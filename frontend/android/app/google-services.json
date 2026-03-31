@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "353464994828",
+    "project_id": "afg2026-2b7a1",
+    "storage_bucket": "afg2026-2b7a1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:353464994828:android:c54f13eaa472de9141b229",
+        "android_client_info": {
+          "package_name": "com.example.small_biz_manager"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIRJxRDmfiPnw7Y9OlRoQvoXQlxQIWGgg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
