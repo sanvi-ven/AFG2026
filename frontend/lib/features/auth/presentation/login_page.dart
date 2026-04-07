@@ -22,7 +22,49 @@ class _LoginPageState extends State<LoginPage> {
   void initState() {
     super.initState();
     _authRepository = AuthRepository(ApiClient(baseUrl: AppConfig.apiBaseUrl));
+
+    final demoToken = AppConfig.demoAuthToken.trim();
+    if (demoToken.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _signInWithToken(demoToken);
+      });
+    }
   }
+
+  Future<void> _signInWithToken(String token) async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final appUser = await _authRepository.authenticateGoogleToken(token);
+      if (!mounted) {
+        return;
+      }
+      Navigator.pushReplacementNamed(
+        context,
+        AppRouter.dashboard,
+        arguments: {'role': appUser.role},
+      );
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _error = (error as dynamic).toString().replaceFirst('Exception: ', '');
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _signInDemoOwner() => _signInWithToken('dev-owner');
+
+  Future<void> _signInDemoClient() => _signInWithToken('dev-client');
 
   Future<void> _signInWithGoogle() async {
     setState(() {
@@ -85,6 +127,32 @@ class _LoginPageState extends State<LoginPage> {
                     onPressed: _isLoading ? null : _signInWithGoogle,
                     icon: const Icon(Icons.login),
                     label: const Text('Sign In with Google'),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Text(
+                          'Demo',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _signInDemoOwner,
+                    icon: const Icon(Icons.storefront_outlined),
+                    label: const Text('Demo Sign In as Business Owner'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _signInDemoClient,
+                    icon: const Icon(Icons.person_outline),
+                    label: const Text('Demo Sign In as Client'),
                   ),
                   if (_isLoading) ...[
                     const SizedBox(height: 16),
