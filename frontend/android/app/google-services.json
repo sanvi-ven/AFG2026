@@ -1,26 +1,36 @@
 {
   "project_info": {
-    "project_number": "353464994828",
-    "project_id": "afg2026-2b7a1",
-    "storage_bucket": "afg2026-2b7a1.firebasestorage.app"
+    "project_number": "1023409308484",
+    "project_id": "afg2026a",
+    "storage_bucket": "afg2026a.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:353464994828:android:c54f13eaa472de9141b229",
+        "mobilesdk_app_id": "1:1023409308484:android:b0cffb0c41c110e58f4d11",
         "android_client_info": {
           "package_name": "com.example.small_biz_manager"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1023409308484-5491gdnf57q572s9c5lel67pq3cofo4n.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyCIRJxRDmfiPnw7Y9OlRoQvoXQlxQIWGgg"
+          "current_key": "AIzaSyBa3aUmjcGoywkRQ5rCaz_yaYcxDV08Fls"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1023409308484-5491gdnf57q572s9c5lel67pq3cofo4n.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
