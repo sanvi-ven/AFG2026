@@ -1,4 +1,6 @@
 {
+  "buildCommand": "cd frontend && flutter build web",
+  "outputDirectory": "frontend/build/web",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
