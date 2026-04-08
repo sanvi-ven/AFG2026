@@ -20,12 +20,15 @@ class AppRouter {
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     final args = (settings.arguments as Map<String, dynamic>?) ?? {};
     final role = (args['role'] as String?) ?? 'client';
+    final authToken = args['authToken'] as String?;
 
     switch (settings.name) {
       case login:
         return MaterialPageRoute(builder: (_) => const LoginPage());
       case dashboard:
-        return MaterialPageRoute(builder: (_) => DashboardPage(role: role));
+        return MaterialPageRoute(
+          builder: (_) => DashboardPage(role: role, authToken: authToken),
+        );
       case appointments:
         return MaterialPageRoute(builder: (_) => AppointmentsPage(role: role));
       case invoices:
