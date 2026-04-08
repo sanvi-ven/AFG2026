@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/services/api_client.dart';
+import '../../../core/services/firebase_service.dart';
 import '../../../models/appointment.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
@@ -28,9 +30,15 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _loadUpcomingAppointment() async {
-    final token = (widget.authToken?.trim().isNotEmpty ?? false)
-        ? widget.authToken!.trim()
-        : AppConfig.demoAuthToken.trim();
+    final demoToken = AppConfig.demoAuthToken.trim();
+    final firebaseToken = await FirebaseService.getFreshIdToken();
+    final token = demoToken.isNotEmpty
+      ? demoToken
+      : (firebaseToken?.trim().isNotEmpty ?? false)
+        ? firebaseToken!.trim()
+        : (widget.authToken?.trim().isNotEmpty ?? false)
+          ? widget.authToken!.trim()
+          : '';
 
     if (token.isEmpty) {
       setState(() {
@@ -104,8 +112,23 @@ class _DashboardPageState extends State<DashboardPage> {
               style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 12),
           _card(context, 'Upcoming appointments', _buildUpcomingSubtitle()),
-          _card(context, 'Unpaid invoices', 'Pending and overdue invoice balances'),
+          if (widget.role == 'client')
+            Card(
+              child: ListTile(
+                title: const Text('Book Appointment'),
+                subtitle: const Text('Pick an available slot from the Bookings calendar'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.pushNamed(
+                    context,
+                    AppRouter.appointments,
+                    arguments: {'role': widget.role, 'authToken': widget.authToken},
+                  );
+                },
+              ),
+            ),
           _card(context, 'Messages', 'Unread and recent conversations'),
+          _card(context, 'Unpaid invoices', 'Pending and overdue invoice balances'),
           _card(context, 'Notifications', 'Recent alerts and updates'),
         ],
       ),

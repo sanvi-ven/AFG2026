@@ -74,7 +74,7 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       final userCredential = await FirebaseService.signInWithGoogle();
-      final idToken = await userCredential.user!.getIdToken();
+      final idToken = await userCredential.user!.getIdToken(true);
       if (idToken == null) {
         throw Exception('Failed to get ID token');
       }

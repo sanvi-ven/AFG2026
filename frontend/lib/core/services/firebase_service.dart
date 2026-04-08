@@ -19,6 +19,7 @@ class FirebaseService {
       final provider = GoogleAuthProvider()
         ..addScope('email')
         ..addScope('https://www.googleapis.com/auth/calendar');
+      
       final userCredential = await _auth.signInWithPopup(provider);
       _currentGoogleUser = null;
       final oauthCredential = userCredential.credential as OAuthCredential?;
@@ -47,6 +48,16 @@ class FirebaseService {
   }
 
   static String? getAccessToken() => _currentAccessToken;
+
+  static User? getCurrentUser() => _auth.currentUser;
+
+  static Future<String?> getFreshIdToken() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return null;
+    }
+    return user.getIdToken(true);
+  }
 
   static GoogleSignInAccount? getCurrentGoogleUser() => _currentGoogleUser;
 

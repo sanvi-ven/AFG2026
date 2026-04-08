@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/auth/presentation/auth_gate.dart';
 
 class SmallBizManagerApp extends StatelessWidget {
   const SmallBizManagerApp({super.key});
@@ -11,7 +12,7 @@ class SmallBizManagerApp extends StatelessWidget {
     return MaterialApp(
       title: 'Small Biz Manager',
       theme: AppTheme.light(),
-      initialRoute: AppRouter.login,
+      home: const AuthGate(),
       onGenerateRoute: AppRouter.onGenerateRoute,
       debugShowCheckedModeBanner: false,
     );

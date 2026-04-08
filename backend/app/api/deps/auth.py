@@ -3,6 +3,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth
 
 from app.core.config import settings
+from app.core.firebase import initialize_firebase_app
 from app.models.enums import UserRole
 from app.schemas.user import UserCreate, UserRead
 from app.services.users_service import UsersService
@@ -27,6 +28,14 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> UserRead:
     token = credentials.credentials
+
+    try:
+        initialize_firebase_app()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Firebase admin is not configured. Check service-account.json and FIREBASE_PROJECT_ID.",
+        ) from exc
 
     if settings.dev_auth_bypass and token.startswith("dev-"):
         role = UserRole.OWNER if token == "dev-owner" else UserRole.CLIENT
