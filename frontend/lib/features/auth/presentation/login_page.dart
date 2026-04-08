@@ -45,7 +45,7 @@ class _LoginPageState extends State<LoginPage> {
       Navigator.pushReplacementNamed(
         context,
         AppRouter.dashboard,
-        arguments: {'role': appUser.role},
+        arguments: {'role': appUser.role, 'authToken': token},
       );
     } catch (error) {
       if (mounted) {
@@ -85,7 +85,7 @@ class _LoginPageState extends State<LoginPage> {
       Navigator.pushReplacementNamed(
         context,
         AppRouter.dashboard,
-        arguments: {'role': appUser.role},
+        arguments: {'role': appUser.role, 'authToken': idToken},
       );
     } catch (error) {
       setState(() {
