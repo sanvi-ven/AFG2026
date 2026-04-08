@@ -19,9 +19,10 @@ class DashboardPage extends StatelessWidget {
           Text('Welcome, ${role == 'owner' ? 'Business Owner' : 'Client'}',
               style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 12),
-          _card(context, 'Messages', 'Unread and recent conversations'),
           _card(context, 'Upcoming appointments', 'Next bookings and availability'),
+          _card(context, 'Messages', 'Unread and recent conversations'),
           _card(context, 'Unpaid invoices', 'Pending and overdue invoice balances'),
+          _card(context, 'Notifications', 'Recent alerts and updates'),
         ],
       ),
     );
