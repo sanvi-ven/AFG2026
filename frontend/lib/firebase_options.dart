@@ -44,37 +44,41 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyB2e2aq_wWhjv0fr_WDBX-qT5T-q2tVVnI',
-    appId: '1:353464994828:web:9471d097686d848241b229',
-    messagingSenderId: '353464994828',
-    projectId: 'afg2026-2b7a1',
-    authDomain: 'afg2026-2b7a1.firebaseapp.com',
-    storageBucket: 'afg2026-2b7a1.firebasestorage.app',
+    apiKey: 'AIzaSyAIi6A8t-QMRVxQ3OsbaoPeFAaVf5Ah1cw',
+    appId: '1:1023409308484:web:6893488613679b158f4d11',
+    messagingSenderId: '1023409308484',
+    projectId: 'afg2026a',
+    authDomain: 'afg2026a.firebaseapp.com',
+    storageBucket: 'afg2026a.firebasestorage.app',
+    measurementId: 'G-1XDE94QL0D',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCIRJxRDmfiPnw7Y9OlRoQvoXQlxQIWGgg',
-    appId: '1:353464994828:android:c54f13eaa472de9141b229',
-    messagingSenderId: '353464994828',
-    projectId: 'afg2026-2b7a1',
-    storageBucket: 'afg2026-2b7a1.firebasestorage.app',
+    apiKey: 'AIzaSyBa3aUmjcGoywkRQ5rCaz_yaYcxDV08Fls',
+    appId: '1:1023409308484:android:b0cffb0c41c110e58f4d11',
+    messagingSenderId: '1023409308484',
+    projectId: 'afg2026a',
+    storageBucket: 'afg2026a.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyA6c1A7Krgq-fK51otZwqpCPsocaVeRlRs',
-    appId: '1:353464994828:ios:c0d65b71811b4dd641b229',
-    messagingSenderId: '353464994828',
-    projectId: 'afg2026-2b7a1',
-    storageBucket: 'afg2026-2b7a1.firebasestorage.app',
+    apiKey: 'AIzaSyBTtTgX-0pU0JBwLdbC8sGONJV3-iW_bsA',
+    appId: '1:1023409308484:ios:a30ec59912c72bad8f4d11',
+    messagingSenderId: '1023409308484',
+    projectId: 'afg2026a',
+    storageBucket: 'afg2026a.firebasestorage.app',
+    iosClientId: '1023409308484-ukssmasm50894vivf55sn1iej8hg5uo2.apps.googleusercontent.com',
     iosBundleId: 'com.example.smallBizManager',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyA6c1A7Krgq-fK51otZwqpCPsocaVeRlRs',
-    appId: '1:353464994828:ios:c0d65b71811b4dd641b229',
-    messagingSenderId: '353464994828',
-    projectId: 'afg2026-2b7a1',
-    storageBucket: 'afg2026-2b7a1.firebasestorage.app',
+    apiKey: 'AIzaSyBTtTgX-0pU0JBwLdbC8sGONJV3-iW_bsA',
+    appId: '1:1023409308484:ios:a30ec59912c72bad8f4d11',
+    messagingSenderId: '1023409308484',
+    projectId: 'afg2026a',
+    storageBucket: 'afg2026a.firebasestorage.app',
+    iosClientId: '1023409308484-ukssmasm50894vivf55sn1iej8hg5uo2.apps.googleusercontent.com',
     iosBundleId: 'com.example.smallBizManager',
   );
+
 }

@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class FirebaseService {
@@ -14,8 +15,18 @@ class FirebaseService {
   }
 
   static Future<UserCredential> signInWithGoogle() async {
+    if (kIsWeb) {
+      final provider = GoogleAuthProvider()
+        ..addScope('email')
+        ..addScope('https://www.googleapis.com/auth/calendar');
+      final userCredential = await _auth.signInWithPopup(provider);
+      _currentGoogleUser = null;
+      final oauthCredential = userCredential.credential as OAuthCredential?;
+      _currentAccessToken = oauthCredential?.accessToken;
+      return userCredential;
+    }
+
     final googleSignIn = GoogleSignIn(
-      clientId: '289117694097-f4ig8298rujjfq0qghjluiqbifgn0qae.apps.googleusercontent.com',
       scopes: [
         'email',
         'https://www.googleapis.com/auth/calendar',
