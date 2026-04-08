@@ -6,17 +6,27 @@ class FirebaseService {
   FirebaseService._();
 
   static final FirebaseAuth _auth = FirebaseAuth.instance;
+  static GoogleSignInAccount? _currentGoogleUser;
+  static String? _currentAccessToken;
 
   static Future<void> initialize() async {
     await Firebase.initializeApp();
   }
 
   static Future<UserCredential> signInWithGoogle() async {
-    final googleUser = await GoogleSignIn().signIn();
+    final googleSignIn = GoogleSignIn(
+      scopes: [
+        'email',
+        'https://www.googleapis.com/auth/calendar',
+      ],
+    );
+    final googleUser = await googleSignIn.signIn();
     if (googleUser == null) {
       throw Exception('Google sign-in canceled by user');
     }
+    _currentGoogleUser = googleUser;
     final googleAuth = await googleUser.authentication;
+    _currentAccessToken = googleAuth.accessToken;
     final credential = GoogleAuthProvider.credential(
       accessToken: googleAuth.accessToken,
       idToken: googleAuth.idToken,
@@ -24,5 +34,13 @@ class FirebaseService {
     return _auth.signInWithCredential(credential);
   }
 
-  static Future<void> signOut() => _auth.signOut();
+  static String? getAccessToken() => _currentAccessToken;
+
+  static GoogleSignInAccount? getCurrentGoogleUser() => _currentGoogleUser;
+
+  static Future<void> signOut() {
+    _currentGoogleUser = null;
+    _currentAccessToken = null;
+    return _auth.signOut();
+  }
 }
