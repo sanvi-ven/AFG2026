@@ -8,6 +8,43 @@ import '../../features/invoices/presentation/invoices_page.dart';
 import '../../features/messages/presentation/messages_page.dart';
 import '../../features/notifications/presentation/notifications_page.dart';
 
+// PageRoute with no transition animation
+class _NoAnimationPageRoute<T> extends PageRoute<T> {
+  _NoAnimationPageRoute({required this.builder, required this.settings});
+
+  final WidgetBuilder builder;
+
+  @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) {
+    return builder(context);
+  }
+
+  @override
+  final RouteSettings settings;
+
+  @override
+  bool get opaque => true;
+
+  @override
+  bool get barrierDismissible => false;
+
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 0);
+
+  @override
+  Color? get barrierColor => null;
+
+  @override
+  String? get barrierLabel => null;
+
+  @override
+  bool get maintainState => true;
+}
+
 class AppRouter {
   static const login = '/';
   static const dashboard = '/dashboard';
@@ -24,23 +61,45 @@ class AppRouter {
 
     switch (settings.name) {
       case login:
-        return MaterialPageRoute(builder: (_) => const LoginPage());
+        return _NoAnimationPageRoute(
+          builder: (_) => const LoginPage(),
+          settings: settings,
+        );
       case dashboard:
-        return MaterialPageRoute(
+        return _NoAnimationPageRoute(
           builder: (_) => DashboardPage(role: role, authToken: authToken),
+          settings: settings,
         );
       case appointments:
-        return MaterialPageRoute(builder: (_) => AppointmentsPage(role: role));
+        return _NoAnimationPageRoute(
+          builder: (_) => AppointmentsPage(role: role),
+          settings: settings,
+        );
       case invoices:
-        return MaterialPageRoute(builder: (_) => InvoicesPage(role: role));
+        return _NoAnimationPageRoute(
+          builder: (_) => InvoicesPage(role: role),
+          settings: settings,
+        );
       case messages:
-        return MaterialPageRoute(builder: (_) => MessagesPage(role: role));
+        return _NoAnimationPageRoute(
+          builder: (_) => MessagesPage(role: role),
+          settings: settings,
+        );
       case notifications:
-        return MaterialPageRoute(builder: (_) => NotificationsPage(role: role));
+        return _NoAnimationPageRoute(
+          builder: (_) => NotificationsPage(role: role),
+          settings: settings,
+        );
       case availability:
-        return MaterialPageRoute(builder: (_) => AvailabilityPage(role: role));
+        return _NoAnimationPageRoute(
+          builder: (_) => AvailabilityPage(role: role),
+          settings: settings,
+        );
       default:
-        return MaterialPageRoute(builder: (_) => const LoginPage());
+        return _NoAnimationPageRoute(
+          builder: (_) => const LoginPage(),
+          settings: settings,
+        );
     }
   }
 }
