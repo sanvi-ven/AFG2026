@@ -15,6 +15,7 @@ class FirebaseService {
 
   static Future<UserCredential> signInWithGoogle() async {
     final googleSignIn = GoogleSignIn(
+      clientId: '634538037073-dovfpggf7rrq402ifi86lbov2061nnrb.apps.googleusercontent.com',
       scopes: [
         'email',
         'https://www.googleapis.com/auth/calendar',
