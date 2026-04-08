@@ -19,3 +19,9 @@
 - Hook up Firebase config (`google-services.json`, `GoogleService-Info.plist`, web config) before production auth flows.
 - Connect widgets to backend endpoints in `lib/core/services/api_client.dart` and feature repositories.
 - Use demo login buttons in the app to authenticate against backend demo tokens (`dev-owner`, `dev-client`).
+
+## Vercel deployment
+- Use the repository root as the Vercel project root
+- Build command: `cd frontend && flutter build web`
+- Output directory: `frontend/build/web`
+- The root-level `vercel.json` rewrites all routes to `index.html` so Flutter web deep links do not 404
