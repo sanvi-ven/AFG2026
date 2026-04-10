@@ -13,7 +13,7 @@ class SmallBizManagerApp extends StatelessWidget {
  @override
  Widget build(BuildContext context) {
    return MaterialApp(
-     title: 'Small Biz Manager',
+     title: 'Anchor',
      theme: AppTheme.light(),
      home: const AuthGate(),
      onGenerateRoute: AppRouter.onGenerateRoute,
