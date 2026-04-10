@@ -106,15 +106,17 @@ class GoogleCalendarService:
         end_dt = datetime.strptime(f"{target_date.isoformat()} {end_time}", "%Y-%m-%d %H:%M").replace(tzinfo=tz)
 
         description_lines = [description.strip()] if description and description.strip() else []
+        display_summary = summary.strip()
         if services:
             cleaned_services = [service_name.strip() for service_name in services if service_name and service_name.strip()]
             if cleaned_services:
+                display_summary = f"{display_summary} — {', '.join(cleaned_services)}"
                 description_lines.append(f"Services: {', '.join(cleaned_services)}")
 
         formatted_description = "\n".join(description_lines)
 
         body: dict = {
-            "summary": summary,
+            "summary": display_summary,
             "description": formatted_description,
             "start": {"dateTime": start_dt.isoformat(), "timeZone": time_zone},
             "end": {"dateTime": end_dt.isoformat(), "timeZone": time_zone},

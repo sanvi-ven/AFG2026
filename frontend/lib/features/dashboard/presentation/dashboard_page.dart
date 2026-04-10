@@ -111,36 +111,52 @@ class _DashboardPageState extends State<DashboardPage> {
           Text('Welcome, ${widget.role == 'owner' ? 'Business Owner' : 'Client'}',
               style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 12),
-          _card(context, 'Upcoming appointments', _buildUpcomingSubtitle()),
+          _linkCard(
+            context,
+            title: 'Upcoming appointments',
+            subtitle: _buildUpcomingSubtitle(),
+            route: AppRouter.appointments,
+          ),
           if (widget.role == 'client')
-            Card(
-              child: ListTile(
-                title: const Text('Book Appointment'),
-                subtitle: const Text('Pick an available slot from the Bookings calendar'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.pushNamed(
-                    context,
-                    AppRouter.appointments,
-                    arguments: {'role': widget.role, 'authToken': widget.authToken},
-                  );
-                },
-              ),
+            _linkCard(
+              context,
+              title: 'Book Appointment',
+              subtitle: 'Pick an available slot from the bookings calendar',
+              route: AppRouter.appointments,
             ),
-          _card(context, 'Messages', 'Unread and recent conversations'),
-          _card(context, 'Unpaid invoices', 'Pending and overdue invoice balances'),
-          _card(context, 'Notifications', 'Recent alerts and updates'),
+          _linkCard(context, title: 'Messages', subtitle: 'Unread and recent conversations', route: AppRouter.messages),
+          _linkCard(context, title: 'Unpaid invoices', subtitle: 'Pending and overdue invoice balances', route: AppRouter.invoices),
+          _linkCard(context, title: 'Estimates', subtitle: 'Review requests and quotes', route: AppRouter.estimates),
+          if (widget.role == 'owner')
+            _linkCard(
+              context,
+              title: 'Availability',
+              subtitle: 'Manage your working hours and blocked times',
+              route: AppRouter.availability,
+            ),
         ],
       ),
     );
   }
 
-  Widget _card(BuildContext context, String title, String subtitle) {
+  Widget _linkCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required String route,
+  }) {
     return Card(
       child: ListTile(
         title: Text(title),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
+        onTap: () {
+          Navigator.pushNamed(
+            context,
+            route,
+            arguments: {'role': widget.role, 'authToken': widget.authToken},
+          );
+        },
       ),
     );
   }

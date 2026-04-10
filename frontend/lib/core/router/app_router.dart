@@ -8,7 +8,6 @@ import '../../features/dashboard/presentation/dashboard_page.dart';
 import '../../features/estimates/estimates_page.dart';
 import '../../features/invoices/presentation/invoices_page.dart';
 import '../../features/messages/presentation/messages_page.dart';
-import '../../features/notifications/presentation/notifications_page.dart';
 
 // PageRoute with no transition animation
 class _NoAnimationPageRoute<T> extends PageRoute<T> {
@@ -55,7 +54,6 @@ class AppRouter {
   static const invoices = '/invoices';
   static const estimates = '/estimates';
   static const messages = '/messages';
-  static const notifications = '/notifications';
   static const availability = '/availability';
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
@@ -97,11 +95,6 @@ class AppRouter {
       case messages:
         return _NoAnimationPageRoute(
           builder: (_) => MessagesPage(role: role),
-          settings: settings,
-        );
-      case notifications:
-        return _NoAnimationPageRoute(
-          builder: (_) => NotificationsPage(role: role),
           settings: settings,
         );
       case availability:
