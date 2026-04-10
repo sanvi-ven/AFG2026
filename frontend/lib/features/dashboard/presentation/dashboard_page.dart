@@ -14,6 +14,10 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  String _buildUpcomingSubtitle() {
+    return 'Open your appointments calendar to view upcoming bookings';
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -65,13 +69,6 @@ class _DashboardPageState extends State<DashboardPage> {
         title: Text(title),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () {
-          Navigator.pushNamed(
-            context,
-            route,
-            arguments: {'role': widget.role, 'authToken': widget.authToken},
-          );
-        },
         onTap: () {
           Navigator.pushNamed(
             context,
