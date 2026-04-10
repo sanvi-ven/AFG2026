@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/api_client.dart';
+import '../../../core/services/client_profile_service.dart';
+import '../../../core/state/client_session.dart';
+import '../../../models/client_profile.dart';
 
 class ClientSignupPage extends StatefulWidget {
   const ClientSignupPage({super.key});
@@ -55,6 +58,23 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
           'zip_code': _zipController.text.trim(),
         },
       });
+
+      final nameParts = _nameController.text.trim().split(RegExp(r'\s+'));
+      final firstName = nameParts.isNotEmpty ? nameParts.first : '';
+      final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+
+      final savedProfile = await ClientProfileService.save(
+        ClientProfile(
+          email: _emailController.text.trim(),
+          firstName: firstName,
+          lastName: lastName,
+          phone: _phoneController.text.trim(),
+          street: _streetController.text.trim(),
+          country: _countryController.text.trim(),
+          zipCode: _zipController.text.trim(),
+        ),
+      );
+      ClientSession.setProfile(savedProfile);
 
       if (!mounted) {
         return;

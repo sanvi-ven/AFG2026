@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/state/client_session.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/app_scaffold.dart';
+import '../../../models/client_profile.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({required this.role, this.authToken, super.key});
@@ -27,8 +29,18 @@ class _DashboardPageState extends State<DashboardPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Welcome, ${widget.role == 'owner' ? 'Business Owner' : 'Client'}',
-              style: Theme.of(context).textTheme.headlineSmall),
+          ValueListenableBuilder<ClientProfile?>(
+            valueListenable: ClientSession.profile,
+            builder: (context, profile, _) {
+              final welcomeName = widget.role == 'owner'
+                  ? 'Business Owner'
+                  : (profile?.greetingName.trim().isNotEmpty == true ? profile!.greetingName : 'Client');
+              return Text(
+                'Welcome $welcomeName',
+                style: Theme.of(context).textTheme.headlineSmall,
+              );
+            },
+          ),
           const SizedBox(height: 12),
           _linkCard(
             context,
