@@ -116,7 +116,7 @@ class _LoginPageState extends State<LoginPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Small Biz Manager', style: Theme.of(context).textTheme.headlineSmall),
+                  Text('Anchor', style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 8),
                   Text(
                     'Sign in with your Google account to get started.',

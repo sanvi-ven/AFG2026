@@ -12,6 +12,6 @@ import 'package:small_biz_manager/app.dart';
 void main() {
   testWidgets('App renders login page', (WidgetTester tester) async {
     await tester.pumpWidget(const SmallBizManagerApp());
-    expect(find.text('Small Biz Manager'), findsOneWidget);
+    expect(find.text('Anchor'), findsOneWidget);
   });
 }

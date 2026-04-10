@@ -74,7 +74,7 @@ class AppScaffold extends StatelessWidget {
 
   List<_NavItem> _navItems(String role) {
     final common = <_NavItem>[
-      const _NavItem(label: 'Dashboard', route: AppRouter.dashboard, icon: Icons.dashboard),
+      const _NavItem(label: 'Anchor', route: AppRouter.dashboard, icon: Icons.dashboard),
       const _NavItem(label: 'Appointments', route: AppRouter.appointments, icon: Icons.calendar_month),
       const _NavItem(label: 'Invoices', route: AppRouter.invoices, icon: Icons.receipt_long),
       const _NavItem(label: 'Messages', route: AppRouter.messages, icon: Icons.chat_bubble_outline),

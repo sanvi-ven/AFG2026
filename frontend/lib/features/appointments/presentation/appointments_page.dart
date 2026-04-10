@@ -112,7 +112,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
         startTime: startTime,
         endTime: endTime,
         summary: 'Appointment - $name',
-          description: 'Booked via Small Biz Manager. Client: $name ($email)',
+        description: 'Booked via Anchor. Client: $name ($email)',
       );
 
       if (!mounted) {
