@@ -4,9 +4,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/services/api_client.dart';
-import '../data/calendar_booking_repository.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/google_calendar_widget.dart';
+import '../data/calendar_booking_repository.dart';
 
 class AppointmentsPage extends StatefulWidget {
   const AppointmentsPage({required this.role, super.key});
@@ -18,6 +18,18 @@ class AppointmentsPage extends StatefulWidget {
 }
 
 class _AppointmentsPageState extends State<AppointmentsPage> {
+  static const String _calendarUrl =
+      'https://calendar.google.com/calendar/embed?mode=WEEK&height=600&wkst=1&ctz=America%2FNew_York&showPrint=0&showTitle=0&showNav=1&showTabs=1&showCalendars=0&showTz=0&src=immc17289%40gmail.com&color=%23039BE5';
+
+  static const List<Map<String, String>> _serviceOptions = [
+    {'key': 'landscaping', 'label': 'Landscaping'},
+    {'key': 'house_cleaning', 'label': 'House Cleaning'},
+    {'key': 'mowing', 'label': 'Mowing'},
+    {'key': 'gardening', 'label': 'Gardening'},
+    {'key': 'power_washing', 'label': 'Power Washing'},
+    {'key': 'tree_trimming', 'label': 'Tree Trimming'},
+  ];
+
   late final CalendarBookingRepository _repository;
   DateTime _selectedDate = DateTime.now();
   List<Map<String, dynamic>> _availableSlots = const [];
@@ -25,6 +37,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   bool _isBooking = false;
   String? _selectedStartTime;
   String? _selectedEndTime;
+  final Set<String> _selectedServices = <String>{};
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
 
@@ -42,6 +55,15 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     _nameController.dispose();
     _emailController.dispose();
     super.dispose();
+  }
+
+  String _serviceLabels() {
+    final labels = _selectedServices
+        .map(
+          (key) => _serviceOptions.firstWhere((option) => option['key'] == key)['label']!,
+        )
+        .toList();
+    return labels.isEmpty ? 'None' : labels.join(', ');
   }
 
   Future<void> _pickDate() async {
@@ -98,9 +120,16 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
 
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
+    final selectedServices = _selectedServices.toList();
     if (name.isEmpty || email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter your name and email.')),
+      );
+      return;
+    }
+    if (selectedServices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least one service.')),
       );
       return;
     }
@@ -113,6 +142,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
         endTime: endTime,
         summary: 'Appointment - $name',
         description: 'Booked via Anchor. Client: $name ($email)',
+        services: selectedServices,
       );
 
       if (!mounted) {
@@ -159,9 +189,6 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
 
   @override
   Widget build(BuildContext context) {
-    const calendarUrl =
-        'https://calendar.google.com/calendar/embed?height=600&wkst=1&ctz=America%2FNew_York&showPrint=0&showTitle=0&showNav=1&showTabs=0&showCalendars=0&showTz=0&src=91d01c09dd4283d77beb10f68e45025941f605469166cfef41609db2a78932bd%40group.calendar.google.com&color=%23039BE5';
-
     return AppScaffold(
       title: 'Appointments',
       role: widget.role,
@@ -173,7 +200,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
             const ListTile(
               leading: Icon(Icons.schedule),
               title: Text('Set available time slots'),
-              subtitle: Text('Define working hours and open slots'),
+              subtitle: Text('Client service choices are saved in the booking description.'),
             ),
           if (widget.role == 'client') ...[
             _buildBookingCard(context),
@@ -185,15 +212,6 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
             subtitle: Text('Create, confirm, cancel, or reschedule'),
           ),
           const SizedBox(height: 20),
-          const Card(
-            child: ListTile(
-              leading: Icon(Icons.calendar_month_outlined),
-              title: Text('Bookings Calendar'),
-              subtitle: Text('Live Google Calendar view for both owner and client.'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          const GoogleCalendarWidget(calendarSrc: calendarUrl, height: 520),
         ],
       ),
     );
@@ -206,7 +224,41 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Book from Google Calendar slots', style: Theme.of(context).textTheme.titleMedium),
+            Text('Request your service', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            Text(
+              'Select the services you want, then choose the best date and time.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            Text('Services', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            ..._serviceOptions.map((service) {
+              final key = service['key']!;
+              final label = service['label']!;
+              return CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(label),
+                value: _selectedServices.contains(key),
+                onChanged: (checked) {
+                  setState(() {
+                    if (checked == true) {
+                      _selectedServices.add(key);
+                    } else {
+                      _selectedServices.remove(key);
+                    }
+                  });
+                },
+              );
+            }),
+            const SizedBox(height: 12),
+            Text(
+              'Selected services: ${_serviceLabels()}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -271,9 +323,19 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Book Slot'),
+                    : const Text('Submit Request'),
               ),
             ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 12),
+            Text('Calendar', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            const Text(
+              'Review the calendar below, then submit the form above to book the selected slot.',
+            ),
+            const SizedBox(height: 12),
+            const GoogleCalendarWidget(calendarSrc: _AppointmentsPageState._calendarUrl, height: 520),
           ],
         ),
       ),

@@ -20,7 +20,7 @@ class AvailabilityPage extends StatelessWidget {
     }
 
     const calendarUrl =
-        "https://calendar.google.com/calendar/embed?height=600&wkst=1&ctz=America%2FNew_York&showPrint=0&showTitle=0&src=YW5jaG9yY29ycDNAZ21haWwuY29t&src=YmU4YTA1MjEzMTQ0MGNhYmYyYTQwYjMwMmNkZDYzMjU2OTk0MzczZDRhYmZhNTEwY2UzMDRiMjdjODg3ZTU1NUBncm91cC5jYWxlbmRhci5nb29nbGUuY29t&src=ZW4udXNhI2hvbGlkYXlAZ3JvdXAudi5jYWxlbmRhci5nb29nbGUuY29t&color=%23039be5&color=%23a79b8e&color=%230b8043";
+        "https://calendar.google.com/calendar/embed?mode=WEEK&height=600&wkst=1&ctz=America%2FNew_York&showPrint=0&showTitle=0&showNav=1&showTabs=1&src=immc17289%40gmail.com&color=%23039be5";
 
     return AppScaffold(
       title: 'Availability',

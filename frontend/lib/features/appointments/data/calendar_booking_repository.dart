@@ -30,6 +30,7 @@ class CalendarBookingRepository {
     required String startTime,
     required String endTime,
     required String summary,
+    List<String> services = const [],
     String? description,
     String timeZone = 'America/New_York',
   }) async {
@@ -42,6 +43,7 @@ class CalendarBookingRepository {
       'start_time': startTime,
       'end_time': endTime,
       'description': description,
+      'services': services,
     };
 
     return _apiClient.postJson('/api/v1/calendar/book?time_zone=$encodedTimeZone', body);

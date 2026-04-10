@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import List, Optional
 
 
 class AvailableSlot(BaseModel):
@@ -21,6 +21,7 @@ class BookCalendarEventRequest(BaseModel):
     start_time: str = Field(description="HH:MM (24-hour)")
     end_time: str = Field(description="HH:MM (24-hour)")
     description: Optional[str] = None
+    services: Optional[List[str]] = None
     attendee_email: Optional[str] = None
 
 

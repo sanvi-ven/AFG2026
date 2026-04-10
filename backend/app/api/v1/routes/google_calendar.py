@@ -84,6 +84,7 @@ def book_calendar_event(
             end_time=payload.end_time,
             time_zone=time_zone,
             description=payload.description,
+            services=payload.services,
             attendee_email=payload.attendee_email,
         )
     except Exception as exc:

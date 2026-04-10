@@ -19,3 +19,11 @@ class ClientSignupCreate(BaseModel):
 class ClientSignupRead(ClientSignupCreate):
     id: str
     created_at: datetime
+
+
+class ClientLoginRequest(BaseModel):
+    email: EmailStr
+
+
+class ClientLoginResponse(ClientSignupRead):
+    pass
