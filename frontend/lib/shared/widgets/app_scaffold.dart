@@ -77,6 +77,7 @@ class AppScaffold extends StatelessWidget {
       const _NavItem(label: 'Anchor', route: AppRouter.dashboard, icon: Icons.dashboard),
       const _NavItem(label: 'Appointments', route: AppRouter.appointments, icon: Icons.calendar_month),
       const _NavItem(label: 'Invoices', route: AppRouter.invoices, icon: Icons.receipt_long),
+      const _NavItem(label: 'Estimates', route: AppRouter.estimates, icon: Icons.request_quote_outlined),
       const _NavItem(label: 'Messages', route: AppRouter.messages, icon: Icons.chat_bubble_outline),
       const _NavItem(label: 'Notify', route: AppRouter.notifications, icon: Icons.notifications_none),
     ];
