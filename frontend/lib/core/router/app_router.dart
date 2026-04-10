@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../features/appointments/presentation/appointments_page.dart';
+import '../../features/auth/presentation/client_signup_page.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/availability/presentation/availability_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
@@ -47,6 +48,7 @@ class _NoAnimationPageRoute<T> extends PageRoute<T> {
 
 class AppRouter {
   static const login = '/';
+  static const clientSignup = '/signup/client';
   static const dashboard = '/dashboard';
   static const appointments = '/appointments';
   static const invoices = '/invoices';
@@ -68,6 +70,11 @@ class AppRouter {
       case dashboard:
         return _NoAnimationPageRoute(
           builder: (_) => DashboardPage(role: role, authToken: authToken),
+          settings: settings,
+        );
+      case clientSignup:
+        return _NoAnimationPageRoute(
+          builder: (_) => const ClientSignupPage(),
           settings: settings,
         );
       case appointments:

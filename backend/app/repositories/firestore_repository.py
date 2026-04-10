@@ -16,8 +16,11 @@ class FirestoreRepository:
         if not settings.use_mock_firestore:
             try:
                 self.db = get_firestore_client()
-            except Exception:
-                self.db = None
+            except Exception as exc:
+                raise RuntimeError(
+                    "Firestore initialization failed while USE_MOCK_FIRESTORE=false. "
+                    "Check FIREBASE_PROJECT_ID and GOOGLE_SERVICE_ACCOUNT_PATH."
+                ) from exc
 
         if self.db is None and self.collection_name not in self._memory_store:
             self._memory_store[self.collection_name] = {}
