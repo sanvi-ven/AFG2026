@@ -53,8 +53,8 @@ class InvoicesPage extends StatelessWidget {
           const _ActionCard(
             icon: Icons.visibility,
             title: 'View invoice and payment status',
-            subtitle: 'Track sent, overdue, and paid invoices in one timeline.',
-            actionLabel: 'Open Ledger',
+            subtitle: 'Sent, overdue, and paid invoices.',
+            actionLabel: '',
           ),
           const SizedBox(height: 14),
           const _SectionTitle(title: 'Recent Activity'),
@@ -67,7 +67,7 @@ class InvoicesPage extends StatelessWidget {
             ),
           const _TimelineTile(
             title: 'Payment received',
-            subtitle: 'INV-1038 was paid via ACH',
+            subtitle: 'Invoice was paid in full',
             icon: Icons.task_alt,
           ),
           const _TimelineTile(
@@ -108,7 +108,7 @@ class _HeroSummary extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  role == 'owner' ? 'Cash Flow Snapshot' : 'Billing Snapshot',
+                  role == 'owner' ? 'Cash Flow Snapshot' : 'Billing Overview',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: colorScheme.onPrimary,
                     fontWeight: FontWeight.w700,

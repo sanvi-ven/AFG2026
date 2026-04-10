@@ -4,6 +4,7 @@ import '../../features/appointments/presentation/appointments_page.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/availability/presentation/availability_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
+import '../../features/estimates/estimates_page.dart';
 import '../../features/invoices/presentation/invoices_page.dart';
 import '../../features/messages/presentation/messages_page.dart';
 import '../../features/notifications/presentation/notifications_page.dart';
@@ -50,6 +51,7 @@ class AppRouter {
   static const dashboard = '/dashboard';
   static const appointments = '/appointments';
   static const invoices = '/invoices';
+  static const estimates = '/estimates';
   static const messages = '/messages';
   static const notifications = '/notifications';
   static const availability = '/availability';
@@ -78,6 +80,11 @@ class AppRouter {
       case invoices:
         return _NoAnimationPageRoute(
           builder: (_) => InvoicesPage(role: role),
+          settings: settings,
+        );
+      case estimates:
+        return _NoAnimationPageRoute(
+          builder: (_) => EstimatesPage(role: role),
           settings: settings,
         );
       case messages:
