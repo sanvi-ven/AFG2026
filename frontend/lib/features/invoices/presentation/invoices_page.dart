@@ -1,176 +1,324 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/invoice_service.dart';
+import '../../../core/state/client_session.dart';
+import '../../../models/invoice.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
-class InvoicesPage extends StatelessWidget {
+class InvoicesPage extends StatefulWidget {
   const InvoicesPage({required this.role, super.key});
 
   final String role;
 
   @override
+  State<InvoicesPage> createState() => _InvoicesPageState();
+}
+
+class _InvoicesPageState extends State<InvoicesPage> {
+  final _invoiceNumberController = TextEditingController();
+  final _clientIdController = TextEditingController();
+  final List<_ServiceRow> _serviceRows = [
+    _ServiceRow(nameController: TextEditingController(), priceController: TextEditingController()),
+  ];
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _invoiceNumberController.dispose();
+    _clientIdController.dispose();
+    for (final row in _serviceRows) {
+      row.nameController.dispose();
+      row.priceController.dispose();
+    }
+    super.dispose();
+  }
+
+  String _defaultInvoiceNumber() {
+    final ts = DateTime.now().millisecondsSinceEpoch.toString();
+    return 'INV-${ts.substring(ts.length - 6)}';
+  }
+
+  void _addServiceRow() {
+    setState(() {
+      _serviceRows.add(
+        _ServiceRow(nameController: TextEditingController(), priceController: TextEditingController()),
+      );
+    });
+  }
+
+  void _removeServiceRow(int index) {
+    if (_serviceRows.length == 1) {
+      return;
+    }
+    setState(() {
+      final row = _serviceRows.removeAt(index);
+      row.nameController.dispose();
+      row.priceController.dispose();
+    });
+  }
+
+  Future<void> _submitInvoice() async {
+    final invoiceNumber = _invoiceNumberController.text.trim().isEmpty
+        ? _defaultInvoiceNumber()
+        : _invoiceNumberController.text.trim();
+    final clientId = _clientIdController.text.trim();
+
+    if (clientId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Client ID is required.')),
+      );
+      return;
+    }
+
+    final services = <InvoiceServiceItem>[];
+    for (final row in _serviceRows) {
+      final name = row.nameController.text.trim();
+      final price = double.tryParse(row.priceController.text.trim());
+      if (name.isEmpty || price == null || price <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Each service needs a name and price greater than 0.')),
+        );
+        return;
+      }
+      services.add(InvoiceServiceItem(name: name, price: price));
+    }
+
+    setState(() => _isSubmitting = true);
+    try {
+      await InvoiceService.createInvoice(
+        invoiceNumber: invoiceNumber,
+        clientId: clientId,
+        services: services,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      _invoiceNumberController.clear();
+      _clientIdController.clear();
+      for (final row in _serviceRows) {
+        row.nameController.clear();
+        row.priceController.clear();
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invoice uploaded to Firebase.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create invoice: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  Future<void> _setStatus(String invoiceId, String status) async {
+    try {
+      await InvoiceService.updateStatus(invoiceId: invoiceId, status: status);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invoice status set to $status.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update invoice status: $error')),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final profile = ClientSession.profile.value;
+    final clientId = profile?.signupId;
 
     return AppScaffold(
       title: 'Invoices',
-      role: role,
+      role: widget.role,
       selectedRoute: '/invoices',
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
         children: [
-          _HeroSummary(role: role),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _MetricCard(
-                  label: 'Outstanding',
-                  value: role == 'owner' ? '\$2,450' : '\$320',
-                  icon: Icons.pending_actions_outlined,
-                  color: colorScheme.errorContainer,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MetricCard(
-                  label: 'Paid This Month',
-                  value: role == 'owner' ? '\$6,100' : '\$1,260',
-                  icon: Icons.check_circle_outline,
-                  color: colorScheme.secondaryContainer,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          if (role == 'owner')
-            const _ActionCard(
-              icon: Icons.request_quote,
-              title: 'Create estimates and invoices',
-              subtitle: 'Build line items, taxes, and due dates in under a minute.',
-              actionLabel: 'New Invoice',
+          if (widget.role == 'owner') ...[
+            _OwnerInvoiceForm(
+              invoiceNumberController: _invoiceNumberController,
+              clientIdController: _clientIdController,
+              serviceRows: _serviceRows,
+              isSubmitting: _isSubmitting,
+              onAddService: _addServiceRow,
+              onRemoveService: _removeServiceRow,
+              onSubmit: _submitInvoice,
             ),
-          if (role == 'owner') const SizedBox(height: 12),
-          const _ActionCard(
-            icon: Icons.visibility,
-            title: 'View invoice and payment status',
-            subtitle: 'Sent, overdue, and paid invoices.',
-            actionLabel: '',
-          ),
-          const SizedBox(height: 14),
-          const _SectionTitle(title: 'Recent Activity'),
-          const SizedBox(height: 10),
-          if (role == 'owner')
-            const _TimelineTile(
-              title: 'Invoice INV-1042 sent',
-              subtitle: 'Landscape lighting project - Due in 5 days',
-              icon: Icons.send_outlined,
+            const SizedBox(height: 16),
+          ],
+          if (widget.role == 'client' && (clientId == null || clientId.trim().isEmpty))
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Client ID not found. Please log in from the client email flow first.'),
+              ),
+            )
+          else
+            StreamBuilder<List<Invoice>>(
+              stream: InvoiceService.watchInvoices(role: widget.role, clientId: clientId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text('Failed to load invoices: ${snapshot.error}'),
+                    ),
+                  );
+                }
+
+                final invoices = snapshot.data ?? const <Invoice>[];
+                if (invoices.isEmpty) {
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(widget.role == 'owner'
+                          ? 'No invoices yet. Create one above.'
+                          : 'No invoices available for your client ID yet.'),
+                    ),
+                  );
+                }
+
+                return Column(
+                  children: [
+                    for (final invoice in invoices)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _InvoiceCard(
+                          invoice: invoice,
+                          isClient: widget.role == 'client',
+                          onApprove: () => _setStatus(invoice.id, InvoiceStatus.approved),
+                          onDeny: () => _setStatus(invoice.id, InvoiceStatus.denied),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
-          const _TimelineTile(
-            title: 'Payment received',
-            subtitle: 'Invoice was paid in full',
-            icon: Icons.task_alt,
-          ),
-          const _TimelineTile(
-            title: 'Reminder queued',
-            subtitle: 'Upcoming due notice scheduled for tomorrow',
-            icon: Icons.notifications_active_outlined,
-          ),
         ],
       ),
     );
   }
 }
 
-class _HeroSummary extends StatelessWidget {
-  const _HeroSummary({required this.role});
-
-  final String role;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [colorScheme.primary, colorScheme.primary],
-        ),
-      ),
-      padding: const EdgeInsets.all(18),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  role == 'owner' ? 'Cash Flow Snapshot' : 'Billing Overview',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: colorScheme.onPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  role == 'owner'
-                      ? 'Stay on top of outstanding balances and upcoming payments.'
-                      : 'Review what is due soon and what has already been paid.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onPrimary.withValues(alpha: 0.92),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 14),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: colorScheme.onPrimary.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Padding(
-              padding: EdgeInsets.all(10),
-              child: Icon(Icons.receipt_long, size: 28, color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
+class _OwnerInvoiceForm extends StatelessWidget {
+  const _OwnerInvoiceForm({
+    required this.invoiceNumberController,
+    required this.clientIdController,
+    required this.serviceRows,
+    required this.isSubmitting,
+    required this.onAddService,
+    required this.onRemoveService,
+    required this.onSubmit,
   });
 
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
+  final TextEditingController invoiceNumberController;
+  final TextEditingController clientIdController;
+  final List<_ServiceRow> serviceRows;
+  final bool isSubmitting;
+  final VoidCallback onAddService;
+  final void Function(int index) onRemoveService;
+  final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: EdgeInsets.zero,
-      color: color,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(icon, size: 20),
-            const SizedBox(height: 10),
-            Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 4),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            Text('Create Invoice / Estimate', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            TextField(
+              controller: invoiceNumberController,
+              decoration: const InputDecoration(
+                labelText: 'Invoice number (optional)',
+                border: OutlineInputBorder(),
+                hintText: 'INV-123456',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: clientIdController,
+              decoration: const InputDecoration(
+                labelText: 'Client ID',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text('Services', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            for (var i = 0; i < serviceRows.length; i++) ...[
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      controller: serviceRows[i].nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Service name',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: serviceRows[i].priceController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Price',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => onRemoveService(i),
+                    icon: const Icon(Icons.remove_circle_outline),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: onAddService,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add service'),
+                ),
+                const Spacer(),
+                FilledButton(
+                  onPressed: isSubmitting ? null : onSubmit,
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Submit Invoice'),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -178,24 +326,29 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
-class _ActionCard extends StatelessWidget {
-  const _ActionCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.actionLabel,
+class _InvoiceCard extends StatelessWidget {
+  const _InvoiceCard({
+    required this.invoice,
+    required this.isClient,
+    required this.onApprove,
+    required this.onDeny,
   });
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String actionLabel;
+  final Invoice invoice;
+  final bool isClient;
+  final VoidCallback onApprove;
+  final VoidCallback onDeny;
 
   @override
   Widget build(BuildContext context) {
+    final statusColor = switch (invoice.status) {
+      InvoiceStatus.approved => Colors.green,
+      InvoiceStatus.denied => Colors.red,
+      _ => Colors.orange,
+    };
+
     return Card(
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
@@ -203,23 +356,69 @@ class _ActionCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon),
-                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    title,
+                    invoice.invoiceNumber,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    invoice.status,
+                    style: TextStyle(color: statusColor, fontWeight: FontWeight.w700),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Text(subtitle),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.tonal(onPressed: () {}, child: Text(actionLabel)),
+            const SizedBox(height: 4),
+            Text('Client ID: ${invoice.clientId}'),
+            const SizedBox(height: 10),
+            Text('Services', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 6),
+            for (final item in invoice.services)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Expanded(child: Text(item.name)),
+                    Text('\$${item.price.toStringAsFixed(2)}'),
+                  ],
+                ),
+              ),
+            const Divider(height: 16),
+            Row(
+              children: [
+                const Expanded(child: Text('Total', style: TextStyle(fontWeight: FontWeight.w700))),
+                Text('\$${invoice.total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+              ],
             ),
+            if (isClient && invoice.isPending) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onDeny,
+                      icon: const Icon(Icons.close),
+                      label: const Text('Deny'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: onApprove,
+                      icon: const Icon(Icons.check),
+                      label: const Text('Approve'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -227,41 +426,9 @@ class _ActionCard extends StatelessWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title});
+class _ServiceRow {
+  _ServiceRow({required this.nameController, required this.priceController});
 
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-    );
-  }
-}
-
-class _TimelineTile extends StatelessWidget {
-  const _TimelineTile({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: ListTile(
-        leading: Icon(icon),
-        title: Text(title),
-        subtitle: Text(subtitle),
-      ),
-    );
-  }
+  final TextEditingController nameController;
+  final TextEditingController priceController;
 }
