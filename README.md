@@ -1,11 +1,88 @@
-# AFG2026
+# AFG2026 (Anchor)
 
-merge testing.
+This project is a Flutter and FastAPI app for small-businesses (client auth later on, appointments, invoices, and estimates).
 
-this is a really cool apps for good project
+## IDE Used
+- Visual Studio Code is what we're using
 
-## Vercel deploy
-- Use the repository root as the Vercel project root
-- Build command: `cd frontend && flutter build web`
-- Output directory: `frontend/build/web`
-- The root-level `vercel.json` rewrites all routes to `index.html` for Flutter web
+Recommended VS Code extensions:
+- Dart
+- Flutter
+- Python
+- Pylance
+
+## What Needs to Be Installed
+
+### 1) Git
+- Install Git and confirm:
+	- `git --version`
+
+### 2) Python
+- Python 3.9+ (recommended: 3.10 or 3.11)
+- Confirm using:
+	- `python3 --version`
+
+### 3) Flutter SDK
+- Install Flutter and ensure it is on PATH
+- Confirm using:
+	- `flutter --version`
+	- `flutter doctor`
+
+### 4) Chrome (for web run)
+- Flutter web is typically run with Chrome:
+	- `flutter devices`
+
+## Project Structure
+- `backend/` is the FastAPI server
+- `frontend/` is the Flutter app
+
+## Instructor Setup (From ZIP)
+
+### 1) Unzip and open project
+- Unzip the folder.
+- Open the root folder in VS Code.
+
+### 2) Backend environment file
+In `backend/`, create a `.env` file by copying `.env.example`.
+
+The `backend/.env`:
+
+```env
+APP_NAME=Anchor
+API_V1_PREFIX=/api/v1
+FIREBASE_PROJECT_ID=afg2026a
+GOOGLE_SERVICE_ACCOUNT_PATH=service-account.json
+GOOGLE_CALENDAR_SCOPES=https://www.googleapis.com/auth/calendar
+USE_MOCK_FIRESTORE=false
+DEV_AUTH_BYPASS=true
+```
+
+### 3) Service account file (required for Google Calendar / Firestore access)
+I believe this file will be included with the zip file but if not we can send the json file. Then, place the Google service-account JSON file in:
+
+- `backend/service-account.json`
+
+The filename must match:
+- `GOOGLE_SERVICE_ACCOUNT_PATH=service-account.json`
+
+Don't commit this file to GitHub.
+
+## Run the App
+
+### Run Commands
+
+Terminal 1 (Backend):
+
+```bash
+cd yourPATH/AFG2026/backend
+python3 -m pip install -r requirements.txt
+PYTHONPATH=. python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+```
+
+Terminal 2 (Frontend):
+
+```bash
+cd yourPATH/AFG2026/frontend
+flutter pub get
+flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8001 or flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8001
+```
