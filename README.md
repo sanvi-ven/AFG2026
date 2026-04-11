@@ -1,6 +1,6 @@
 # AFG2026 (Anchor)
 
-This project is a Flutter and FastAPI app for small-businesses (client auth later on, appointments, invoices, and estimates).
+This project is a Flutter and FastAPI app for small-businesses (client auth later on, appointments, invoices, and estimates). Github repo: https://github.com/sanvi-ven/AFG2026
 
 ## IDE Used
 - Visual Studio Code is what we're using
@@ -58,7 +58,7 @@ DEV_AUTH_BYPASS=true
 ```
 
 ### 3) Service account file (required for Google Calendar / Firestore access)
-I believe this file will be included with the zip file but if not we can send the json file. Then, place the Google service-account JSON file in:
+The file's contents will be sent in an email. Please create the service-account.json under the backend folder:
 
 - `backend/service-account.json`
 
