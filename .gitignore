@@ -14,5 +14,11 @@ __pycache__/
 *.log
 
 # Secrets
-backend/service-account.json
-backend/.env
+.env
+.env.*
+**/.env
+**/.env.*
+service-account.json
+service-account*.json
+**/service-account.json
+**/service-account*.json

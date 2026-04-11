@@ -5,7 +5,6 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/api_client.dart';
 import '../../../core/services/client_profile_service.dart';
 import '../../../core/state/client_session.dart';
-import '../../../models/client_profile.dart';
 
 class ClientSignupPage extends StatefulWidget {
   const ClientSignupPage({super.key});
@@ -16,7 +15,8 @@ class ClientSignupPage extends StatefulWidget {
 
 class _ClientSignupPageState extends State<ClientSignupPage> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _streetController = TextEditingController();
@@ -25,9 +25,31 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
   bool _isSubmitting = false;
   String? _error;
 
+  bool _looksLikeEmail(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || trimmed.contains(' ')) {
+      return false;
+    }
+    final parts = trimmed.split('@');
+    if (parts.length != 2) {
+      return false;
+    }
+    if (parts.first.isEmpty || parts.last.isEmpty) {
+      return false;
+    }
+    if (!parts.last.contains('.')) {
+      return false;
+    }
+    if (trimmed.contains(',')) {
+      return false;
+    }
+    return true;
+  }
+
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
     _streetController.dispose();
@@ -48,8 +70,11 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
 
     try {
       final apiClient = ApiClient(baseUrl: AppConfig.apiBaseUrl);
-      await apiClient.postJson('/api/v1/public/client-signups', {
-        'name': _nameController.text.trim(),
+      final firstName = _firstNameController.text.trim();
+      final lastName = _lastNameController.text.trim();
+      final fullName = '$firstName $lastName'.trim();
+      final createdClient = await apiClient.postJson('/api/v1/public/client-signups', {
+        'name': fullName,
         'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
         'address': {
@@ -59,20 +84,15 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
         },
       });
 
-      final nameParts = _nameController.text.trim().split(RegExp(r'\s+'));
-      final firstName = nameParts.isNotEmpty ? nameParts.first : '';
-      final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
-
-      final savedProfile = await ClientProfileService.save(
-        ClientProfile(
-          email: _emailController.text.trim(),
-          firstName: firstName,
-          lastName: lastName,
-          phone: _phoneController.text.trim(),
-          street: _streetController.text.trim(),
-          country: _countryController.text.trim(),
-          zipCode: _zipController.text.trim(),
-        ),
+      final savedProfile = await ClientProfileService.getOrCreateForSignup(
+        signupId: (createdClient['id'] as String? ?? '').trim(),
+        email: (createdClient['email'] as String? ?? _emailController.text.trim()),
+        firstName: firstName,
+        lastName: lastName,
+        phone: _phoneController.text.trim(),
+        street: _streetController.text.trim(),
+        country: _countryController.text.trim(),
+        zipCode: _zipController.text.trim(),
       );
       ClientSession.setProfile(savedProfile);
 
@@ -115,17 +135,42 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
                 children: [
                   const Text('Enter your details to continue.'),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(labelText: 'Name', border: OutlineInputBorder()),
-                    validator: (value) => (value == null || value.trim().isEmpty) ? 'Name is required' : null,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _firstNameController,
+                          decoration: const InputDecoration(labelText: 'First name', border: OutlineInputBorder()),
+                          validator: (value) =>
+                              (value == null || value.trim().isEmpty) ? 'First name is required' : null,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _lastNameController,
+                          decoration: const InputDecoration(labelText: 'Last name', border: OutlineInputBorder()),
+                          validator: (value) =>
+                              (value == null || value.trim().isEmpty) ? 'Last name is required' : null,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _emailController,
                     decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
                     keyboardType: TextInputType.emailAddress,
-                    validator: (value) => (value == null || value.trim().isEmpty) ? 'Email is required' : null,
+                    validator: (value) {
+                      final input = value?.trim() ?? '';
+                      if (input.isEmpty) {
+                        return 'Email is required';
+                      }
+                      if (!_looksLikeEmail(input)) {
+                        return 'Enter a valid email address';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 12),
                   TextFormField(

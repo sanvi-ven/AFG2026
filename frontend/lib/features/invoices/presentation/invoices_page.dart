@@ -89,7 +89,6 @@ class _HeroSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = role == 'owner' ? colorScheme.primary : colorScheme.tertiary;
 
     return Container(
       decoration: BoxDecoration(
@@ -97,7 +96,7 @@ class _HeroSummary extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [accent.withValues(alpha: 0.9), colorScheme.primary.withValues(alpha: 0.7)],
+          colors: [colorScheme.primary, colorScheme.primary],
         ),
       ),
       padding: const EdgeInsets.all(18),

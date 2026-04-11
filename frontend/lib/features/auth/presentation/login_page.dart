@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/config/app_config.dart';
+import '../../../core/services/api_client.dart';
 import '../../../core/services/client_profile_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../core/router/app_router.dart';
@@ -38,7 +40,27 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final profile = await ClientProfileService.getOrCreate(_emailController.text);
+      final apiClient = ApiClient(baseUrl: AppConfig.apiBaseUrl);
+      final client = await apiClient.postJson('/api/v1/public/client-login', {
+        'email': _emailController.text.trim(),
+      });
+
+      final rawName = (client['name'] as String? ?? '').trim();
+      final nameParts = rawName.split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
+      final firstName = nameParts.isNotEmpty ? nameParts.first : '';
+      final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+      final address = (client['address'] as Map<String, dynamic>?) ?? const <String, dynamic>{};
+
+      final profile = await ClientProfileService.getOrCreateForSignup(
+        signupId: (client['id'] as String? ?? '').trim(),
+        email: (client['email'] as String? ?? _emailController.text.trim()),
+        firstName: firstName,
+        lastName: lastName,
+        phone: (client['phone'] as String? ?? '').trim(),
+        street: (address['street'] as String? ?? '').trim(),
+        country: (address['country'] as String? ?? '').trim(),
+        zipCode: (address['zip_code'] as String? ?? '').trim(),
+      );
       ClientSession.setProfile(profile);
 
       if (!mounted) {

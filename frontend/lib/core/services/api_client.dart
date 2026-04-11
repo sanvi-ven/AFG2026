@@ -60,6 +60,26 @@ class ApiClient {
       final detail = body['detail'];
       if (detail is String && detail.isNotEmpty) {
         message = detail;
+      } else if (detail is List && detail.isNotEmpty) {
+        final parsedErrors = detail
+            .whereType<Map<String, dynamic>>()
+            .map((item) {
+              final location = (item['loc'] as List<dynamic>?)
+                      ?.map((part) => part.toString())
+                      .where((part) => part != 'body')
+                      .join('.') ??
+                  'field';
+              final text = (item['msg'] as String?)?.trim();
+              if (text == null || text.isEmpty) {
+                return null;
+              }
+              return '$location: $text';
+            })
+            .whereType<String>()
+            .toList();
+        if (parsedErrors.isNotEmpty) {
+          message = parsedErrors.join('\n');
+        }
       }
     } catch (_) {
       message = response.body.isNotEmpty ? response.body : message;

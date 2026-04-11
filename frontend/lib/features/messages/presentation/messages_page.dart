@@ -78,7 +78,7 @@ class _HeaderBanner extends StatelessWidget {
        gradient: LinearGradient(
          begin: Alignment.topLeft,
          end: Alignment.bottomRight,
-         colors: [colorScheme.primary, colorScheme.tertiary],
+         colors: [colorScheme.primary, colorScheme.primary],
        ),
      ),
      padding: const EdgeInsets.all(18),

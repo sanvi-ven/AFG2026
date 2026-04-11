@@ -96,7 +96,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [colorScheme.secondary, colorScheme.primary],
+          colors: [colorScheme.primary, colorScheme.primary],
         ),
       ),
       padding: const EdgeInsets.all(18),
