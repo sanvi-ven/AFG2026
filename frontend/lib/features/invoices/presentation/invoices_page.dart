@@ -15,109 +15,6 @@ class InvoicesPage extends StatefulWidget {
 }
 
 class _InvoicesPageState extends State<InvoicesPage> {
-  final _invoiceNumberController = TextEditingController();
-  final _clientIdController = TextEditingController();
-  final List<_ServiceRow> _serviceRows = [
-    _ServiceRow(nameController: TextEditingController(), priceController: TextEditingController()),
-  ];
-  bool _isSubmitting = false;
-
-  @override
-  void dispose() {
-    _invoiceNumberController.dispose();
-    _clientIdController.dispose();
-    for (final row in _serviceRows) {
-      row.nameController.dispose();
-      row.priceController.dispose();
-    }
-    super.dispose();
-  }
-
-  String _defaultInvoiceNumber() {
-    final ts = DateTime.now().millisecondsSinceEpoch.toString();
-    return 'INV-${ts.substring(ts.length - 6)}';
-  }
-
-  void _addServiceRow() {
-    setState(() {
-      _serviceRows.add(
-        _ServiceRow(nameController: TextEditingController(), priceController: TextEditingController()),
-      );
-    });
-  }
-
-  void _removeServiceRow(int index) {
-    if (_serviceRows.length == 1) {
-      return;
-    }
-    setState(() {
-      final row = _serviceRows.removeAt(index);
-      row.nameController.dispose();
-      row.priceController.dispose();
-    });
-  }
-
-  Future<void> _submitInvoice() async {
-    final invoiceNumber = _invoiceNumberController.text.trim().isEmpty
-        ? _defaultInvoiceNumber()
-        : _invoiceNumberController.text.trim();
-    final clientId = _clientIdController.text.trim();
-
-    if (clientId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Client ID is required.')),
-      );
-      return;
-    }
-
-    final services = <InvoiceServiceItem>[];
-    for (final row in _serviceRows) {
-      final name = row.nameController.text.trim();
-      final price = double.tryParse(row.priceController.text.trim());
-      if (name.isEmpty || price == null || price <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Each service needs a name and price greater than 0.')),
-        );
-        return;
-      }
-      services.add(InvoiceServiceItem(name: name, price: price));
-    }
-
-    setState(() => _isSubmitting = true);
-    try {
-      await InvoiceService.createInvoice(
-        invoiceNumber: invoiceNumber,
-        clientId: clientId,
-        services: services,
-      );
-      if (!mounted) {
-        return;
-      }
-
-      _invoiceNumberController.clear();
-      _clientIdController.clear();
-      for (final row in _serviceRows) {
-        row.nameController.clear();
-        row.priceController.clear();
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invoice uploaded to Firebase.')),
-      );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create invoice: $error')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
-    }
-  }
-
   Future<void> _setStatus(String invoiceId, String status) async {
     try {
       await InvoiceService.updateStatus(invoiceId: invoiceId, status: status);
@@ -149,18 +46,6 @@ class _InvoicesPageState extends State<InvoicesPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
         children: [
-          if (widget.role == 'owner') ...[
-            _OwnerInvoiceForm(
-              invoiceNumberController: _invoiceNumberController,
-              clientIdController: _clientIdController,
-              serviceRows: _serviceRows,
-              isSubmitting: _isSubmitting,
-              onAddService: _addServiceRow,
-              onRemoveService: _removeServiceRow,
-              onSubmit: _submitInvoice,
-            ),
-            const SizedBox(height: 16),
-          ],
           if (widget.role == 'client' && (clientId == null || clientId.trim().isEmpty))
             const Card(
               child: Padding(
@@ -191,7 +76,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Text(widget.role == 'owner'
-                          ? 'No invoices yet. Create one above.'
+                          ? 'No invoices yet. Convert approved estimates to invoices from the Estimates page.'
                           : 'No invoices available for your client ID yet.'),
                     ),
                   );
@@ -214,113 +99,6 @@ class _InvoicesPageState extends State<InvoicesPage> {
               },
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _OwnerInvoiceForm extends StatelessWidget {
-  const _OwnerInvoiceForm({
-    required this.invoiceNumberController,
-    required this.clientIdController,
-    required this.serviceRows,
-    required this.isSubmitting,
-    required this.onAddService,
-    required this.onRemoveService,
-    required this.onSubmit,
-  });
-
-  final TextEditingController invoiceNumberController;
-  final TextEditingController clientIdController;
-  final List<_ServiceRow> serviceRows;
-  final bool isSubmitting;
-  final VoidCallback onAddService;
-  final void Function(int index) onRemoveService;
-  final VoidCallback onSubmit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Create Invoice / Estimate', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            TextField(
-              controller: invoiceNumberController,
-              decoration: const InputDecoration(
-                labelText: 'Invoice number (optional)',
-                border: OutlineInputBorder(),
-                hintText: 'INV-123456',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: clientIdController,
-              decoration: const InputDecoration(
-                labelText: 'Client ID',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text('Services', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            for (var i = 0; i < serviceRows.length; i++) ...[
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: TextField(
-                      controller: serviceRows[i].nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Service name',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: serviceRows[i].priceController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Price',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => onRemoveService(i),
-                    icon: const Icon(Icons.remove_circle_outline),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-            ],
-            Row(
-              children: [
-                TextButton.icon(
-                  onPressed: onAddService,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add service'),
-                ),
-                const Spacer(),
-                FilledButton(
-                  onPressed: isSubmitting ? null : onSubmit,
-                  child: isSubmitting
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Submit Invoice'),
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -424,11 +202,4 @@ class _InvoiceCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _ServiceRow {
-  _ServiceRow({required this.nameController, required this.priceController});
-
-  final TextEditingController nameController;
-  final TextEditingController priceController;
 }

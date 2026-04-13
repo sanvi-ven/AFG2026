@@ -29,6 +29,33 @@ class InvoiceService {
     required String invoiceNumber,
     required String clientId,
     required List<InvoiceServiceItem> services,
+    String status = InvoiceStatus.pending,
+    String? sourceEstimateId,
+  }) async {
+    final now = DateTime.now();
+    final total = services.fold<double>(0, (runningTotal, item) => runningTotal + item.price);
+    final doc = _collection.doc();
+
+    final invoice = Invoice(
+      id: doc.id,
+      invoiceNumber: invoiceNumber.trim(),
+      clientId: clientId.trim(),
+      services: services,
+      total: total,
+      status: status,
+      createdAt: now,
+      updatedAt: now,
+      sourceEstimateId: sourceEstimateId?.trim(),
+    );
+
+    await doc.set(invoice.toMap());
+  }
+
+  static Future<String> createInvoiceFromEstimate({
+    required String invoiceNumber,
+    required String clientId,
+    required List<InvoiceServiceItem> services,
+    required String sourceEstimateId,
   }) async {
     final now = DateTime.now();
     final total = services.fold<double>(0, (runningTotal, item) => runningTotal + item.price);
@@ -43,9 +70,11 @@ class InvoiceService {
       status: InvoiceStatus.pending,
       createdAt: now,
       updatedAt: now,
+      sourceEstimateId: sourceEstimateId.trim(),
     );
 
     await doc.set(invoice.toMap());
+    return doc.id;
   }
 
   static Future<void> updateStatus({required String invoiceId, required String status}) async {
