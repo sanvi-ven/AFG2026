@@ -85,4 +85,7 @@ Terminal 2 (Frontend):
 cd yourPATH/AFG2026/frontend
 flutter pub get
 flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8001 or flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8001
+cd frontend && flutter run -d chrome --web-port 5174 --dart-define=API_BASE_URL=http://127.0.0.1:8000 --dart-define=DEMO_ROLE=client --dart-define=DEMO_AUTH_TOKEN=dev-client
+cd frontend && flutter run -d chrome --web-port 5174 --dart-define=API_BASE_URL=http://127.0.0.1:8000 --dart-define=DEMO_ROLE=owner --dart-define=DEMO_AUTH_TOKEN=dev-owner
+
 ```
