@@ -19,7 +19,7 @@ class MessagesPage extends StatelessWidget {
 
 
    return AppScaffold(
-     title: 'Messages',
+     title: 'Announcements',
      role: role,
      selectedRoute: '/messages',
      body: ListView(
