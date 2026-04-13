@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 from app.core.config import settings
 
@@ -39,18 +40,30 @@ class GoogleCalendarService:
 
         service = self._build_client()
 
-        events_result = (
-            service.events()
-            .list(
-                calendarId=calendar_id,
-                timeMin=day_start.isoformat(),
-                timeMax=day_end.isoformat(),
-                singleEvents=True,
-                orderBy="startTime",
-                maxResults=250,
+        try:
+            events_result = (
+                service.events()
+                .list(
+                    calendarId=calendar_id,
+                    timeMin=day_start.isoformat(),
+                    timeMax=day_end.isoformat(),
+                    singleEvents=True,
+                    orderBy="startTime",
+                    maxResults=250,
+                )
+                .execute()
             )
-            .execute()
-        )
+        except HttpError as exc:
+            status_code = getattr(exc.resp, "status", None)
+            if status_code == 404:
+                raise ValueError(
+                    f"Calendar '{calendar_id}' was not found. Set GOOGLE_BOOKING_CALENDAR_ID to a valid calendar ID."
+                ) from exc
+            if status_code == 403:
+                raise ValueError(
+                    f"Access denied for calendar '{calendar_id}'. Share the calendar with the service account email."
+                ) from exc
+            raise
 
         events = events_result.get("items", [])
         busy_intervals: list[tuple[datetime, datetime]] = []
@@ -124,4 +137,16 @@ class GoogleCalendarService:
         if attendee_email:
             body["attendees"] = [{"email": attendee_email}]
 
-        return service.events().insert(calendarId=calendar_id, body=body).execute()
+        try:
+            return service.events().insert(calendarId=calendar_id, body=body).execute()
+        except HttpError as exc:
+            status_code = getattr(exc.resp, "status", None)
+            if status_code == 404:
+                raise ValueError(
+                    f"Calendar '{calendar_id}' was not found. Set GOOGLE_BOOKING_CALENDAR_ID to a valid calendar ID."
+                ) from exc
+            if status_code == 403:
+                raise ValueError(
+                    f"Access denied for calendar '{calendar_id}'. Share the calendar with the service account email."
+                ) from exc
+            raise

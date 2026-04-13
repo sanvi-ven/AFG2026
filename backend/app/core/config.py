@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     firebase_project_id: str = "afg2026a"
     google_service_account_path: str = "service-account.json"
     google_calendar_scopes: str = "https://www.googleapis.com/auth/calendar"
-    google_booking_calendar_id: str = "91d01c09dd4283d77beb10f68e45025941f605469166cfef41609db2a78932bd@group.calendar.google.com"
+    google_booking_calendar_id: str = "immc17289@gmail.com"
     use_mock_firestore: bool = True
     dev_auth_bypass: bool = True
 
