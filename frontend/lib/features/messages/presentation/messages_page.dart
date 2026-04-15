@@ -1,3 +1,7 @@
+// made with chatgpt: build a flutter messaging page for a service business app. owners should be able to send broadcast messages to multiple client IDs
+// snapshot--https://firebase.google.com/docs/reference/js/firestore_.documentsnapshot
+
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';

@@ -1,3 +1,5 @@
+// made with help of chatgpt: create a flutter client signup page outline with a form. include fields for first name, last name, email, phone, address (street, country, zip)
+
 import 'package:flutter/material.dart';
 
 import '../../../core/config/app_config.dart';

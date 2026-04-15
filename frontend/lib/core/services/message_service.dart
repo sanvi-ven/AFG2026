@@ -47,7 +47,7 @@ class MessageService {
       return summaries;
     });
   }
-
+//learned through chatgpt prompt: i have a list of firestore message documents in flutter. how can i group them by a category (broadcastId) and create a summary object with counts
   static Future<int> sendBroadcast({
     required String title,
     required String body,

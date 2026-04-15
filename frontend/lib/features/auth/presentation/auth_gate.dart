@@ -50,7 +50,7 @@ class AuthGate extends StatelessWidget {
       },
     );
   }
-
+// with https://firebase.google.com/docs/auth/admin/verify-id-tokens
   Future<_AuthGateResult> _loadUser(User user) async {
     final idToken = await user.getIdToken(true);
     if (idToken == null || idToken.isEmpty) {

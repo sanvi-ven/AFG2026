@@ -1,3 +1,5 @@
+// This file's structure was made with the help of ChatGPT; prompt: make a flutter app router outline with onGenerateRoute and multiple routes
+
 import 'package:flutter/material.dart';
 
 import '../../features/appointments/presentation/appointments_page.dart';
