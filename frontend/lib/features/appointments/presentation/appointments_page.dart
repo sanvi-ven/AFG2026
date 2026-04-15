@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/services/api_client.dart';
@@ -36,6 +37,13 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     super.dispose();
   }
 
+  Future<void> _openGoogleCalendar() async {
+    const url = 'https://calendar.google.com/calendar/u/0/r/week';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -45,33 +53,30 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (widget.role == 'owner')
-            const ListTile(
-              leading: Icon(Icons.schedule),
-              title: Text('Set available time slots'),
-              subtitle: Text('Client service choices are saved in the booking description.'),
-            ),
           if (widget.role == 'client') ...[
             GoogleCalendarBookingButton(scheduleUrl: _schedulingUrl),
             const SizedBox(height: 24),
-            Text(
-              'Your Calendar',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 12),
-            const GoogleCalendarWidget(
-              calendarSrc: _AppointmentsPageState._calendarUrl,
-              height: 520,
-            ),
           ],
-          if (widget.role == 'owner') ...[
-            const SizedBox(height: 16),
-            const ListTile(
-              leading: Icon(Icons.event_available),
-              title: Text('Book / manage appointments'),
-              subtitle: Text('Create, confirm, cancel, or reschedule'),
-            ),
-          ]
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                widget.role == 'client' ? 'Your Calendar' : 'Appointments Calendar',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              if (widget.role == 'owner')
+                FilledButton.icon(
+                  onPressed: _openGoogleCalendar,
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('Open in Google'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const GoogleCalendarWidget(
+            calendarSrc: _AppointmentsPageState._calendarUrl,
+            height: 520,
+          ),
         ],
       ),
     );
