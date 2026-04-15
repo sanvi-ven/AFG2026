@@ -1,32 +1,125 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
-
+import '../../../core/config/app_config.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
 
-class MessagesPage extends StatelessWidget {
- const MessagesPage({required this.role, super.key});
-
+class MessagesPage extends StatefulWidget {
+ const MessagesPage({required this.role, this.authToken, super.key});
 
  final String role;
+ final String? authToken;
 
+ @override
+ State<MessagesPage> createState() => _MessagesPageState();
+}
+
+class _MessagesPageState extends State<MessagesPage> {
+ final _titleController = TextEditingController();
+ final _bodyController = TextEditingController();
+ bool _isSending = false;
+ String? _sendError;
+ String? _sendSuccess;
+
+ @override
+ void dispose() {
+   _titleController.dispose();
+   _bodyController.dispose();
+   super.dispose();
+ }
+
+ Future<void> _sendBroadcast() async {
+   final title = _titleController.text.trim();
+   final body = _bodyController.text.trim();
+
+   if (title.isEmpty || body.isEmpty) {
+     setState(() => _sendError = 'Title and message are required.');
+     return;
+   }
+
+   setState(() {
+     _isSending = true;
+     _sendError = null;
+     _sendSuccess = null;
+   });
+
+   try {
+     final token = widget.authToken?.trim() ?? 'dev-owner';
+     final response = await http.post(
+       Uri.parse('${AppConfig.apiBaseUrl}/api/v1/notifications/broadcast'),
+       headers: {
+         'Content-Type': 'application/json',
+         'Authorization': 'Bearer $token',
+       },
+       body: jsonEncode({
+         'business_id': 'default-business',
+         'title': title,
+         'body': body,
+         'target': 'ALL_CLIENTS',
+       }),
+     );
+
+     if (!mounted) return;
+
+     if (response.statusCode >= 200 && response.statusCode < 300) {
+       setState(() {
+         _sendSuccess = 'Announcement sent to all clients!';
+         _titleController.clear();
+         _bodyController.clear();
+       });
+       // Clear success message after 3 seconds
+       Future.delayed(const Duration(seconds: 3), () {
+         if (mounted) {
+           setState(() => _sendSuccess = null);
+         }
+       });
+     } else {
+       final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+       final detail = errorBody['detail'] ?? 'Failed to send announcement';
+       setState(() => _sendError = detail.toString());
+     }
+   } catch (error) {
+     if (mounted) {
+       setState(() => _sendError = 'Error: $error');
+     }
+   } finally {
+     if (mounted) {
+       setState(() => _isSending = false);
+     }
+   }
+ }
 
  @override
  Widget build(BuildContext context) {
    final announcements = _broadcasts;
    final unreadCount = announcements.where((announcement) => !announcement.read).length;
-   final isOwner = role == 'owner';
+   final isOwner = widget.role == 'owner';
 
 
    return AppScaffold(
      title: 'Announcements',
-     role: role,
+     role: widget.role,
+     authToken: widget.authToken,
      selectedRoute: '/messages',
      body: ListView(
        padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
        children: [
          _HeaderBanner(isOwner: isOwner, unreadCount: unreadCount),
          const SizedBox(height: 14),
+         if (isOwner) ...[
+           _BroadcastComposer(
+             titleController: _titleController,
+             bodyController: _bodyController,
+             isSending: _isSending,
+             onSend: _sendBroadcast,
+             error: _sendError,
+             success: _sendSuccess,
+           ),
+           const SizedBox(height: 20),
+         ],
          Row(
            children: [
              Expanded(child: _StatCard(label: 'Announcements', value: announcements.length, icon: Icons.campaign_outlined)),
@@ -48,11 +141,100 @@ class MessagesPage extends StatelessWidget {
          _InfoPanel(
            title: 'No Replies Enabled',
            body: isOwner
-               ? 'These are one-way messages sent to all clients. Use the broadcast composer in your admin flow to send updates.'
+               ? 'These are one-way announcements sent to all clients. Use the broadcast composer above to send updates.'
                : 'These are one-way announcements from the business owner. Clients can read them, but cannot reply here.',
            icon: Icons.lock_outline,
          ),
        ],
+     ),
+   );
+ }
+}
+
+
+class _BroadcastComposer extends StatelessWidget {
+ const _BroadcastComposer({
+   required this.titleController,
+   required this.bodyController,
+   required this.isSending,
+   required this.onSend,
+   this.error,
+   this.success,
+ });
+
+ final TextEditingController titleController;
+ final TextEditingController bodyController;
+ final bool isSending;
+ final VoidCallback onSend;
+ final String? error;
+ final String? success;
+
+ @override
+ Widget build(BuildContext context) {
+   final colorScheme = Theme.of(context).colorScheme;
+
+   return Card(
+     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+     child: Padding(
+       padding: const EdgeInsets.all(16),
+       child: Column(
+         crossAxisAlignment: CrossAxisAlignment.start,
+         children: [
+           Text(
+             'Send Announcement to All Clients',
+             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+           ),
+           const SizedBox(height: 12),
+           TextField(
+             controller: titleController,
+             enabled: !isSending,
+             decoration: InputDecoration(
+               labelText: 'Title',
+               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+             ),
+             maxLines: 1,
+           ),
+           const SizedBox(height: 12),
+           TextField(
+             controller: bodyController,
+             enabled: !isSending,
+             decoration: InputDecoration(
+               labelText: 'Message',
+               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+             ),
+             maxLines: 4,
+           ),
+           const SizedBox(height: 12),
+           if (error != null)
+             Padding(
+               padding: const EdgeInsets.only(bottom: 12),
+               child: Text(
+                 error!,
+                 style: TextStyle(color: colorScheme.error, fontSize: 12),
+               ),
+             ),
+           if (success != null)
+             Padding(
+               padding: const EdgeInsets.only(bottom: 12),
+               child: Text(
+                 success!,
+                 style: TextStyle(color: colorScheme.primary, fontSize: 12),
+               ),
+             ),
+           SizedBox(
+             width: double.infinity,
+             child: FilledButton.icon(
+               onPressed: isSending ? null : onSend,
+               icon: isSending
+                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                   : const Icon(Icons.send_outlined),
+               label: Text(isSending ? 'Sending...' : 'Send to All Clients'),
+             ),
+           ),
+         ],
+       ),
      ),
    );
  }

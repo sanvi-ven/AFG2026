@@ -25,6 +25,7 @@ class _DashboardPageState extends State<DashboardPage> {
     return AppScaffold(
       title: 'Dashboard',
       role: widget.role,
+      authToken: widget.authToken,
       selectedRoute: '/dashboard',
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -55,7 +56,7 @@ class _DashboardPageState extends State<DashboardPage> {
               subtitle: 'Pick an available slot from the bookings calendar',
               route: AppRouter.appointments,
             ),
-          _linkCard(context, title: 'Messages', subtitle: 'Unread and recent conversations', route: AppRouter.messages),
+          _linkCard(context, title: 'Announcements', subtitle: 'Latest updates from the business owner', route: AppRouter.messages),
           _linkCard(context, title: 'Unpaid invoices', subtitle: 'Pending and overdue invoice balances', route: AppRouter.invoices),
           _linkCard(context, title: 'Estimates', subtitle: 'Review requests and quotes', route: AppRouter.estimates),
           if (widget.role == 'owner')

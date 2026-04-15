@@ -79,27 +79,27 @@ class AppRouter {
         );
       case appointments:
         return _NoAnimationPageRoute(
-          builder: (_) => AppointmentsPage(role: role),
+          builder: (_) => AppointmentsPage(role: role, authToken: authToken),
           settings: settings,
         );
       case invoices:
         return _NoAnimationPageRoute(
-          builder: (_) => InvoicesPage(role: role),
+          builder: (_) => InvoicesPage(role: role, authToken: authToken),
           settings: settings,
         );
       case estimates:
         return _NoAnimationPageRoute(
-          builder: (_) => EstimatesPage(role: role),
+          builder: (_) => EstimatesPage(role: role, authToken: authToken),
           settings: settings,
         );
       case messages:
         return _NoAnimationPageRoute(
-          builder: (_) => MessagesPage(role: role),
+          builder: (_) => MessagesPage(role: role, authToken: authToken),
           settings: settings,
         );
       case availability:
         return _NoAnimationPageRoute(
-          builder: (_) => AvailabilityPage(role: role),
+          builder: (_) => AvailabilityPage(role: role, authToken: authToken),
           settings: settings,
         );
       default:

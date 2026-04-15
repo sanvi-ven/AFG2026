@@ -4,9 +4,10 @@ import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/google_calendar_widget.dart';
 
 class AvailabilityPage extends StatelessWidget {
-  const AvailabilityPage({required this.role, super.key});
+  const AvailabilityPage({required this.role, this.authToken, super.key});
 
   final String role;
+  final String? authToken;
 
   @override
   Widget build(BuildContext context) {
@@ -14,6 +15,7 @@ class AvailabilityPage extends StatelessWidget {
       return AppScaffold(
         title: 'Availability',
         role: role,
+        authToken: authToken,
         selectedRoute: '/availability',
         body: const Center(child: Text('Availability management is for business owners only.')),
       );
@@ -25,6 +27,7 @@ class AvailabilityPage extends StatelessWidget {
     return AppScaffold(
       title: 'Availability',
       role: role,
+      authToken: authToken,
       selectedRoute: '/availability',
       body: ListView(
         padding: const EdgeInsets.all(16),

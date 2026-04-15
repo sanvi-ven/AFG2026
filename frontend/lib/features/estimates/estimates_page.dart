@@ -8,9 +8,10 @@ import '../../models/invoice.dart';
 import '../../shared/widgets/app_scaffold.dart';
 
 class EstimatesPage extends StatefulWidget {
-  const EstimatesPage({required this.role, super.key});
+  const EstimatesPage({required this.role, this.authToken, super.key});
 
   final String role;
+  final String? authToken;
 
   @override
   State<EstimatesPage> createState() => _EstimatesPageState();
@@ -187,6 +188,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
     return AppScaffold(
       title: 'Estimates',
       role: widget.role,
+      authToken: widget.authToken,
       selectedRoute: '/estimates',
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
