@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/config/app_config.dart';
-import '../../../core/services/api_client.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/google_calendar_widget.dart';
 import '../../../shared/widgets/google_calendar_booking_button.dart';
-import '../data/calendar_booking_repository.dart';
 
 class AppointmentsPage extends StatefulWidget {
   const AppointmentsPage({required this.role, this.authToken, super.key});
@@ -23,19 +20,6 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
 
   static const String _schedulingUrl =
       'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0vl6GyDUbhfZVYEi-NzQpylnetU7nK0p2b9fgeN4vv_SpQKa-NuMxTtvUVm5wNEeUPBtIYvfrW?gv=true';
-
-  late final CalendarBookingRepository _repository;
-
-  @override
-  void initState() {
-    super.initState();
-    _repository = CalendarBookingRepository(ApiClient(baseUrl: AppConfig.apiBaseUrl));
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {

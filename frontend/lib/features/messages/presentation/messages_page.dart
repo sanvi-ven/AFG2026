@@ -2,19 +2,18 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
 
 import '../../../core/services/local_notification_service.dart';
 import '../../../core/services/message_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../models/message.dart';
-import '../../../core/config/app_config.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
 class MessagesPage extends StatefulWidget {
-  const MessagesPage({required this.role, super.key});
+  const MessagesPage({required this.role, this.authToken, super.key});
 
   final String role;
+  final String? authToken;
 
   @override
   State<MessagesPage> createState() => _MessagesPageState();
@@ -179,6 +178,7 @@ class _MessagesPageState extends State<MessagesPage> {
     return AppScaffold(
       title: widget.role == 'owner' ? 'Broadcast Center' : 'Inbox',
       role: widget.role,
+      authToken: widget.authToken,
       selectedRoute: '/messages',
       body: widget.role == 'owner'
           ? _buildOwnerView(context)
