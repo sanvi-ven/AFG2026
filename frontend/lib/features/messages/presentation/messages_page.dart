@@ -1,556 +1,519 @@
-import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 
-import '../../../core/config/app_config.dart';
+import '../../../core/services/local_notification_service.dart';
+import '../../../core/services/message_service.dart';
+import '../../../core/state/client_session.dart';
+import '../../../models/message.dart';import '../../../core/config/app_config.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
-
 class MessagesPage extends StatefulWidget {
- const MessagesPage({required this.role, this.authToken, super.key});
+  const MessagesPage({required this.role, super.key});
 
- final String role;
- final String? authToken;
+  final String role;
 
- @override
- State<MessagesPage> createState() => _MessagesPageState();
+  @override
+  State<MessagesPage> createState() => _MessagesPageState();
 }
 
 class _MessagesPageState extends State<MessagesPage> {
- final _titleController = TextEditingController();
- final _bodyController = TextEditingController();
- bool _isSending = false;
- String? _sendError;
- String? _sendSuccess;
+  final _titleController = TextEditingController();
+  final _bodyController = TextEditingController();
+  final _clientIdsController = TextEditingController();
 
- @override
- void dispose() {
-   _titleController.dispose();
-   _bodyController.dispose();
-   super.dispose();
- }
+  bool _isSending = false;
+  bool _notificationBootstrapDone = false;
+  String? _activeClientId;
+  Set<String> _knownMessageIds = <String>{};
+  StreamSubscription<List<MessageLog>>? _notificationSub;
 
- Future<void> _sendBroadcast() async {
-   final title = _titleController.text.trim();
-   final body = _bodyController.text.trim();
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _bodyController.dispose();
+    _clientIdsController.dispose();
+    _notificationSub?.cancel();
+    super.dispose();
+  }
 
-   if (title.isEmpty || body.isEmpty) {
-     setState(() => _sendError = 'Title and message are required.');
-     return;
-   }
+  List<String> _parseClientIds(String input) {
+    return input
+        .split(RegExp(r'[,;\n\s]+'))
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList();
+  }
 
-   setState(() {
-     _isSending = true;
-     _sendError = null;
-     _sendSuccess = null;
-   });
+  Future<void> _sendBroadcast() async {
+    final title = _titleController.text.trim();
+    final body = _bodyController.text.trim();
+    final clientIds = _parseClientIds(_clientIdsController.text);
 
-   try {
-     final token = widget.authToken?.trim() ?? 'dev-owner';
-     final response = await http.post(
-       Uri.parse('${AppConfig.apiBaseUrl}/api/v1/notifications/broadcast'),
-       headers: {
-         'Content-Type': 'application/json',
-         'Authorization': 'Bearer $token',
-       },
-       body: jsonEncode({
-         'business_id': 'default-business',
-         'title': title,
-         'body': body,
-         'target': 'ALL_CLIENTS',
-       }),
-     );
+    if (title.isEmpty || body.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Title and message body are required.')),
+      );
+      return;
+    }
+    if (clientIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Provide at least one client ID.')),
+      );
+      return;
+    }
 
-     if (!mounted) return;
+    setState(() => _isSending = true);
+    try {
+      final sentCount = await MessageService.sendBroadcast(
+        title: title,
+        body: body,
+        clientIds: clientIds,
+      );
 
-     if (response.statusCode >= 200 && response.statusCode < 300) {
-       setState(() {
-         _sendSuccess = 'Announcement sent to all clients!';
-         _titleController.clear();
-         _bodyController.clear();
-       });
-       // Clear success message after 3 seconds
-       Future.delayed(const Duration(seconds: 3), () {
-         if (mounted) {
-           setState(() => _sendSuccess = null);
-         }
-       });
-     } else {
-       final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
-       final detail = errorBody['detail'] ?? 'Failed to send announcement';
-       setState(() => _sendError = detail.toString());
-     }
-   } catch (error) {
-     if (mounted) {
-       setState(() => _sendError = 'Error: $error');
-     }
-   } finally {
-     if (mounted) {
-       setState(() => _isSending = false);
-     }
-   }
- }
+      if (!mounted) {
+        return;
+      }
 
- @override
- Widget build(BuildContext context) {
-   final announcements = _broadcasts;
-   final unreadCount = announcements.where((announcement) => !announcement.read).length;
-   final isOwner = widget.role == 'owner';
+      _titleController.clear();
+      _bodyController.clear();
+      _clientIdsController.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Broadcast sent to $sentCount client(s).')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send broadcast: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
+    }
+  }
 
+  Future<void> _markMessageRead(String messageId) async {
+    try {
+      await MessageService.markAsRead(messageId: messageId);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to mark message as read: $error')),
+      );
+    }
+  }
 
-   return AppScaffold(
-     title: 'Announcements',
-     role: widget.role,
-     authToken: widget.authToken,
-     selectedRoute: '/messages',
-     body: ListView(
-       padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-       children: [
-         _HeaderBanner(isOwner: isOwner, unreadCount: unreadCount),
-         const SizedBox(height: 14),
-         if (isOwner) ...[
-           _BroadcastComposer(
-             titleController: _titleController,
-             bodyController: _bodyController,
-             isSending: _isSending,
-             onSend: _sendBroadcast,
-             error: _sendError,
-             success: _sendSuccess,
-           ),
-           const SizedBox(height: 20),
-         ],
-         Row(
-           children: [
-             Expanded(child: _StatCard(label: 'Announcements', value: announcements.length, icon: Icons.campaign_outlined)),
-             const SizedBox(width: 10),
-             Expanded(child: _StatCard(label: 'Unread', value: unreadCount, icon: Icons.mark_email_unread_outlined)),
-           ],
-         ),
-         const SizedBox(height: 16),
-         Text(
-           'Broadcasts',
-           style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-         ),
-         const SizedBox(height: 10),
-         for (final announcement in announcements) ...[
-           _AnnouncementCard(announcement: announcement),
-           const SizedBox(height: 12),
-         ],
-         const SizedBox(height: 4),
-         _InfoPanel(
-           title: 'No Replies Enabled',
-           body: isOwner
-               ? 'These are one-way announcements sent to all clients. Use the broadcast composer above to send updates.'
-               : 'These are one-way announcements from the business owner. Clients can read them, but cannot reply here.',
-           icon: Icons.lock_outline,
-         ),
-       ],
-     ),
-   );
- }
+  Future<void> _markAllRead(String clientId) async {
+    try {
+      await MessageService.markAllAsRead(clientId: clientId);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All messages marked as read.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to mark all read: $error')),
+      );
+    }
+  }
+
+  void _ensureClientNotificationListener(String? clientId) {
+    if (widget.role != 'client' || clientId == null || clientId.trim().isEmpty) {
+      return;
+    }
+    if (_activeClientId == clientId && _notificationSub != null) {
+      return;
+    }
+
+    _activeClientId = clientId;
+    _notificationBootstrapDone = false;
+    _knownMessageIds = <String>{};
+    _notificationSub?.cancel();
+
+    _notificationSub = MessageService.watchClientMessages(clientId: clientId).listen((messages) async {
+      if (!_notificationBootstrapDone) {
+        _knownMessageIds = messages.map((item) => item.id).toSet();
+        _notificationBootstrapDone = true;
+        return;
+      }
+
+      for (final message in messages) {
+        if (_knownMessageIds.contains(message.id)) {
+          continue;
+        }
+        _knownMessageIds.add(message.id);
+        if (!message.read) {
+          await LocalNotificationService.showMessageNotification(
+            id: message.id.hashCode,
+            title: message.title,
+            body: message.body,
+          );
+        }
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = ClientSession.profile.value;
+    final clientId = profile?.signupId;
+    _ensureClientNotificationListener(clientId);
+
+    return AppScaffold(
+      title: widget.role == 'owner' ? 'Broadcast Center' : 'Inbox',
+      role: widget.role,
+      selectedRoute: '/messages',
+      body: widget.role == 'owner'
+          ? _buildOwnerView(context)
+          : _buildClientView(context, clientId),
+    );
+  }
+
+  Widget _buildOwnerView(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+      children: [
+        _OwnerComposerCard(
+          titleController: _titleController,
+          bodyController: _bodyController,
+          clientIdsController: _clientIdsController,
+          isSending: _isSending,
+          onSend: _sendBroadcast,
+        ),
+        const SizedBox(height: 14),
+        StreamBuilder<List<OwnerBroadcastSummary>>(
+          stream: MessageService.watchOwnerBroadcasts(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text('Failed to load broadcast log: ${snapshot.error}'),
+                ),
+              );
+            }
+
+            final broadcasts = snapshot.data ?? const <OwnerBroadcastSummary>[];
+            if (broadcasts.isEmpty) {
+              return const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No broadcasts yet. Send your first message above.'),
+                ),
+              );
+            }
+
+            return Column(
+              children: [
+                for (final item in broadcasts)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _OwnerBroadcastLogCard(summary: item),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildClientView(BuildContext context, String? clientId) {
+    if (clientId == null || clientId.trim().isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('Client ID not found. Please log in from the client email flow first.'),
+          ),
+        ),
+      );
+    }
+
+    return StreamBuilder<List<MessageLog>>(
+      stream: MessageService.watchClientMessages(clientId: clientId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('Failed to load inbox: ${snapshot.error}'),
+              ),
+            ),
+          );
+        }
+
+        final messages = snapshot.data ?? const <MessageLog>[];
+        final unreadCount = messages.where((item) => item.isUnread).length;
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+          children: [
+            _ClientInboxBanner(unreadCount: unreadCount),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: unreadCount > 0 ? () => _markAllRead(clientId) : null,
+                icon: const Icon(Icons.done_all),
+                label: const Text('Mark All Read'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (messages.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No messages yet.'),
+                ),
+              )
+            else
+              ...messages.map(
+                (message) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _ClientMessageCard(
+                    message: message,
+                    onMarkRead: message.isUnread ? () => _markMessageRead(message.id) : null,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
 }
 
+class _OwnerComposerCard extends StatelessWidget {
+  const _OwnerComposerCard({
+    required this.titleController,
+    required this.bodyController,
+    required this.clientIdsController,
+    required this.isSending,
+    required this.onSend,
+  });
 
-class _BroadcastComposer extends StatelessWidget {
- const _BroadcastComposer({
-   required this.titleController,
-   required this.bodyController,
-   required this.isSending,
-   required this.onSend,
-   this.error,
-   this.success,
- });
+  final TextEditingController titleController;
+  final TextEditingController bodyController;
+  final TextEditingController clientIdsController;
+  final bool isSending;
+  final VoidCallback onSend;
 
- final TextEditingController titleController;
- final TextEditingController bodyController;
- final bool isSending;
- final VoidCallback onSend;
- final String? error;
- final String? success;
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
 
- @override
- Widget build(BuildContext context) {
-   final colorScheme = Theme.of(context).colorScheme;
-
-   return Card(
-     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-     child: Padding(
-       padding: const EdgeInsets.all(16),
-       child: Column(
-         crossAxisAlignment: CrossAxisAlignment.start,
-         children: [
-           Text(
-             'Send Announcement to All Clients',
-             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-           ),
-           const SizedBox(height: 12),
-           TextField(
-             controller: titleController,
-             enabled: !isSending,
-             decoration: InputDecoration(
-               labelText: 'Title',
-               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-             ),
-             maxLines: 1,
-           ),
-           const SizedBox(height: 12),
-           TextField(
-             controller: bodyController,
-             enabled: !isSending,
-             decoration: InputDecoration(
-               labelText: 'Message',
-               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-             ),
-             maxLines: 4,
-           ),
-           const SizedBox(height: 12),
-           if (error != null)
-             Padding(
-               padding: const EdgeInsets.only(bottom: 12),
-               child: Text(
-                 error!,
-                 style: TextStyle(color: colorScheme.error, fontSize: 12),
-               ),
-             ),
-           if (success != null)
-             Padding(
-               padding: const EdgeInsets.only(bottom: 12),
-               child: Text(
-                 success!,
-                 style: TextStyle(color: colorScheme.primary, fontSize: 12),
-               ),
-             ),
-           SizedBox(
-             width: double.infinity,
-             child: FilledButton.icon(
-               onPressed: isSending ? null : onSend,
-               icon: isSending
-                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                   : const Icon(Icons.send_outlined),
-               label: Text(isSending ? 'Sending...' : 'Send to All Clients'),
-             ),
-           ),
-         ],
-       ),
-     ),
-   );
- }
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Owner Broadcast',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: colorScheme.onPrimaryContainer,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: titleController,
+            decoration: const InputDecoration(
+              labelText: 'Title',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: bodyController,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Message',
+              border: OutlineInputBorder(),
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: clientIdsController,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Client IDs (comma, space, or new-line separated)',
+              border: OutlineInputBorder(),
+              alignLabelWithHint: true,
+              hintText: 'abc123, def456',
+            ),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: isSending ? null : onSend,
+              icon: isSending
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send),
+              label: const Text('Send Broadcast'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
+class _OwnerBroadcastLogCard extends StatelessWidget {
+  const _OwnerBroadcastLogCard({required this.summary});
 
-class _HeaderBanner extends StatelessWidget {
- const _HeaderBanner({required this.isOwner, required this.unreadCount});
+  final OwnerBroadcastSummary summary;
 
+  @override
+  Widget build(BuildContext context) {
+    final dateLabel = DateFormat.yMMMd().add_jm().format(summary.createdAt);
+    final deliveryPercent = summary.recipientCount == 0
+        ? 0
+        : ((summary.readCount / summary.recipientCount) * 100).round();
 
- final bool isOwner;
- final int unreadCount;
-
-
- @override
- Widget build(BuildContext context) {
-   final colorScheme = Theme.of(context).colorScheme;
-
-
-   return Container(
-     decoration: BoxDecoration(
-       borderRadius: BorderRadius.circular(20),
-       gradient: LinearGradient(
-         begin: Alignment.topLeft,
-         end: Alignment.bottomRight,
-         colors: [colorScheme.primary, colorScheme.primary],
-       ),
-     ),
-     padding: const EdgeInsets.all(18),
-     child: Row(
-       children: [
-         Expanded(
-           child: Column(
-             crossAxisAlignment: CrossAxisAlignment.start,
-             children: [
-               Text(
-                 isOwner ? 'Broadcast Announcements' : 'Owner Announcements',
-                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                       color: colorScheme.onPrimary,
-                       fontWeight: FontWeight.w700,
-                     ),
-               ),
-               const SizedBox(height: 6),
-               Text(
-                 isOwner
-                     ? 'Send updates to all clients at once. Clients receive them as read-only announcements.'
-                     : 'Read the latest updates from the business owner. Replies are disabled here.',
-                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                       color: colorScheme.onPrimary.withValues(alpha: 0.92),
-                     ),
-               ),
-             ],
-           ),
-         ),
-         const SizedBox(width: 12),
-         CircleAvatar(
-           radius: 26,
-           backgroundColor: colorScheme.onPrimary.withValues(alpha: 0.16),
-           child: Icon(Icons.campaign_outlined, color: colorScheme.onPrimary),
-         ),
-         const SizedBox(width: 10),
-         Column(
-           crossAxisAlignment: CrossAxisAlignment.end,
-           children: [
-             Text(
-               '$unreadCount unread',
-               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                     color: colorScheme.onPrimary,
-                     fontWeight: FontWeight.w700,
-                   ),
-             ),
-             const SizedBox(height: 4),
-             Text(
-               'No replies',
-               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                     color: colorScheme.onPrimary.withValues(alpha: 0.88),
-                   ),
-             ),
-           ],
-         ),
-       ],
-     ),
-   );
- }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(summary.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Text(summary.body),
+            const SizedBox(height: 10),
+            Text('$dateLabel · ${summary.recipientCount} recipient(s)'),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(value: summary.recipientCount == 0 ? 0 : summary.readCount / summary.recipientCount),
+            const SizedBox(height: 6),
+            Text('Read by ${summary.readCount}/${summary.recipientCount} ($deliveryPercent%)'),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
+class _ClientInboxBanner extends StatelessWidget {
+  const _ClientInboxBanner({required this.unreadCount});
 
-class _StatCard extends StatelessWidget {
- const _StatCard({required this.label, required this.value, required this.icon});
+  final int unreadCount;
 
-
- final String label;
- final int value;
- final IconData icon;
-
-
- @override
- Widget build(BuildContext context) {
-   return Card(
-     margin: EdgeInsets.zero,
-     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-     child: Padding(
-       padding: const EdgeInsets.all(12),
-       child: Column(
-         crossAxisAlignment: CrossAxisAlignment.start,
-         children: [
-           Icon(icon, size: 18),
-           const SizedBox(height: 10),
-           Text(
-             value.toString(),
-             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-           ),
-           const SizedBox(height: 4),
-           Text(label, style: Theme.of(context).textTheme.bodySmall),
-         ],
-       ),
-     ),
-   );
- }
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.notifications_active_outlined, color: colorScheme.onSecondaryContainer),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              unreadCount == 0
+                  ? 'No unread announcements.'
+                  : 'You have $unreadCount unread announcement(s).',
+              style: TextStyle(color: colorScheme.onSecondaryContainer, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
+class _ClientMessageCard extends StatelessWidget {
+  const _ClientMessageCard({required this.message, this.onMarkRead});
 
-class _AnnouncementCard extends StatelessWidget {
- const _AnnouncementCard({required this.announcement});
+  final MessageLog message;
+  final VoidCallback? onMarkRead;
 
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final statusColor = message.read ? colorScheme.primary : colorScheme.error;
+    final dateLabel = DateFormat.yMMMd().add_jm().format(message.createdAt);
 
- final _Announcement announcement;
-
-
- @override
- Widget build(BuildContext context) {
-   final colorScheme = Theme.of(context).colorScheme;
-
-
-   return Card(
-     margin: EdgeInsets.zero,
-     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-     child: Padding(
-       padding: const EdgeInsets.all(16),
-       child: Column(
-         crossAxisAlignment: CrossAxisAlignment.start,
-         children: [
-           Row(
-             children: [
-               Container(
-                 width: 46,
-                 height: 46,
-                 decoration: BoxDecoration(
-                   color: colorScheme.primaryContainer,
-                   borderRadius: BorderRadius.circular(14),
-                 ),
-                 child: const Icon(Icons.campaign_outlined),
-               ),
-               const SizedBox(width: 12),
-               Expanded(
-                 child: Column(
-                   crossAxisAlignment: CrossAxisAlignment.start,
-                   children: [
-                     Row(
-                       children: [
-                         Expanded(
-                           child: Text(
-                             announcement.title,
-                             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                           ),
-                         ),
-                         _StatusChip(label: announcement.read ? 'Read' : 'Unread', color: announcement.read ? colorScheme.primary : colorScheme.error),
-                       ],
-                     ),
-                     const SizedBox(height: 4),
-                     Text('${announcement.sentBy} · ${announcement.timeLabel}'),
-                   ],
-                 ),
-               ),
-             ],
-           ),
-           const SizedBox(height: 14),
-           Text(announcement.body),
-           const SizedBox(height: 12),
-           Row(
-             children: [
-               _MetaPill(icon: Icons.groups_outlined, text: announcement.audience),
-               const SizedBox(width: 10),
-               _MetaPill(icon: Icons.lock_outline, text: 'Read only'),
-             ],
-           ),
-         ],
-       ),
-     ),
-   );
- }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    message.title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    message.read ? 'Read' : 'Unread',
+                    style: TextStyle(color: statusColor, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(message.body),
+            const SizedBox(height: 10),
+            Text(dateLabel, style: Theme.of(context).textTheme.bodySmall),
+            if (onMarkRead != null) ...[
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: OutlinedButton.icon(
+                  onPressed: onMarkRead,
+                  icon: const Icon(Icons.mark_email_read_outlined),
+                  label: const Text('Mark Read'),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
-
-
-class _InfoPanel extends StatelessWidget {
- const _InfoPanel({required this.title, required this.body, required this.icon});
-
-
- final String title;
- final String body;
- final IconData icon;
-
-
- @override
- Widget build(BuildContext context) {
-   return Card(
-     margin: EdgeInsets.zero,
-     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-     child: Padding(
-       padding: const EdgeInsets.all(16),
-       child: Row(
-         children: [
-           Icon(icon),
-           const SizedBox(width: 12),
-           Expanded(
-             child: Column(
-               crossAxisAlignment: CrossAxisAlignment.start,
-               children: [
-                 Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-                 const SizedBox(height: 4),
-                 Text(body),
-               ],
-             ),
-           ),
-         ],
-       ),
-     ),
-   );
- }
-}
-
-
-class _MetaPill extends StatelessWidget {
- const _MetaPill({required this.icon, required this.text});
-
-
- final IconData icon;
- final String text;
-
-
- @override
- Widget build(BuildContext context) {
-   return Container(
-     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-     decoration: BoxDecoration(
-       color: Theme.of(context).colorScheme.surfaceContainerHighest,
-       borderRadius: BorderRadius.circular(14),
-     ),
-     child: Row(
-       mainAxisSize: MainAxisSize.min,
-       children: [
-         Icon(icon, size: 16),
-         const SizedBox(width: 8),
-         Text(text),
-       ],
-     ),
-   );
- }
-}
-
-
-class _StatusChip extends StatelessWidget {
- const _StatusChip({required this.label, required this.color});
-
-
- final String label;
- final Color color;
-
-
- @override
- Widget build(BuildContext context) {
-   return Container(
-     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-     decoration: BoxDecoration(
-       color: color.withValues(alpha: 0.12),
-       borderRadius: BorderRadius.circular(999),
-     ),
-     child: Text(
-       label,
-       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-             color: color,
-             fontWeight: FontWeight.w700,
-           ),
-     ),
-   );
- }
-}
-
-
-class _Announcement {
- const _Announcement({
-   required this.title,
-   required this.body,
-   required this.sentBy,
-   required this.timeLabel,
-   required this.audience,
-   required this.read,
- });
-
-
- final String title;
- final String body;
- final String sentBy;
- final String timeLabel;
- final String audience;
- final bool read;
-}
-
-
-const List<_Announcement> _broadcasts = <_Announcement>[
- _Announcement(
-   title: 'Spring service availability',
-   body: 'New service slots have been opened for next week. Reach out through your booking link if needed.',
-   sentBy: 'RP Landscaping',
-   timeLabel: '3d ago',
-   audience: 'All clients',
-   read: false,
- ),
-];
