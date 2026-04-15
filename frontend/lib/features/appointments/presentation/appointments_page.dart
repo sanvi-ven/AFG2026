@@ -9,9 +9,10 @@ import '../../../shared/widgets/google_calendar_booking_button.dart';
 import '../data/calendar_booking_repository.dart';
 
 class AppointmentsPage extends StatefulWidget {
-  const AppointmentsPage({required this.role, super.key});
+  const AppointmentsPage({required this.role, this.authToken, super.key});
 
   final String role;
+  final String? authToken;
 
   @override
   State<AppointmentsPage> createState() => _AppointmentsPageState();
@@ -49,6 +50,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     return AppScaffold(
       title: 'Appointments',
       role: widget.role,
+      authToken: widget.authToken,
       selectedRoute: '/appointments',
       body: ListView(
         padding: const EdgeInsets.all(16),

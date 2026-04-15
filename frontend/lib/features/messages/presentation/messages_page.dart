@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
 
 import '../../../core/services/local_notification_service.dart';
 import '../../../core/services/message_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../models/message.dart';
+import '../../../core/config/app_config.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
 class MessagesPage extends StatefulWidget {
@@ -130,7 +132,9 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 
   void _ensureClientNotificationListener(String? clientId) {
-    if (widget.role != 'client' || clientId == null || clientId.trim().isEmpty) {
+    if (widget.role != 'client' ||
+        clientId == null ||
+        clientId.trim().isEmpty) {
       return;
     }
     if (_activeClientId == clientId && _notificationSub != null) {
@@ -142,7 +146,8 @@ class _MessagesPageState extends State<MessagesPage> {
     _knownMessageIds = <String>{};
     _notificationSub?.cancel();
 
-    _notificationSub = MessageService.watchClientMessages(clientId: clientId).listen((messages) async {
+    _notificationSub = MessageService.watchClientMessages(clientId: clientId)
+        .listen((messages) async {
       if (!_notificationBootstrapDone) {
         _knownMessageIds = messages.map((item) => item.id).toSet();
         _notificationBootstrapDone = true;
@@ -203,7 +208,8 @@ class _MessagesPageState extends State<MessagesPage> {
               return Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text('Failed to load broadcast log: ${snapshot.error}'),
+                  child:
+                      Text('Failed to load broadcast log: ${snapshot.error}'),
                 ),
               );
             }
@@ -213,7 +219,8 @@ class _MessagesPageState extends State<MessagesPage> {
               return const Card(
                 child: Padding(
                   padding: EdgeInsets.all(16),
-                  child: Text('No broadcasts yet. Send your first message above.'),
+                  child:
+                      Text('No broadcasts yet. Send your first message above.'),
                 ),
               );
             }
@@ -240,7 +247,8 @@ class _MessagesPageState extends State<MessagesPage> {
         child: Card(
           child: Padding(
             padding: EdgeInsets.all(16),
-            child: Text('Client ID not found. Please log in from the client email flow first.'),
+            child: Text(
+                'Client ID not found. Please log in from the client email flow first.'),
           ),
         ),
       );
@@ -275,7 +283,8 @@ class _MessagesPageState extends State<MessagesPage> {
             Align(
               alignment: Alignment.centerRight,
               child: OutlinedButton.icon(
-                onPressed: unreadCount > 0 ? () => _markAllRead(clientId) : null,
+                onPressed:
+                    unreadCount > 0 ? () => _markAllRead(clientId) : null,
                 icon: const Icon(Icons.done_all),
                 label: const Text('Mark All Read'),
               ),
@@ -294,7 +303,9 @@ class _MessagesPageState extends State<MessagesPage> {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _ClientMessageCard(
                     message: message,
-                    onMarkRead: message.isUnread ? () => _markMessageRead(message.id) : null,
+                    onMarkRead: message.isUnread
+                        ? () => _markMessageRead(message.id)
+                        : null,
                   ),
                 ),
               ),
@@ -408,15 +419,23 @@ class _OwnerBroadcastLogCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(summary.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+            Text(summary.title,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
             Text(summary.body),
             const SizedBox(height: 10),
             Text('$dateLabel · ${summary.recipientCount} recipient(s)'),
             const SizedBox(height: 8),
-            LinearProgressIndicator(value: summary.recipientCount == 0 ? 0 : summary.readCount / summary.recipientCount),
+            LinearProgressIndicator(
+                value: summary.recipientCount == 0
+                    ? 0
+                    : summary.readCount / summary.recipientCount),
             const SizedBox(height: 6),
-            Text('Read by ${summary.readCount}/${summary.recipientCount} ($deliveryPercent%)'),
+            Text(
+                'Read by ${summary.readCount}/${summary.recipientCount} ($deliveryPercent%)'),
           ],
         ),
       ),
@@ -440,14 +459,17 @@ class _ClientInboxBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.notifications_active_outlined, color: colorScheme.onSecondaryContainer),
+          Icon(Icons.notifications_active_outlined,
+              color: colorScheme.onSecondaryContainer),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               unreadCount == 0
                   ? 'No unread announcements.'
                   : 'You have $unreadCount unread announcement(s).',
-              style: TextStyle(color: colorScheme.onSecondaryContainer, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                  color: colorScheme.onSecondaryContainer,
+                  fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -479,18 +501,23 @@ class _ClientMessageCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     message.title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     message.read ? 'Read' : 'Unread',
-                    style: TextStyle(color: statusColor, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                        color: statusColor, fontWeight: FontWeight.w700),
                   ),
                 ),
               ],

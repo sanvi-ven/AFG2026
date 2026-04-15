@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../features/appointments/presentation/appointments_page.dart';
 import '../../features/auth/presentation/client_signup_page.dart';
 import '../../features/auth/presentation/login_page.dart';
+import '../../features/auth/presentation/owner_signin_page.dart';
 import '../../features/availability/presentation/availability_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
 import '../../features/estimates/estimates_page.dart';
@@ -49,6 +50,7 @@ class _NoAnimationPageRoute<T> extends PageRoute<T> {
 class AppRouter {
   static const login = '/';
   static const clientSignup = '/signup/client';
+  static const ownerSignin = '/signin/owner';
   static const dashboard = '/dashboard';
   static const appointments = '/appointments';
   static const invoices = '/invoices';
@@ -77,29 +79,34 @@ class AppRouter {
           builder: (_) => const ClientSignupPage(),
           settings: settings,
         );
+      case ownerSignin:
+        return _NoAnimationPageRoute(
+          builder: (_) => const OwnerSigninPage(),
+          settings: settings,
+        );
       case appointments:
         return _NoAnimationPageRoute(
-          builder: (_) => AppointmentsPage(role: role),
+          builder: (_) => AppointmentsPage(role: role, authToken: authToken),
           settings: settings,
         );
       case invoices:
         return _NoAnimationPageRoute(
-          builder: (_) => InvoicesPage(role: role),
+          builder: (_) => InvoicesPage(role: role, authToken: authToken),
           settings: settings,
         );
       case estimates:
         return _NoAnimationPageRoute(
-          builder: (_) => EstimatesPage(role: role),
+          builder: (_) => EstimatesPage(role: role, authToken: authToken),
           settings: settings,
         );
       case messages:
         return _NoAnimationPageRoute(
-          builder: (_) => MessagesPage(role: role),
+          builder: (_) => MessagesPage(role: role, authToken: authToken),
           settings: settings,
         );
       case availability:
         return _NoAnimationPageRoute(
-          builder: (_) => AvailabilityPage(role: role),
+          builder: (_) => AvailabilityPage(role: role, authToken: authToken),
           settings: settings,
         );
       default:

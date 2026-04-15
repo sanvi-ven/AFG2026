@@ -6,9 +6,10 @@ import '../../../models/invoice.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
 class InvoicesPage extends StatefulWidget {
-  const InvoicesPage({required this.role, super.key});
+  const InvoicesPage({required this.role, this.authToken, super.key});
 
   final String role;
+  final String? authToken;
 
   @override
   State<InvoicesPage> createState() => _InvoicesPageState();
@@ -42,6 +43,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
     return AppScaffold(
       title: 'Invoices',
       role: widget.role,
+      authToken: widget.authToken,
       selectedRoute: '/invoices',
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),

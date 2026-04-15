@@ -29,6 +29,10 @@ class _LoginPageState extends State<LoginPage> {
     Navigator.pushNamed(context, AppRouter.clientSignup);
   }
 
+  void _goToOwnerSignin() {
+    Navigator.pushNamed(context, AppRouter.ownerSignin);
+  }
+
   Future<void> _loginClient() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -145,6 +149,11 @@ class _LoginPageState extends State<LoginPage> {
                   OutlinedButton(
                     onPressed: _goToSignup,
                     child: const Text('Create Client Profile'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _goToOwnerSignin,
+                    child: const Text('Business Owner Sign In'),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
