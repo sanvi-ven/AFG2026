@@ -11,6 +11,7 @@ class AppScaffold extends StatelessWidget {
     required this.role,
     required this.selectedRoute,
     required this.body,
+    this.authToken,
     super.key,
   });
 
@@ -18,6 +19,7 @@ class AppScaffold extends StatelessWidget {
   final String role;
   final String selectedRoute;
   final Widget body;
+  final String? authToken;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +29,11 @@ class AppScaffold extends StatelessWidget {
     void onDestinationSelected(int index) {
       final destination = items[index].route;
       if (destination != selectedRoute) {
-        Navigator.pushReplacementNamed(context, destination, arguments: {'role': role});
+        Navigator.pushReplacementNamed(
+          context,
+          destination,
+          arguments: {'role': role, 'authToken': authToken},
+        );
       }
     }
 
@@ -137,7 +143,7 @@ class AppScaffold extends StatelessWidget {
       const _NavItem(label: 'Appointments', route: AppRouter.appointments, icon: Icons.calendar_month),
       const _NavItem(label: 'Invoices', route: AppRouter.invoices, icon: Icons.receipt_long),
       const _NavItem(label: 'Estimates', route: AppRouter.estimates, icon: Icons.request_quote_outlined),
-      const _NavItem(label: 'Messages', route: AppRouter.messages, icon: Icons.chat_bubble_outline),
+      const _NavItem(label: 'Announcements', route: AppRouter.messages, icon: Icons.chat_bubble_outline),
     ];
 
     if (role == 'owner') {
