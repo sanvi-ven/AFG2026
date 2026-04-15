@@ -16,10 +16,6 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  String _buildUpcomingSubtitle() {
-    return 'Open your appointments calendar to view upcoming bookings';
-  }
-
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -35,7 +31,9 @@ class _DashboardPageState extends State<DashboardPage> {
             builder: (context, profile, _) {
               final welcomeName = widget.role == 'owner'
                   ? 'Business Owner'
-                  : (profile?.greetingName.trim().isNotEmpty == true ? profile!.greetingName : 'Client');
+                  : (profile?.greetingName.trim().isNotEmpty == true
+                      ? profile!.greetingName
+                      : 'Client');
               return Text(
                 'Welcome $welcomeName',
                 style: Theme.of(context).textTheme.headlineSmall,
@@ -45,20 +43,25 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 12),
           _linkCard(
             context,
-            title: 'Upcoming appointments',
-            subtitle: _buildUpcomingSubtitle(),
+            title:
+                widget.role == 'client' ? 'Book Appointment' : 'Appointments',
+            subtitle: widget.role == 'client'
+                ? 'Pick an available slot from the bookings calendar'
+                : 'View and manage upcoming bookings',
             route: AppRouter.appointments,
           ),
-          if (widget.role == 'client')
-            _linkCard(
-              context,
-              title: 'Book Appointment',
-              subtitle: 'Pick an available slot from the bookings calendar',
-              route: AppRouter.appointments,
-            ),
-          _linkCard(context, title: 'Announcements', subtitle: 'Latest updates from the business owner', route: AppRouter.messages),
-          _linkCard(context, title: 'Unpaid invoices', subtitle: 'Pending and overdue invoice balances', route: AppRouter.invoices),
-          _linkCard(context, title: 'Estimates', subtitle: 'Review requests and quotes', route: AppRouter.estimates),
+          _linkCard(context,
+              title: 'Unpaid invoices',
+              subtitle: 'Pending and overdue invoice balances',
+              route: AppRouter.invoices),
+          _linkCard(context,
+              title: 'Estimates',
+              subtitle: 'Review requests and quotes',
+              route: AppRouter.estimates),
+          _linkCard(context,
+              title: 'Announcements',
+              subtitle: 'Latest updates from the business owner',
+              route: AppRouter.messages),
           if (widget.role == 'owner')
             _linkCard(
               context,
