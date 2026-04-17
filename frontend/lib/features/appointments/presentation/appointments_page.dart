@@ -60,7 +60,9 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                widget.role == 'client' ? 'Your Calendar' : 'Appointments Calendar',
+                widget.role == 'client'
+                    ? 'Your Calendar'
+                    : 'Appointments Calendar',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               if (widget.role == 'owner')
