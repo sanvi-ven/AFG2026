@@ -1,9 +1,12 @@
-// made with help of chatgpt: create a flutter client signup page outline with a form. include fields for first name, last name, email, phone, address (street, country, zip)
+// made with help of chatgpt: create a flutter client signup page outline with a form. include fields for first name, last name, email, phone, and searchable address
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/address_autocomplete_service.dart';
 import '../../../core/services/api_client.dart';
 import '../../../core/services/client_profile_service.dart';
 import '../../../core/state/client_session.dart';
@@ -21,11 +24,12 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _streetController = TextEditingController();
-  final _countryController = TextEditingController();
-  final _zipController = TextEditingController();
+  final _addressController = TextEditingController();
   bool _isSubmitting = false;
+  bool _isLoadingAddressSuggestions = false;
   String? _error;
+  Timer? _addressDebounce;
+  List<String> _addressSuggestions = const [];
 
   bool _looksLikeEmail(String value) {
     final trimmed = value.trim();
@@ -54,10 +58,42 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
     _lastNameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
-    _streetController.dispose();
-    _countryController.dispose();
-    _zipController.dispose();
+    _addressController.dispose();
+    _addressDebounce?.cancel();
     super.dispose();
+  }
+
+  void _onAddressChanged(String value) {
+    _addressDebounce?.cancel();
+
+    final query = value.trim();
+    if (query.length < 3) {
+      setState(() {
+        _addressSuggestions = const [];
+        _isLoadingAddressSuggestions = false;
+      });
+      return;
+    }
+
+    setState(() => _isLoadingAddressSuggestions = true);
+    _addressDebounce = Timer(const Duration(milliseconds: 300), () async {
+      final suggestions = await AddressAutocompleteService.search(query);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _addressSuggestions = suggestions;
+        _isLoadingAddressSuggestions = false;
+      });
+    });
+  }
+
+  void _pickAddressSuggestion(String value) {
+    _addressController.text = value;
+    setState(() {
+      _addressSuggestions = const [];
+      _isLoadingAddressSuggestions = false;
+    });
   }
 
   Future<void> _submit() async {
@@ -74,16 +110,12 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
       final apiClient = ApiClient(baseUrl: AppConfig.apiBaseUrl);
       final firstName = _firstNameController.text.trim();
       final lastName = _lastNameController.text.trim();
-      final fullName = '$firstName $lastName'.trim();
       final createdClient = await apiClient.postJson('/api/v1/public/client-signups', {
-        'name': fullName,
+        'first_name': firstName,
+        'last_name': lastName,
         'email': _emailController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'address': {
-          'street': _streetController.text.trim(),
-          'country': _countryController.text.trim(),
-          'zip_code': _zipController.text.trim(),
-        },
+        'phone_number': _phoneController.text.trim(),
+        'address': _addressController.text.trim(),
       });
 
       final savedProfile = await ClientProfileService.getOrCreateForSignup(
@@ -91,10 +123,8 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
         email: (createdClient['email'] as String? ?? _emailController.text.trim()),
         firstName: firstName,
         lastName: lastName,
-        phone: _phoneController.text.trim(),
-        street: _streetController.text.trim(),
-        country: _countryController.text.trim(),
-        zipCode: _zipController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        address: _addressController.text.trim(),
       );
       ClientSession.setProfile(savedProfile);
 
@@ -183,30 +213,45 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
-                    controller: _streetController,
-                    decoration: const InputDecoration(labelText: 'Street', border: OutlineInputBorder()),
-                    validator: (value) => (value == null || value.trim().isEmpty) ? 'Street is required' : null,
+                    controller: _addressController,
+                    decoration: InputDecoration(
+                      labelText: 'Address',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: _isLoadingAddressSuggestions
+                          ? const Padding(
+                              padding: EdgeInsets.all(10),
+                              child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : null,
+                    ),
+                    onChanged: _onAddressChanged,
+                    validator: (value) => (value == null || value.trim().isEmpty) ? 'Address is required' : null,
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _countryController,
-                          decoration: const InputDecoration(labelText: 'Country', border: OutlineInputBorder()),
-                          validator: (value) => (value == null || value.trim().isEmpty) ? 'Country is required' : null,
+                  if (_addressSuggestions.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Card(
+                      margin: EdgeInsets.zero,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 180),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _addressSuggestions.length,
+                          itemBuilder: (context, index) {
+                            final suggestion = _addressSuggestions[index];
+                            return ListTile(
+                              dense: true,
+                              title: Text(suggestion),
+                              onTap: () => _pickAddressSuggestion(suggestion),
+                            );
+                          },
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _zipController,
-                          decoration: const InputDecoration(labelText: 'ZIP', border: OutlineInputBorder()),
-                          validator: (value) => (value == null || value.trim().isEmpty) ? 'ZIP is required' : null,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     Text(

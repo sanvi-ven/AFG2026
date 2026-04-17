@@ -22,19 +22,6 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   static const String _schedulingUrl =
       'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0vl6GyDUbhfZVYEi-NzQpylnetU7nK0p2b9fgeN4vv_SpQKa-NuMxTtvUVm5wNEeUPBtIYvfrW?gv=true';
 
-  late final CalendarBookingRepository _repository;
-
-  @override
-  void initState() {
-    super.initState();
-    _repository = CalendarBookingRepository(ApiClient(baseUrl: AppConfig.apiBaseUrl));
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
   Future<void> _openGoogleCalendar() async {
     const url = 'https://calendar.google.com/calendar/u/0/r/week';
     if (await canLaunchUrl(Uri.parse(url))) {

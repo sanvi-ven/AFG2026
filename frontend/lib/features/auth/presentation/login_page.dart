@@ -53,19 +53,30 @@ class _LoginPageState extends State<LoginPage> {
 
       final rawName = (client['name'] as String? ?? '').trim();
       final nameParts = rawName.split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
-      final firstName = nameParts.isNotEmpty ? nameParts.first : '';
-      final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
-      final address = (client['address'] as Map<String, dynamic>?) ?? const <String, dynamic>{};
+      final firstName =
+          (client['first_name'] as String? ?? (nameParts.isNotEmpty ? nameParts.first : '')).trim();
+      final lastName =
+          (client['last_name'] as String? ?? (nameParts.length > 1 ? nameParts.sublist(1).join(' ') : ''))
+              .trim();
+        final rawAddress = client['address'];
+        final fallbackAddressMap = rawAddress is Map
+          ? rawAddress.map((key, value) => MapEntry(key.toString(), value))
+          : const <String, dynamic>{};
+      final parsedAddress = (client['address'] as String? ?? '').trim().isNotEmpty
+          ? (client['address'] as String).trim()
+          : [
+              (fallbackAddressMap['street'] as String? ?? '').trim(),
+              (fallbackAddressMap['country'] as String? ?? '').trim(),
+              (fallbackAddressMap['zip_code'] as String? ?? '').trim(),
+            ].where((part) => part.isNotEmpty).join(', ');
 
       final profile = await ClientProfileService.getOrCreateForSignup(
         signupId: (client['id'] as String? ?? '').trim(),
         email: (client['email'] as String? ?? _emailController.text.trim()),
         firstName: firstName,
         lastName: lastName,
-        phone: (client['phone'] as String? ?? '').trim(),
-        street: (address['street'] as String? ?? '').trim(),
-        country: (address['country'] as String? ?? '').trim(),
-        zipCode: (address['zip_code'] as String? ?? '').trim(),
+        phoneNumber: (client['phone_number'] as String? ?? client['phone'] as String? ?? '').trim(),
+        address: parsedAddress,
       );
       ClientSession.setProfile(profile);
 
