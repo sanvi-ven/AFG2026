@@ -1,11 +1,14 @@
 //made with help of chatgpt: create a reusable app scaffold for a flutter business app that accepts title, role, selectedRoute, body, authToken
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/router/app_router.dart';
 import '../../core/services/client_profile_service.dart';
+import '../../core/services/owner_settings_service.dart';
 import '../../core/state/client_session.dart';
 import '../../models/client_profile.dart';
+import '../../models/owner_settings.dart';
 
 class AppScaffold extends StatelessWidget {
   const AppScaffold({
@@ -43,6 +46,8 @@ class AppScaffold extends StatelessWidget {
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 900;
         final showClientSettings = role == 'client';
+        final showOwnerSettings = role == 'owner';
+        final showSettings = showClientSettings || showOwnerSettings;
 
         if (isWide) {
           return Scaffold(
@@ -67,18 +72,20 @@ class AppScaffold extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (showClientSettings) ...[
+                      if (showSettings) ...[
                         const Divider(height: 1),
                         ListTile(
                           leading: const Icon(Icons.settings_outlined),
                           title: const Text('Settings'),
-                          subtitle: ValueListenableBuilder<ClientProfile?>(
-                            valueListenable: ClientSession.profile,
-                            builder: (context, profile, _) {
-                              return Text(profile?.email ?? 'Update your profile');
-                            },
-                          ),
-                          onTap: () => _openClientSettingsDialog(context),
+                          subtitle: showClientSettings
+                              ? ValueListenableBuilder<ClientProfile?>(
+                                  valueListenable: ClientSession.profile,
+                                  builder: (context, profile, _) {
+                                    return Text(profile?.email ?? 'Update your profile');
+                                  },
+                                )
+                              : const Text('Update business details'),
+                          onTap: () => _openSettingsDialog(context),
                         ),
                       ],
                     ],
@@ -94,12 +101,12 @@ class AppScaffold extends StatelessWidget {
         return Scaffold(
           appBar: AppBar(
             title: Text(title),
-            actions: showClientSettings
+            actions: showSettings
                 ? [
                     IconButton(
                       tooltip: 'Settings',
                       icon: const Icon(Icons.settings_outlined),
-                      onPressed: () => _openClientSettingsDialog(context),
+                      onPressed: () => _openSettingsDialog(context),
                     ),
                   ]
                 : null,
@@ -116,6 +123,15 @@ class AppScaffold extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _openSettingsDialog(BuildContext context) async {
+    if (role == 'owner') {
+      await _openOwnerSettingsDialog(context);
+      return;
+    }
+
+    await _openClientSettingsDialog(context);
   }
 
   Future<void> _openClientSettingsDialog(BuildContext context) async {
@@ -136,6 +152,31 @@ class AppScaffold extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile updated.')),
       );
+    }
+  }
+
+  Future<void> _openOwnerSettingsDialog(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final settings = await OwnerSettingsService.fetch();
+      if (!context.mounted) {
+        return;
+      }
+
+      final saved = await showDialog<OwnerSettings>(
+        context: context,
+        builder: (_) => _OwnerSettingsDialog(initialSettings: settings),
+      );
+
+      if (saved != null && context.mounted) {
+        messenger.showSnackBar(const SnackBar(content: Text('Business settings updated.')));
+      }
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(SnackBar(content: Text('Failed to load owner settings: $error')));
     }
   }
 
@@ -180,10 +221,8 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _firstNameController;
   late final TextEditingController _lastNameController;
-  late final TextEditingController _phoneController;
-  late final TextEditingController _streetController;
-  late final TextEditingController _countryController;
-  late final TextEditingController _zipCodeController;
+  late final TextEditingController _phoneNumberController;
+  late final TextEditingController _addressController;
   bool _isSaving = false;
 
   @override
@@ -191,20 +230,16 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
     super.initState();
     _firstNameController = TextEditingController(text: widget.initialProfile.firstName);
     _lastNameController = TextEditingController(text: widget.initialProfile.lastName);
-    _phoneController = TextEditingController(text: widget.initialProfile.phone);
-    _streetController = TextEditingController(text: widget.initialProfile.street);
-    _countryController = TextEditingController(text: widget.initialProfile.country);
-    _zipCodeController = TextEditingController(text: widget.initialProfile.zipCode);
+    _phoneNumberController = TextEditingController(text: widget.initialProfile.phoneNumber);
+    _addressController = TextEditingController(text: widget.initialProfile.address);
   }
 
   @override
   void dispose() {
     _firstNameController.dispose();
     _lastNameController.dispose();
-    _phoneController.dispose();
-    _streetController.dispose();
-    _countryController.dispose();
-    _zipCodeController.dispose();
+    _phoneNumberController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -219,10 +254,8 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
         widget.initialProfile.copyWith(
           firstName: _firstNameController.text,
           lastName: _lastNameController.text,
-          phone: _phoneController.text,
-          street: _streetController.text,
-          country: _countryController.text,
-          zipCode: _zipCodeController.text,
+          phoneNumber: _phoneNumberController.text,
+          address: _addressController.text,
         ),
       );
       ClientSession.setProfile(updated);
@@ -274,24 +307,14 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
-                  controller: _phoneController,
+                  controller: _phoneNumberController,
                   decoration: const InputDecoration(labelText: 'Phone'),
                   keyboardType: TextInputType.phone,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
-                  controller: _streetController,
-                  decoration: const InputDecoration(labelText: 'Street'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _countryController,
-                  decoration: const InputDecoration(labelText: 'Country'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _zipCodeController,
-                  decoration: const InputDecoration(labelText: 'ZIP code'),
+                  controller: _addressController,
+                  decoration: const InputDecoration(labelText: 'Address'),
                 ),
               ],
             ),
@@ -305,6 +328,219 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
         ),
         FilledButton(
           onPressed: _isSaving ? null : _save,
+          child: _isSaving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+class _OwnerSettingsDialog extends StatefulWidget {
+  const _OwnerSettingsDialog({required this.initialSettings});
+
+  final OwnerSettings initialSettings;
+
+  @override
+  State<_OwnerSettingsDialog> createState() => _OwnerSettingsDialogState();
+}
+
+class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _companyNameController;
+  late final TextEditingController _addressController;
+  final ImagePicker _picker = ImagePicker();
+  bool _isSaving = false;
+  bool _isUploadingLogo = false;
+  String? _logoUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _companyNameController = TextEditingController(text: widget.initialSettings.companyName);
+    _addressController = TextEditingController(text: widget.initialSettings.address);
+    _logoUrl = widget.initialSettings.logoUrl;
+  }
+
+  @override
+  void dispose() {
+    _companyNameController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickAndUploadLogo() async {
+    try {
+      final picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        imageQuality: 85,
+      );
+      if (picked == null) {
+        return;
+      }
+
+      setState(() => _isUploadingLogo = true);
+      final bytes = await picked.readAsBytes();
+      final mimeType = _inferMimeType(picked.name);
+      final uploadedUrl = await OwnerSettingsService.uploadLogo(bytes: bytes, mimeType: mimeType);
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _logoUrl = uploadedUrl;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to upload logo: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingLogo = false);
+      }
+    }
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final settings = OwnerSettings(
+        companyName: _companyNameController.text.trim(),
+        address: _addressController.text.trim(),
+        logoUrl: _logoUrl,
+      );
+      final saved = await OwnerSettingsService.save(settings);
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(saved);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save owner settings: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  String _inferMimeType(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.png')) {
+      return 'image/png';
+    }
+    if (lower.endsWith('.webp')) {
+      return 'image/webp';
+    }
+    if (lower.endsWith('.gif')) {
+      return 'image/gif';
+    }
+    return 'image/jpeg';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final logo = _logoUrl;
+
+    return AlertDialog(
+      title: const Text('Owner Settings'),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextFormField(
+                  controller: _companyNameController,
+                  decoration: const InputDecoration(labelText: 'Company name'),
+                  validator: (value) =>
+                      (value == null || value.trim().isEmpty) ? 'Company name is required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _addressController,
+                  decoration: const InputDecoration(labelText: 'Business address'),
+                  validator: (value) =>
+                      (value == null || value.trim().isEmpty) ? 'Business address is required' : null,
+                ),
+                const SizedBox(height: 16),
+                const Text('Logo', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Container(
+                  height: 120,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Theme.of(context).dividerColor),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: logo == null || logo.trim().isEmpty
+                      ? const Text('No logo uploaded')
+                      : ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            logo,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const Text('Unable to preview logo'),
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _isUploadingLogo ? null : _pickAndUploadLogo,
+                      icon: _isUploadingLogo
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.upload_file_outlined),
+                      label: Text(_isUploadingLogo ? 'Uploading...' : 'Upload logo'),
+                    ),
+                    TextButton(
+                      onPressed: _isUploadingLogo
+                          ? null
+                          : () {
+                              setState(() => _logoUrl = null);
+                            },
+                      child: const Text('Remove logo'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving || _isUploadingLogo ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isSaving || _isUploadingLogo ? null : _save,
           child: _isSaving
               ? const SizedBox(
                   width: 16,

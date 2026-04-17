@@ -35,6 +35,15 @@ class FirestoreRepository:
         self.db.collection(self.collection_name).document(doc_id).set(record)
         return record
 
+    def create_with_id(self, doc_id: str, payload: dict) -> dict:
+        record = payload | {"id": doc_id}
+        if self.db is None:
+            self._memory_store[self.collection_name][doc_id] = record
+            return record
+
+        self.db.collection(self.collection_name).document(doc_id).set(record)
+        return record
+
     def list(self, field_name: Optional[str] = None, equals: Optional[str] = None) -> list[dict]:
         if self.db is None:
             rows = list(self._memory_store[self.collection_name].values())

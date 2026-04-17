@@ -64,10 +64,8 @@ class ClientProfileService {
     required String email,
     String firstName = '',
     String lastName = '',
-    String phone = '',
-    String street = '',
-    String country = '',
-    String zipCode = '',
+    String phoneNumber = '',
+    String address = '',
   }) async {
     final normalizedId = signupId.trim();
     if (normalizedId.isEmpty) {
@@ -80,19 +78,15 @@ class ClientProfileService {
         email: email.trim().isNotEmpty ? email : existing.email,
         firstName: firstName.trim().isNotEmpty ? firstName : existing.firstName,
         lastName: lastName.trim().isNotEmpty ? lastName : existing.lastName,
-        phone: phone.trim().isNotEmpty ? phone : existing.phone,
-        street: street.trim().isNotEmpty ? street : existing.street,
-        country: country.trim().isNotEmpty ? country : existing.country,
-        zipCode: zipCode.trim().isNotEmpty ? zipCode : existing.zipCode,
+        phoneNumber: phoneNumber.trim().isNotEmpty ? phoneNumber : existing.phoneNumber,
+        address: address.trim().isNotEmpty ? address : existing.address,
       );
 
       final hasChanges = merged.email != existing.email ||
           merged.firstName != existing.firstName ||
           merged.lastName != existing.lastName ||
-          merged.phone != existing.phone ||
-          merged.street != existing.street ||
-          merged.country != existing.country ||
-          merged.zipCode != existing.zipCode;
+          merged.phoneNumber != existing.phoneNumber ||
+          merged.address != existing.address;
 
       if (hasChanges) {
         return save(merged);
@@ -105,10 +99,8 @@ class ClientProfileService {
       email: email,
       firstName: firstName,
       lastName: lastName,
-      phone: phone,
-      street: street,
-      country: country,
-      zipCode: zipCode,
+      phoneNumber: phoneNumber,
+      address: address,
     );
     return save(profile);
   }

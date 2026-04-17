@@ -4,20 +4,16 @@ class ClientProfile {
     required this.email,
     required this.firstName,
     required this.lastName,
-    required this.phone,
-    required this.street,
-    required this.country,
-    required this.zipCode,
+    required this.phoneNumber,
+    required this.address,
   });
 
   final String signupId;
   final String email;
   final String firstName;
   final String lastName;
-  final String phone;
-  final String street;
-  final String country;
-  final String zipCode;
+  final String phoneNumber;
+  final String address;
 
   String get greetingName {
     if (firstName.trim().isNotEmpty) {
@@ -42,46 +38,42 @@ class ClientProfile {
       email: normalizedEmail,
       firstName: fallbackFirstName,
       lastName: '',
-      phone: '',
-      street: '',
-      country: '',
-      zipCode: '',
+      phoneNumber: '',
+      address: '',
     );
   }
 
   factory ClientProfile.fromMap(Map<String, dynamic> map) {
     final rawName = (map['name'] as String? ?? '').trim();
     final nameParts = rawName.split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
-    final address = (map['address'] as Map<String, dynamic>?) ?? const <String, dynamic>{};
+    final rawAddress = map['address'];
+    final legacyAddressMap = rawAddress is Map
+        ? rawAddress.map((key, value) => MapEntry(key.toString(), value))
+        : const <String, dynamic>{};
+    final fallbackAddress = [
+      legacyAddressMap['street'] as String? ?? map['street'] as String? ?? '',
+      legacyAddressMap['country'] as String? ?? map['country'] as String? ?? '',
+      legacyAddressMap['zip_code'] as String? ?? map['zipCode'] as String? ?? '',
+    ].where((part) => part.trim().isNotEmpty).join(', ');
 
     return ClientProfile(
       signupId: (map['signupId'] as String? ?? map['id'] as String? ?? '').trim(),
       email: (map['email'] as String? ?? '').trim().toLowerCase(),
-      firstName: (map['firstName'] as String? ?? (nameParts.isNotEmpty ? nameParts.first : '')).trim(),
-      lastName: (map['lastName'] as String? ?? (nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '')).trim(),
-      phone: (map['phone'] as String? ?? '').trim(),
-      street: (map['street'] as String? ?? address['street'] as String? ?? '').trim(),
-      country: (map['country'] as String? ?? address['country'] as String? ?? '').trim(),
-      zipCode: (map['zipCode'] as String? ?? address['zip_code'] as String? ?? '').trim(),
+      firstName: (map['first_name'] as String? ?? map['firstName'] as String? ?? (nameParts.isNotEmpty ? nameParts.first : '')).trim(),
+      lastName: (map['last_name'] as String? ?? map['lastName'] as String? ?? (nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '')).trim(),
+      phoneNumber: (map['phone_number'] as String? ?? map['phone'] as String? ?? '').trim(),
+      address: (map['address'] as String? ?? fallbackAddress).trim(),
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'signupId': signupId.trim(),
+      'id': signupId.trim(),
       'email': email.trim().toLowerCase(),
-      'firstName': firstName.trim(),
-      'lastName': lastName.trim(),
-      'name': fullName,
-      'phone': phone.trim(),
-      'street': street.trim(),
-      'country': country.trim(),
-      'zipCode': zipCode.trim(),
-      'address': {
-        'street': street.trim(),
-        'country': country.trim(),
-        'zip_code': zipCode.trim(),
-      },
+      'first_name': firstName.trim(),
+      'last_name': lastName.trim(),
+      'phone_number': phoneNumber.trim(),
+      'address': address.trim(),
     };
   }
 
@@ -90,20 +82,16 @@ class ClientProfile {
     String? email,
     String? firstName,
     String? lastName,
-    String? phone,
-    String? street,
-    String? country,
-    String? zipCode,
+    String? phoneNumber,
+    String? address,
   }) {
     return ClientProfile(
       signupId: signupId ?? this.signupId,
       email: email ?? this.email,
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
-      phone: phone ?? this.phone,
-      street: street ?? this.street,
-      country: country ?? this.country,
-      zipCode: zipCode ?? this.zipCode,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      address: address ?? this.address,
     );
   }
 }
