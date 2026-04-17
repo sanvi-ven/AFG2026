@@ -1,3 +1,5 @@
+//made with help of chatgpt: create a simple flutter owner login page with a password field
+
 import 'package:flutter/material.dart';
 
 import '../../../core/router/app_router.dart';

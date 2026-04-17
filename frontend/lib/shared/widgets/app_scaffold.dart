@@ -1,3 +1,5 @@
+//made with help of chatgpt: create a reusable app scaffold for a flutter business app that accepts title, role, selectedRoute, body, authToken
+
 import 'package:flutter/material.dart';
 
 import '../../core/router/app_router.dart';

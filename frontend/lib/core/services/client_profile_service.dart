@@ -1,3 +1,5 @@
+//made with the help of chatgpt; prompt: create a flutter service class for firestore that manages a client profile model
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/client_profile.dart';

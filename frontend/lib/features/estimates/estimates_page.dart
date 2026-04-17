@@ -1,3 +1,6 @@
+//made with help of chatgpt: create flutter page that shows list of estimates from firestore stream, how to add aprove/deny buttons for client, and convert to invoice button for owner
+
+
 import 'package:flutter/material.dart';
 
 import '../../core/services/estimate_service.dart';
