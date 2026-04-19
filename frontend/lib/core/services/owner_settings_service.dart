@@ -1,16 +1,22 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
+import '../../firebase_options.dart';
 import '../../models/owner_settings.dart';
 
 class OwnerSettingsService {
   OwnerSettingsService._();
 
   static const String _docId = 'default';
+  static const Duration _uploadTimeout = Duration(seconds: 45);
+  static const Duration _downloadUrlTimeout = Duration(seconds: 20);
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static final FirebaseStorage _storage = FirebaseStorage.instance;
+  static final FirebaseStorage _storage = FirebaseStorage.instanceFor(
+    bucket: DefaultFirebaseOptions.currentPlatform.storageBucket,
+  );
   static final CollectionReference<Map<String, dynamic>> _collection =
       _firestore.collection('owner_settings');
 
@@ -35,13 +41,55 @@ class OwnerSettingsService {
     required Uint8List bytes,
     required String mimeType,
   }) async {
+    if (bytes.isEmpty) {
+      throw Exception('Logo file is empty. Please choose a different image.');
+    }
+
     final extension = _fileExtensionForMimeType(mimeType);
     final path = 'owner_settings/$_docId/logo_${DateTime.now().millisecondsSinceEpoch}.$extension';
     final ref = _storage.ref(path);
     final metadata = SettableMetadata(contentType: mimeType);
 
-    await ref.putData(bytes, metadata);
-    return ref.getDownloadURL();
+    final uploadTask = ref.putData(bytes, metadata);
+    TaskSnapshot snapshot;
+    try {
+      snapshot = await uploadTask.timeout(
+        _uploadTimeout,
+        onTimeout: () {
+          uploadTask.cancel();
+          throw TimeoutException('Logo upload timed out.');
+        },
+      );
+    } on FirebaseException catch (error) {
+      throw Exception(_friendlyStorageMessage(error));
+    } on TimeoutException {
+      throw Exception(
+        'Logo upload timed out. Check your internet or Firebase Storage rules, then try again.',
+      );
+    }
+
+    try {
+      return await snapshot.ref.getDownloadURL().timeout(_downloadUrlTimeout);
+    } on FirebaseException catch (error) {
+      throw Exception(_friendlyStorageMessage(error));
+    } on TimeoutException {
+      throw Exception('Upload completed, but fetching logo URL timed out. Please retry.');
+    }
+  }
+
+  static String _friendlyStorageMessage(FirebaseException error) {
+    switch (error.code) {
+      case 'unauthorized':
+        return 'Storage permission denied. Update Firebase Storage rules to allow this upload.';
+      case 'object-not-found':
+        return 'Storage bucket object was not found. Check your Firebase Storage bucket setup.';
+      case 'canceled':
+        return 'Upload canceled.';
+      case 'quota-exceeded':
+        return 'Firebase Storage quota exceeded.';
+      default:
+        return 'Storage upload failed (${error.code}): ${error.message ?? 'Unknown error'}';
+    }
   }
 
   static String _fileExtensionForMimeType(String mimeType) {
