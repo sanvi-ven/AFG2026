@@ -53,19 +53,19 @@ class OwnerSettingsService {
     final uploadTask = ref.putData(bytes, metadata);
     TaskSnapshot snapshot;
     try {
-      snapshot = await uploadTask.timeout(
-        _uploadTimeout,
-        onTimeout: () {
-          uploadTask.cancel();
-          throw TimeoutException('Logo upload timed out.');
-        },
-      );
+      snapshot = await uploadTask.timeout(_uploadTimeout);
     } on FirebaseException catch (error) {
       throw Exception(_friendlyStorageMessage(error));
     } on TimeoutException {
-      throw Exception(
-        'Logo upload timed out. Check your internet or Firebase Storage rules, then try again.',
-      );
+      // In some web/network scenarios the upload reaches Storage but completion
+      // callback is delayed; recover by attempting to fetch the object URL.
+      try {
+        return await ref.getDownloadURL().timeout(_downloadUrlTimeout);
+      } on Exception {
+        throw Exception(
+          'Logo upload timed out. Check your internet or Firebase Storage rules, then try again.',
+        );
+      }
     }
 
     try {

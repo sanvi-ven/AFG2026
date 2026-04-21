@@ -1,5 +1,7 @@
 //made with help of chatgpt: create a reusable app scaffold for a flutter business app that accepts title, role, selectedRoute, body, authToken
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -356,8 +358,10 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
   late final TextEditingController _addressController;
   final ImagePicker _picker = ImagePicker();
   bool _isSaving = false;
-  bool _isUploadingLogo = false;
+  bool _isPickingLogo = false;
   String? _logoUrl;
+  Uint8List? _pendingLogoBytes;
+  String? _pendingLogoMimeType;
 
   @override
   void initState() {
@@ -374,8 +378,9 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
     super.dispose();
   }
 
-  Future<void> _pickAndUploadLogo() async {
+  Future<void> _pickLogo() async {
     try {
+      setState(() => _isPickingLogo = true);
       final picked = await _picker.pickImage(
         source: ImageSource.gallery,
         maxWidth: 1600,
@@ -385,27 +390,31 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
         return;
       }
 
-      setState(() => _isUploadingLogo = true);
+      final fileName = picked.name;
+      if (!_isSupportedImageFile(fileName)) {
+        throw Exception('Unsupported logo format. Use PNG, JPG/JPEG, WEBP, or GIF.');
+      }
+
       final bytes = await picked.readAsBytes();
       final mimeType = _inferMimeType(picked.name);
-      final uploadedUrl = await OwnerSettingsService.uploadLogo(bytes: bytes, mimeType: mimeType);
 
       if (!mounted) {
         return;
       }
       setState(() {
-        _logoUrl = uploadedUrl;
+        _pendingLogoBytes = bytes;
+        _pendingLogoMimeType = mimeType;
       });
     } catch (error) {
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to upload logo: $error')),
+        SnackBar(content: Text('Failed to select logo: $error')),
       );
     } finally {
       if (mounted) {
-        setState(() => _isUploadingLogo = false);
+        setState(() => _isPickingLogo = false);
       }
     }
   }
@@ -417,14 +426,32 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
 
     setState(() => _isSaving = true);
     try {
+      var nextLogoUrl = _logoUrl;
+      final bytes = _pendingLogoBytes;
+      final mimeType = _pendingLogoMimeType;
+      String? nonBlockingUploadWarning;
+      if (bytes != null && mimeType != null) {
+        try {
+          nextLogoUrl = await OwnerSettingsService.uploadLogo(bytes: bytes, mimeType: mimeType);
+        } catch (error) {
+          nonBlockingUploadWarning =
+              'Logo was not updated (${error.toString().replaceFirst('Exception: ', '')}). Other settings were saved.';
+        }
+      }
+
       final settings = OwnerSettings(
         companyName: _companyNameController.text.trim(),
         address: _addressController.text.trim(),
-        logoUrl: _logoUrl,
+        logoUrl: nextLogoUrl,
       );
       final saved = await OwnerSettingsService.save(settings);
       if (!mounted) {
         return;
+      }
+      if (nonBlockingUploadWarning != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(nonBlockingUploadWarning)),
+        );
       }
       Navigator.of(context).pop(saved);
     } catch (error) {
@@ -446,6 +473,9 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
     if (lower.endsWith('.png')) {
       return 'image/png';
     }
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
     if (lower.endsWith('.webp')) {
       return 'image/webp';
     }
@@ -455,9 +485,19 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
     return 'image/jpeg';
   }
 
+  bool _isSupportedImageFile(String fileName) {
+    final lower = fileName.toLowerCase();
+    return lower.endsWith('.png') ||
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.gif');
+  }
+
   @override
   Widget build(BuildContext context) {
     final logo = _logoUrl;
+    final localPreview = _pendingLogoBytes;
 
     return AlertDialog(
       title: const Text('Owner Settings'),
@@ -494,7 +534,15 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
                   ),
                   alignment: Alignment.center,
                   child: logo == null || logo.trim().isEmpty
-                      ? const Text('No logo uploaded')
+                      ? (localPreview == null
+                          ? const Text('No logo uploaded')
+                          : ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.memory(
+                                localPreview,
+                                fit: BoxFit.contain,
+                              ),
+                            ))
                       : ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: Image.network(
@@ -505,25 +553,35 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
                         ),
                 ),
                 const SizedBox(height: 8),
+                if (localPreview != null)
+                  Text(
+                    'Logo selected. It will upload when you tap Save.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                if (localPreview != null) const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   children: [
                     OutlinedButton.icon(
-                      onPressed: _isUploadingLogo ? null : _pickAndUploadLogo,
-                      icon: _isUploadingLogo
+                      onPressed: _isPickingLogo ? null : _pickLogo,
+                      icon: _isPickingLogo
                           ? const SizedBox(
                               width: 14,
                               height: 14,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.upload_file_outlined),
-                      label: Text(_isUploadingLogo ? 'Uploading...' : 'Upload logo'),
+                      label: Text(_isPickingLogo ? 'Selecting...' : 'Select logo'),
                     ),
                     TextButton(
-                      onPressed: _isUploadingLogo
+                      onPressed: _isPickingLogo
                           ? null
                           : () {
-                              setState(() => _logoUrl = null);
+                              setState(() {
+                                _logoUrl = null;
+                                _pendingLogoBytes = null;
+                                _pendingLogoMimeType = null;
+                              });
                             },
                       child: const Text('Remove logo'),
                     ),
@@ -536,11 +594,11 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _isSaving || _isUploadingLogo ? null : () => Navigator.of(context).pop(),
+          onPressed: _isSaving || _isPickingLogo ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: _isSaving || _isUploadingLogo ? null : _save,
+          onPressed: _isSaving || _isPickingLogo ? null : _save,
           child: _isSaving
               ? const SizedBox(
                   width: 16,
