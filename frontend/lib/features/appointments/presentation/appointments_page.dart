@@ -15,6 +15,8 @@ class AppointmentsPage extends StatefulWidget {
   State<AppointmentsPage> createState() => _AppointmentsPageState();
 }
 
+// https://pub.dev/documentation/url_launcher/latest/url_launcher/canLaunchUrl.html
+
 class _AppointmentsPageState extends State<AppointmentsPage> {
   static const String _calendarUrl =
       'https://calendar.google.com/calendar/embed?mode=WEEK&height=600&wkst=1&ctz=America%2FNew_York&showPrint=0&showTitle=0&showNav=1&showTabs=1&showCalendars=0&showTz=0&src=immc17289%40gmail.com&color=%23039BE5';

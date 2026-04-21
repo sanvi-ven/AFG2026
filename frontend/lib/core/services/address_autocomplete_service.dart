@@ -19,7 +19,7 @@ class AddressAutocompleteService {
       'addressdetails': '0',
       'limit': '6',
     });
-
+// Used flutter docs to understand how to make http requests: https://docs.flutter.dev/cookbook/networking/fetch-data
     final response = await http.get(
       uri,
       headers: const {
