@@ -10,7 +10,7 @@ class LocalNotificationService {
     if (_initialized) {
       return;
     }
-
+// used flutter docs to understand how to initialize: https://pub.dev/documentation/eyflutter_notifications/latest/platform_specifics_android_initialization_settings/AndroidInitializationSettings-class.html
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings(
       requestAlertPermission: true,
