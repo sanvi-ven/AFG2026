@@ -62,13 +62,6 @@ class _DashboardPageState extends State<DashboardPage> {
               title: 'Announcements',
               subtitle: 'Latest updates from the business owner',
               route: AppRouter.messages),
-          if (widget.role == 'owner')
-            _linkCard(
-              context,
-              title: 'Availability',
-              subtitle: 'Manage your working hours and blocked times',
-              route: AppRouter.availability,
-            ),
         ],
       ),
     );

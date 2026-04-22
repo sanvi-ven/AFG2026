@@ -192,10 +192,7 @@ class AppScaffold extends StatelessWidget {
     ];
 
     if (role == 'owner') {
-      return [
-        ...common,
-        const _NavItem(label: 'Availability', route: AppRouter.availability, icon: Icons.schedule),
-      ];
+      return common;
     }
 
     return common;
