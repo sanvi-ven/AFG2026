@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/invoice_pdf_service.dart';
 import '../../../core/services/invoice_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../models/invoice.dart';
@@ -16,22 +17,31 @@ class InvoicesPage extends StatefulWidget {
 }
 
 class _InvoicesPageState extends State<InvoicesPage> {
-  Future<void> _setStatus(String invoiceId, String status) async {
+  String? _downloadingInvoiceId;
+
+  Future<void> _downloadInvoicePdf(Invoice invoice) async {
+    setState(() => _downloadingInvoiceId = invoice.id);
     try {
-      await InvoiceService.updateStatus(invoiceId: invoiceId, status: status);
+      final savedPath = await InvoicePdfService.generateAndDownloadInvoicePdf(invoice: invoice);
       if (!mounted) {
         return;
       }
+      final message =
+          savedPath == null ? 'Invoice PDF downloaded.' : 'Invoice PDF saved: $savedPath';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Invoice status set to $status.')),
+        SnackBar(content: Text(message)),
       );
     } catch (error) {
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update invoice status: $error')),
+        SnackBar(content: Text('Failed to download invoice PDF: $error')),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _downloadingInvoiceId = null);
+      }
     }
   }
 
@@ -91,9 +101,9 @@ class _InvoicesPageState extends State<InvoicesPage> {
                         padding: const EdgeInsets.only(bottom: 12),
                         child: _InvoiceCard(
                           invoice: invoice,
-                          isClient: widget.role == 'client',
-                          onApprove: () => _setStatus(invoice.id, InvoiceStatus.approved),
-                          onDeny: () => _setStatus(invoice.id, InvoiceStatus.denied),
+                          role: widget.role,
+                          isDownloadingPdf: _downloadingInvoiceId == invoice.id,
+                          onDownloadPdf: () => _downloadInvoicePdf(invoice),
                         ),
                       ),
                   ],
@@ -109,22 +119,31 @@ class _InvoicesPageState extends State<InvoicesPage> {
 class _InvoiceCard extends StatelessWidget {
   const _InvoiceCard({
     required this.invoice,
-    required this.isClient,
-    required this.onApprove,
-    required this.onDeny,
+    required this.role,
+    required this.isDownloadingPdf,
+    required this.onDownloadPdf,
   });
 
   final Invoice invoice;
-  final bool isClient;
-  final VoidCallback onApprove;
-  final VoidCallback onDeny;
+  final String role;
+  final bool isDownloadingPdf;
+  final VoidCallback onDownloadPdf;
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = switch (invoice.status) {
-      InvoiceStatus.approved => Colors.green,
-      InvoiceStatus.denied => Colors.red,
-      _ => Colors.orange,
+    final statusKey = InvoiceStatus.displayLabel(invoice.status);
+    final statusColor = InvoiceStatus.isSent(statusKey)
+      ? Colors.green
+        : statusKey == InvoiceStatus.denied
+        ? Colors.red
+        : Colors.orange;
+    final statusText = switch (statusKey) {
+      InvoiceStatus.sent => role == 'client' ? 'Received' : 'Sent',
+      InvoiceStatus.denied => 'Denied',
+      InvoiceStatus.pending => 'Pending',
+      _ => statusKey.isEmpty
+          ? 'Pending'
+          : '${statusKey[0].toUpperCase()}${statusKey.substring(1)}',
     };
 
     return Card(
@@ -149,7 +168,7 @@ class _InvoiceCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    invoice.status,
+                    statusText,
                     style: TextStyle(color: statusColor, fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -177,28 +196,18 @@ class _InvoiceCard extends StatelessWidget {
                 Text('\$${invoice.total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700)),
               ],
             ),
-            if (isClient && invoice.isPending) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onDeny,
-                      icon: const Icon(Icons.close),
-                      label: const Text('Deny'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: onApprove,
-                      icon: const Icon(Icons.check),
-                      label: const Text('Approve'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: isDownloadingPdf ? null : onDownloadPdf,
+              icon: isDownloadingPdf
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download_outlined),
+              label: const Text('Download PDF'),
+            ),
           ],
         ),
       ),

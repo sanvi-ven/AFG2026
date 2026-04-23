@@ -13,6 +13,57 @@ class ClientProfileService {
 
   static String normalizeEmail(String email) => email.trim().toLowerCase();
 
+  static Stream<List<ClientProfile>> watchAllProfiles() {
+    return _signupsCollection.snapshots().map((snapshot) {
+      final profiles = snapshot.docs
+          .map((doc) => ClientProfile.fromMap(doc.data()).copyWith(signupId: doc.id))
+          .where((profile) => profile.signupId.trim().isNotEmpty)
+          .toList();
+      profiles.sort((a, b) => a.signupId.compareTo(b.signupId));
+      return profiles;
+    });
+  }
+
+  static List<ClientProfile> searchProfiles({
+    required List<ClientProfile> profiles,
+    required String query,
+    int limit = 8,
+    Set<String> excludeSignupIds = const <String>{},
+  }) {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) {
+      return const <ClientProfile>[];
+    }
+
+    final matches = profiles.where((profile) {
+      if (excludeSignupIds.contains(profile.signupId)) {
+        return false;
+      }
+
+      final searchable = <String>[
+        profile.signupId,
+        profile.fullName,
+        profile.firstName,
+        profile.lastName,
+        profile.address,
+        profile.email,
+      ].map((value) => value.trim().toLowerCase()).where((value) => value.isNotEmpty);
+
+      for (final value in searchable) {
+        if (value.contains(normalizedQuery)) {
+          return true;
+        }
+      }
+
+      return false;
+    }).toList();
+
+    if (matches.length > limit) {
+      return matches.sublist(0, limit);
+    }
+    return matches;
+  }
+
   static Future<ClientProfile?> fetchBySignupId(String signupId) async {
     final normalizedId = signupId.trim();
     if (normalizedId.isEmpty) {

@@ -24,7 +24,7 @@ class Invoice {
   final String? sourceEstimateId;
 
   bool get isPending => status == InvoiceStatus.pending;
-  bool get isApproved => status == InvoiceStatus.approved;
+  bool get isApproved => InvoiceStatus.isSent(status);
   bool get isDenied => status == InvoiceStatus.denied;
 
   factory Invoice.fromMap(Map<String, dynamic> map) {
@@ -97,6 +97,24 @@ class InvoiceServiceItem {
 
 class InvoiceStatus {
   static const pending = 'pending';
+  static const sent = 'sent';
+  // Kept for backwards compatibility with legacy invoice documents.
   static const approved = 'approved';
   static const denied = 'denied';
+
+  static bool isSent(String status) {
+    final normalized = status.trim().toLowerCase();
+    return normalized == sent || normalized == approved;
+  }
+
+  static String displayLabel(String status) {
+    final normalized = status.trim().toLowerCase();
+    if (isSent(normalized)) {
+      return sent;
+    }
+    if (normalized.isEmpty) {
+      return pending;
+    }
+    return normalized;
+  }
 }

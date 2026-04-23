@@ -69,7 +69,7 @@ class InvoiceService {
       clientId: clientId.trim(),
       services: services,
       total: total,
-      status: InvoiceStatus.pending,
+      status: InvoiceStatus.sent,
       createdAt: now,
       updatedAt: now,
       sourceEstimateId: sourceEstimateId.trim(),
@@ -77,6 +77,21 @@ class InvoiceService {
 
     await doc.set(invoice.toMap());
     return doc.id;
+  }
+
+  static Future<Invoice?> getInvoiceById(String invoiceId) async {
+    final normalizedId = invoiceId.trim();
+    if (normalizedId.isEmpty) {
+      return null;
+    }
+
+    final snapshot = await _collection.doc(normalizedId).get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) {
+      return null;
+    }
+
+    return Invoice.fromMap({...data, 'id': snapshot.id});
   }
 
   static Future<void> updateStatus({required String invoiceId, required String status}) async {

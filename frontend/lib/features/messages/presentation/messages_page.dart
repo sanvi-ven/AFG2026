@@ -7,9 +7,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/services/client_profile_service.dart';
 import '../../../core/services/local_notification_service.dart';
 import '../../../core/services/message_service.dart';
 import '../../../core/state/client_session.dart';
+import '../../../models/client_profile.dart';
 import '../../../models/message.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
@@ -30,12 +32,47 @@ class _MessagesPageState extends State<MessagesPage> {
 
   bool _isSending = false;
   bool _notificationBootstrapDone = false;
+  bool _isLoadingClientSuggestions = true;
   String? _activeClientId;
   Set<String> _knownMessageIds = <String>{};
   StreamSubscription<List<MessageLog>>? _notificationSub;
+  StreamSubscription<List<ClientProfile>>? _clientDirectorySub;
+  Timer? _clientSuggestionDebounce;
+  List<ClientProfile> _knownClients = const [];
+  List<ClientProfile> _clientSuggestions = const [];
+  final List<ClientProfile> _selectedRecipients = <ClientProfile>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _clientDirectorySub =
+        ClientProfileService.watchAllProfiles().listen((profiles) {
+      if (!mounted) {
+        return;
+      }
+
+      final profileIds = profiles.map((item) => item.signupId).toSet();
+
+      setState(() {
+        _knownClients = profiles;
+        _isLoadingClientSuggestions = false;
+        _selectedRecipients
+            .removeWhere((item) => !profileIds.contains(item.signupId));
+        _clientSuggestions = ClientProfileService.searchProfiles(
+          profiles: profiles,
+          query: _clientIdsController.text,
+          limit: 8,
+          excludeSignupIds:
+              _selectedRecipients.map((item) => item.signupId).toSet(),
+        );
+      });
+    });
+  }
 
   @override
   void dispose() {
+    _clientSuggestionDebounce?.cancel();
+    _clientDirectorySub?.cancel();
     _titleController.dispose();
     _bodyController.dispose();
     _clientIdsController.dispose();
@@ -43,19 +80,86 @@ class _MessagesPageState extends State<MessagesPage> {
     super.dispose();
   }
 
-  List<String> _parseClientIds(String input) {
-    return input
-        .split(RegExp(r'[,;\n\s]+'))
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toSet()
-        .toList();
+  List<ClientProfile> _findClientSuggestions(String query) {
+    return ClientProfileService.searchProfiles(
+      profiles: _knownClients,
+      query: query,
+      limit: 8,
+      excludeSignupIds: _selectedRecipients.map((item) => item.signupId).toSet(),
+    );
+  }
+
+  void _onClientSearchChanged(String value) {
+    _clientSuggestionDebounce?.cancel();
+
+    final query = value.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _clientSuggestions = const [];
+      });
+      return;
+    }
+
+    _clientSuggestionDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = _findClientSuggestions(query);
+      });
+    });
+  }
+
+  void _addRecipient(ClientProfile profile) {
+    final alreadyAdded =
+        _selectedRecipients.any((item) => item.signupId == profile.signupId);
+    if (alreadyAdded) {
+      _clientIdsController.clear();
+      setState(() {
+        _clientSuggestions = const [];
+      });
+      return;
+    }
+
+    _clientIdsController.clear();
+    setState(() {
+      _selectedRecipients.add(profile);
+      _clientSuggestions = const [];
+    });
+  }
+
+  void _removeRecipient(String signupId) {
+    setState(() {
+      _selectedRecipients.removeWhere((item) => item.signupId == signupId);
+      _clientSuggestions = _findClientSuggestions(_clientIdsController.text);
+    });
+  }
+
+  bool _tryResolveTypedClientId() {
+    final query = _clientIdsController.text.trim();
+    if (query.isEmpty) {
+      return true;
+    }
+
+    ClientProfile? exactIdMatch;
+    for (final profile in _knownClients) {
+      if (profile.signupId.toLowerCase() == query.toLowerCase()) {
+        exactIdMatch = profile;
+        break;
+      }
+    }
+
+    if (exactIdMatch == null) {
+      return false;
+    }
+
+    _addRecipient(exactIdMatch);
+    return true;
   }
 
   Future<void> _sendBroadcast() async {
     final title = _titleController.text.trim();
     final body = _bodyController.text.trim();
-    final clientIds = _parseClientIds(_clientIdsController.text);
 
     if (title.isEmpty || body.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -63,9 +167,18 @@ class _MessagesPageState extends State<MessagesPage> {
       );
       return;
     }
+
+    if (!_tryResolveTypedClientId()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a valid client from suggestions.')),
+      );
+      return;
+    }
+
+    final clientIds = _selectedRecipients.map((item) => item.signupId).toSet().toList();
     if (clientIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Provide at least one client ID.')),
+        const SnackBar(content: Text('Select at least one valid client.')),
       );
       return;
     }
@@ -85,6 +198,10 @@ class _MessagesPageState extends State<MessagesPage> {
       _titleController.clear();
       _bodyController.clear();
       _clientIdsController.clear();
+      setState(() {
+        _selectedRecipients.clear();
+        _clientSuggestions = const [];
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Broadcast sent to $sentCount client(s).')),
       );
@@ -198,6 +315,12 @@ class _MessagesPageState extends State<MessagesPage> {
           titleController: _titleController,
           bodyController: _bodyController,
           clientIdsController: _clientIdsController,
+          selectedRecipients: _selectedRecipients,
+          isLoadingClientSuggestions: _isLoadingClientSuggestions,
+          clientSuggestions: _clientSuggestions,
+          onClientSearchChanged: _onClientSearchChanged,
+          onClientSuggestionSelected: _addRecipient,
+          onRecipientRemoved: _removeRecipient,
           isSending: _isSending,
           onSend: _sendBroadcast,
         ),
@@ -325,6 +448,12 @@ class _OwnerComposerCard extends StatelessWidget {
     required this.titleController,
     required this.bodyController,
     required this.clientIdsController,
+    required this.selectedRecipients,
+    required this.isLoadingClientSuggestions,
+    required this.clientSuggestions,
+    required this.onClientSearchChanged,
+    required this.onClientSuggestionSelected,
+    required this.onRecipientRemoved,
     required this.isSending,
     required this.onSend,
   });
@@ -332,6 +461,12 @@ class _OwnerComposerCard extends StatelessWidget {
   final TextEditingController titleController;
   final TextEditingController bodyController;
   final TextEditingController clientIdsController;
+  final List<ClientProfile> selectedRecipients;
+  final bool isLoadingClientSuggestions;
+  final List<ClientProfile> clientSuggestions;
+  final ValueChanged<String> onClientSearchChanged;
+  final ValueChanged<ClientProfile> onClientSuggestionSelected;
+  final ValueChanged<String> onRecipientRemoved;
   final bool isSending;
   final VoidCallback onSend;
 
@@ -376,14 +511,65 @@ class _OwnerComposerCard extends StatelessWidget {
           const SizedBox(height: 10),
           TextField(
             controller: clientIdsController,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Client IDs (comma, space, or new-line separated)',
-              border: OutlineInputBorder(),
-              alignLabelWithHint: true,
-              hintText: 'abc123, def456',
+            onChanged: onClientSearchChanged,
+            decoration: InputDecoration(
+              labelText: 'Search Clients (ID, name, or address)',
+              border: const OutlineInputBorder(),
+              hintText: 'Type ID, name, or address',
+              suffixIcon: isLoadingClientSuggestions
+                  ? const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : null,
             ),
           ),
+          if (selectedRecipients.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final recipient in selectedRecipients)
+                  InputChip(
+                    label: Text('${recipient.signupId} · ${recipient.fullName}'),
+                    onDeleted: () => onRecipientRemoved(recipient.signupId),
+                  ),
+              ],
+            ),
+          ],
+          if (clientSuggestions.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Card(
+              margin: EdgeInsets.zero,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 220),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: clientSuggestions.length,
+                  itemBuilder: (context, index) {
+                    final suggestion = clientSuggestions[index];
+                    return ListTile(
+                      dense: true,
+                      title: Text('${suggestion.signupId} · ${suggestion.fullName}'),
+                      subtitle: Text(
+                        suggestion.address.isEmpty
+                            ? 'Address unavailable'
+                            : suggestion.address,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () => onClientSuggestionSelected(suggestion),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerRight,

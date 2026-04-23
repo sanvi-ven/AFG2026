@@ -1,11 +1,15 @@
 //made with help of chatgpt: create flutter page that shows list of estimates from firestore stream, how to add aprove/deny buttons for client, and convert to invoice button for owner
 
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/services/client_profile_service.dart';
 import '../../core/services/estimate_service.dart';
+import '../../core/services/invoice_pdf_service.dart';
 import '../../core/services/invoice_service.dart';
 import '../../core/state/client_session.dart';
+import '../../models/client_profile.dart';
 import '../../models/estimate.dart';
 import '../../models/invoice.dart';
 import '../../shared/widgets/app_scaffold.dart';
@@ -28,9 +32,46 @@ class _EstimatesPageState extends State<EstimatesPage> {
   ];
   bool _isSubmitting = false;
   String? _convertingEstimateId;
+  String? _downloadingEstimateId;
+  Timer? _clientSearchDebounce;
+  StreamSubscription<List<ClientProfile>>? _clientsSub;
+  List<ClientProfile> _knownClients = const [];
+  List<ClientProfile> _clientSuggestions = const [];
+  ClientProfile? _selectedClient;
+  bool _isLoadingClientSuggestions = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _clientsSub = ClientProfileService.watchAllProfiles().listen((profiles) {
+      if (!mounted) {
+        return;
+      }
+
+      final selectedId = _selectedClient?.signupId;
+      final query = _clientIdController.text.trim();
+      setState(() {
+        _knownClients = profiles;
+        _isLoadingClientSuggestions = false;
+
+        if (selectedId != null &&
+            !profiles.any((profile) => profile.signupId == selectedId)) {
+          _selectedClient = null;
+        }
+
+        _clientSuggestions = ClientProfileService.searchProfiles(
+          profiles: profiles,
+          query: query,
+          limit: 8,
+        );
+      });
+    });
+  }
 
   @override
   void dispose() {
+    _clientSearchDebounce?.cancel();
+    _clientsSub?.cancel();
     _estimateNumberController.dispose();
     _clientIdController.dispose();
     for (final row in _serviceRows) {
@@ -69,6 +110,45 @@ class _EstimatesPageState extends State<EstimatesPage> {
     });
   }
 
+  void _onClientSearchChanged(String value) {
+    _clientSearchDebounce?.cancel();
+
+    if (_selectedClient != null && value.trim() != _selectedClient!.signupId) {
+      setState(() {
+        _selectedClient = null;
+      });
+    }
+
+    final query = value.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _clientSuggestions = const [];
+      });
+      return;
+    }
+
+    _clientSearchDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _clientSuggestions = ClientProfileService.searchProfiles(
+          profiles: _knownClients,
+          query: query,
+          limit: 8,
+        );
+      });
+    });
+  }
+
+  void _pickClientSuggestion(ClientProfile profile) {
+    _clientIdController.text = profile.signupId;
+    setState(() {
+      _selectedClient = profile;
+      _clientSuggestions = const [];
+    });
+  }
+
   Future<void> _submitEstimate() async {
     final estimateNumber = _estimateNumberController.text.trim().isEmpty
         ? _defaultEstimateNumber()
@@ -97,6 +177,16 @@ class _EstimatesPageState extends State<EstimatesPage> {
 
     setState(() => _isSubmitting = true);
     try {
+      final existingClient = await ClientProfileService.fetchBySignupId(clientId);
+      if (existingClient == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Select a valid client from suggestions.')),
+          );
+        }
+        return;
+      }
+
       await EstimateService.createEstimate(
         estimateNumber: estimateNumber,
         clientId: clientId,
@@ -112,6 +202,10 @@ class _EstimatesPageState extends State<EstimatesPage> {
         row.nameController.clear();
         row.priceController.clear();
       }
+      setState(() {
+        _selectedClient = null;
+        _clientSuggestions = const [];
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Estimate sent to client.')),
@@ -136,8 +230,12 @@ class _EstimatesPageState extends State<EstimatesPage> {
       if (!mounted) {
         return;
       }
+      final normalizedStatus = status.trim().toLowerCase();
+      final displayStatus = normalizedStatus.isEmpty
+          ? 'Pending'
+          : '${normalizedStatus[0].toUpperCase()}${normalizedStatus.substring(1)}';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Estimate status set to $status.')),
+        SnackBar(content: Text('Estimate status set to $displayStatus.')),
       );
     } catch (error) {
       if (!mounted) {
@@ -167,7 +265,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${estimate.estimateNumber} converted to invoice.')),
+        SnackBar(content: Text('${estimate.estimateNumber} converted to invoice and sent to client.')),
       );
     } catch (error) {
       if (!mounted) {
@@ -179,6 +277,45 @@ class _EstimatesPageState extends State<EstimatesPage> {
     } finally {
       if (mounted) {
         setState(() => _convertingEstimateId = null);
+      }
+    }
+  }
+
+  Future<void> _downloadConvertedInvoicePdf(Estimate estimate) async {
+    final invoiceId = estimate.convertedInvoiceId?.trim() ?? '';
+    if (invoiceId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No converted invoice found for this estimate.')),
+      );
+      return;
+    }
+
+    setState(() => _downloadingEstimateId = estimate.id);
+    try {
+      final invoice = await InvoiceService.getInvoiceById(invoiceId);
+      if (invoice == null) {
+        throw Exception('Converted invoice not found.');
+      }
+
+      final savedPath = await InvoicePdfService.generateAndDownloadInvoicePdf(invoice: invoice);
+      if (!mounted) {
+        return;
+      }
+
+      final message = savedPath == null
+          ? 'Invoice PDF downloaded.'
+          : 'Invoice PDF saved: $savedPath';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to download invoice PDF: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _downloadingEstimateId = null);
       }
     }
   }
@@ -200,6 +337,11 @@ class _EstimatesPageState extends State<EstimatesPage> {
             _OwnerEstimateForm(
               estimateNumberController: _estimateNumberController,
               clientIdController: _clientIdController,
+              selectedClient: _selectedClient,
+              isLoadingClientSuggestions: _isLoadingClientSuggestions,
+              clientSuggestions: _clientSuggestions,
+              onClientIdChanged: _onClientSearchChanged,
+              onClientSuggestionSelected: _pickClientSuggestion,
               serviceRows: _serviceRows,
               isSubmitting: _isSubmitting,
               onAddService: _addServiceRow,
@@ -253,9 +395,11 @@ class _EstimatesPageState extends State<EstimatesPage> {
                           estimate: estimate,
                           role: widget.role,
                           isConverting: _convertingEstimateId == estimate.id,
+                          isDownloadingPdf: _downloadingEstimateId == estimate.id,
                           onApprove: () => _setEstimateStatus(estimate.id, InvoiceStatus.approved),
                           onDeny: () => _setEstimateStatus(estimate.id, InvoiceStatus.denied),
                           onConvert: () => _convertToInvoice(estimate),
+                          onDownloadPdf: () => _downloadConvertedInvoicePdf(estimate),
                         ),
                       ),
                   ],
@@ -272,6 +416,11 @@ class _OwnerEstimateForm extends StatelessWidget {
   const _OwnerEstimateForm({
     required this.estimateNumberController,
     required this.clientIdController,
+    required this.selectedClient,
+    required this.isLoadingClientSuggestions,
+    required this.clientSuggestions,
+    required this.onClientIdChanged,
+    required this.onClientSuggestionSelected,
     required this.serviceRows,
     required this.isSubmitting,
     required this.onAddService,
@@ -281,6 +430,11 @@ class _OwnerEstimateForm extends StatelessWidget {
 
   final TextEditingController estimateNumberController;
   final TextEditingController clientIdController;
+  final ClientProfile? selectedClient;
+  final bool isLoadingClientSuggestions;
+  final List<ClientProfile> clientSuggestions;
+  final ValueChanged<String> onClientIdChanged;
+  final ValueChanged<ClientProfile> onClientSuggestionSelected;
   final List<_ServiceRow> serviceRows;
   final bool isSubmitting;
   final VoidCallback onAddService;
@@ -308,11 +462,62 @@ class _OwnerEstimateForm extends StatelessWidget {
             const SizedBox(height: 12),
             TextField(
               controller: clientIdController,
-              decoration: const InputDecoration(
-                labelText: 'Client ID',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: 'Client (ID, name, or address)',
+                border: const OutlineInputBorder(),
+                suffixIcon: isLoadingClientSuggestions
+                    ? const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : null,
               ),
+              onChanged: onClientIdChanged,
             ),
+            if (selectedClient != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${selectedClient!.signupId} · ${selectedClient!.fullName}\n${selectedClient!.address.isEmpty ? 'Address unavailable' : selectedClient!.address}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
+            if (clientSuggestions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Card(
+                margin: EdgeInsets.zero,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: clientSuggestions.length,
+                    itemBuilder: (context, index) {
+                      final client = clientSuggestions[index];
+                      return ListTile(
+                        dense: true,
+                        title: Text('${client.signupId} · ${client.fullName}'),
+                        subtitle: Text(
+                          client.address.isEmpty ? 'Address unavailable' : client.address,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () => onClientSuggestionSelected(client),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             Text('Services', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
@@ -380,24 +585,37 @@ class _EstimateCard extends StatelessWidget {
     required this.estimate,
     required this.role,
     required this.isConverting,
+    required this.isDownloadingPdf,
     required this.onApprove,
     required this.onDeny,
     required this.onConvert,
+    required this.onDownloadPdf,
   });
 
   final Estimate estimate;
   final String role;
   final bool isConverting;
+  final bool isDownloadingPdf;
   final VoidCallback onApprove;
   final VoidCallback onDeny;
   final VoidCallback onConvert;
+  final VoidCallback onDownloadPdf;
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = switch (estimate.status) {
+    final statusKey = estimate.status.trim().toLowerCase();
+    final statusColor = switch (statusKey) {
       InvoiceStatus.approved => Colors.green,
       InvoiceStatus.denied => Colors.red,
       _ => Colors.orange,
+    };
+    final statusText = switch (statusKey) {
+      InvoiceStatus.approved => 'Approved',
+      InvoiceStatus.denied => 'Denied',
+      InvoiceStatus.pending => 'Pending',
+      _ => statusKey.isEmpty
+          ? 'Pending'
+          : '${statusKey[0].toUpperCase()}${statusKey.substring(1)}',
     };
 
     return Card(
@@ -422,7 +640,7 @@ class _EstimateCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    estimate.status,
+                    statusText,
                     style: TextStyle(color: statusColor, fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -475,9 +693,26 @@ class _EstimateCard extends StatelessWidget {
             if (role == 'owner') ...[
               const SizedBox(height: 12),
               if (estimate.convertedToInvoice)
-                Text(
-                  'Converted to invoice${estimate.convertedInvoiceId == null ? '' : ': ${estimate.convertedInvoiceId}'}',
-                  style: Theme.of(context).textTheme.bodySmall,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Converted to invoice${estimate.convertedInvoiceId == null ? '' : ': ${estimate.convertedInvoiceId}'}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: isDownloadingPdf ? null : onDownloadPdf,
+                      icon: isDownloadingPdf
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.download_outlined),
+                      label: const Text('Download PDF'),
+                    ),
+                  ],
                 )
               else
                 FilledButton.icon(

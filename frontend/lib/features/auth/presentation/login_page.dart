@@ -35,6 +35,41 @@ class _LoginPageState extends State<LoginPage> {
     Navigator.pushNamed(context, AppRouter.ownerSignin);
   }
 
+  Future<Map<String, dynamic>> _loginViaApi(String email) async {
+    final primaryBaseUrl = AppConfig.apiBaseUrl.trim();
+    final candidateBaseUrls = <String>[primaryBaseUrl];
+    if (primaryBaseUrl.contains('127.0.0.1')) {
+      candidateBaseUrls.add(primaryBaseUrl.replaceAll('127.0.0.1', 'localhost'));
+    } else if (primaryBaseUrl.contains('localhost')) {
+      candidateBaseUrls.add(primaryBaseUrl.replaceAll('localhost', '127.0.0.1'));
+    }
+
+    Object? lastError;
+    for (final baseUrl in candidateBaseUrls.toSet()) {
+      try {
+        final apiClient = ApiClient(baseUrl: baseUrl);
+        return await apiClient.postJson('/api/v1/public/client-login', {
+          'email': email,
+        });
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw Exception(lastError?.toString() ?? 'Login API unavailable.');
+  }
+
+  Future<void> _loginWithFirestoreFallback({
+    required String email,
+    required Object apiError,
+  }) async {
+    final fallbackProfile = await ClientProfileService.fetchByEmail(email);
+    if (fallbackProfile == null) {
+      throw Exception(apiError.toString().replaceFirst('Exception: ', ''));
+    }
+    ClientSession.setProfile(fallbackProfile);
+  }
+
   Future<void> _loginClient() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -46,39 +81,42 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final apiClient = ApiClient(baseUrl: AppConfig.apiBaseUrl);
-      final client = await apiClient.postJson('/api/v1/public/client-login', {
-        'email': _emailController.text.trim(),
-      });
+      final email = _emailController.text.trim();
+      try {
+        final client = await _loginViaApi(email);
 
-      final rawName = (client['name'] as String? ?? '').trim();
-      final nameParts = rawName.split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
-      final firstName =
-          (client['first_name'] as String? ?? (nameParts.isNotEmpty ? nameParts.first : '')).trim();
-      final lastName =
-          (client['last_name'] as String? ?? (nameParts.length > 1 ? nameParts.sublist(1).join(' ') : ''))
-              .trim();
+        final rawName = (client['name'] as String? ?? '').trim();
+        final nameParts = rawName.split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
+        final firstName =
+            (client['first_name'] as String? ?? (nameParts.isNotEmpty ? nameParts.first : '')).trim();
+        final lastName =
+            (client['last_name'] as String? ??
+                    (nameParts.length > 1 ? nameParts.sublist(1).join(' ') : ''))
+                .trim();
         final rawAddress = client['address'];
         final fallbackAddressMap = rawAddress is Map
           ? rawAddress.map((key, value) => MapEntry(key.toString(), value))
           : const <String, dynamic>{};
-      final parsedAddress = (client['address'] as String? ?? '').trim().isNotEmpty
-          ? (client['address'] as String).trim()
-          : [
-              (fallbackAddressMap['street'] as String? ?? '').trim(),
-              (fallbackAddressMap['country'] as String? ?? '').trim(),
-              (fallbackAddressMap['zip_code'] as String? ?? '').trim(),
-            ].where((part) => part.isNotEmpty).join(', ');
+        final parsedAddress = (client['address'] as String? ?? '').trim().isNotEmpty
+            ? (client['address'] as String).trim()
+            : [
+                (fallbackAddressMap['street'] as String? ?? '').trim(),
+                (fallbackAddressMap['country'] as String? ?? '').trim(),
+                (fallbackAddressMap['zip_code'] as String? ?? '').trim(),
+              ].where((part) => part.isNotEmpty).join(', ');
 
-      final profile = await ClientProfileService.getOrCreateForSignup(
-        signupId: (client['id'] as String? ?? '').trim(),
-        email: (client['email'] as String? ?? _emailController.text.trim()),
-        firstName: firstName,
-        lastName: lastName,
-        phoneNumber: (client['phone_number'] as String? ?? client['phone'] as String? ?? '').trim(),
-        address: parsedAddress,
-      );
-      ClientSession.setProfile(profile);
+        final profile = await ClientProfileService.getOrCreateForSignup(
+          signupId: (client['id'] as String? ?? '').trim(),
+          email: (client['email'] as String? ?? email),
+          firstName: firstName,
+          lastName: lastName,
+          phoneNumber: (client['phone_number'] as String? ?? client['phone'] as String? ?? '').trim(),
+          address: parsedAddress,
+        );
+        ClientSession.setProfile(profile);
+      } catch (apiError) {
+        await _loginWithFirestoreFallback(email: email, apiError: apiError);
+      }
 
       if (!mounted) {
         return;

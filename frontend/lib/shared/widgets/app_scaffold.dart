@@ -498,6 +498,7 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
   Widget build(BuildContext context) {
     final logo = _logoUrl;
     final localPreview = _pendingLogoBytes;
+    const localFallbackLogo = 'assets/logos/logo.png';
 
     return AlertDialog(
       title: const Text('Owner Settings'),
@@ -535,7 +536,14 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
                   alignment: Alignment.center,
                   child: logo == null || logo.trim().isEmpty
                       ? (localPreview == null
-                          ? const Text('No logo uploaded')
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.asset(
+                                localFallbackLogo,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => const Text('No logo uploaded'),
+                              ),
+                            )
                           : ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: Image.memory(
