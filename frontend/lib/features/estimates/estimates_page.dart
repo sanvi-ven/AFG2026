@@ -3,11 +3,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/services/client_profile_service.dart';
+import '../../core/services/estimate_pdf_service.dart';
 import '../../core/services/estimate_service.dart';
 import '../../core/services/invoice_pdf_service.dart';
 import '../../core/services/invoice_service.dart';
+import '../../core/services/scheduled_work_service.dart';
 import '../../core/state/client_session.dart';
 import '../../models/client_profile.dart';
 import '../../models/estimate.dart';
@@ -33,6 +36,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
   bool _isSubmitting = false;
   String? _convertingEstimateId;
   String? _downloadingEstimateId;
+  String? _schedulingEstimateId;
+  String? _downloadingEstimatePdfId;
   Timer? _clientSearchDebounce;
   StreamSubscription<List<ClientProfile>>? _clientsSub;
   List<ClientProfile> _knownClients = const [];
@@ -224,6 +229,72 @@ class _EstimatesPageState extends State<EstimatesPage> {
     }
   }
 
+  Future<void> _downloadEstimatePdf(Estimate estimate) async {
+    setState(() => _downloadingEstimatePdfId = estimate.id);
+    try {
+      final savedPath = await EstimatePdfService.generateAndDownloadEstimatePdf(estimate: estimate);
+      if (!mounted) return;
+      final message = savedPath == null ? 'Estimate PDF downloaded.' : 'Estimate PDF saved: $savedPath';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to download estimate PDF: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _downloadingEstimatePdfId = null);
+    }
+  }
+
+  Future<void> _scheduleWork(Estimate estimate) async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 1)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+    );
+    if (pickedDate == null || !mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 9, minute: 0),
+    );
+    if (pickedTime == null || !mounted) return;
+
+    final scheduledDateTime = DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+
+    setState(() => _schedulingEstimateId = estimate.id);
+    try {
+      final workId = await ScheduledWorkService.createScheduledWork(
+        estimateId: estimate.id,
+        estimateNumber: estimate.estimateNumber,
+        clientId: estimate.clientId,
+        services: estimate.services,
+        total: estimate.total,
+        scheduledDate: scheduledDateTime,
+      );
+      await EstimateService.markScheduled(estimateId: estimate.id, scheduledWorkId: workId);
+      if (!mounted) return;
+      final formatted = DateFormat('MMM d, yyyy · h:mm a').format(scheduledDateTime);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Work scheduled for $formatted.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to schedule work: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _schedulingEstimateId = null);
+    }
+  }
+
   Future<void> _setEstimateStatus(String estimateId, String status) async {
     try {
       await EstimateService.updateStatus(estimateId: estimateId, status: status);
@@ -396,10 +467,14 @@ class _EstimatesPageState extends State<EstimatesPage> {
                           role: widget.role,
                           isConverting: _convertingEstimateId == estimate.id,
                           isDownloadingPdf: _downloadingEstimateId == estimate.id,
+                          isScheduling: _schedulingEstimateId == estimate.id,
+                          isDownloadingEstimatePdf: _downloadingEstimatePdfId == estimate.id,
                           onApprove: () => _setEstimateStatus(estimate.id, InvoiceStatus.approved),
                           onDeny: () => _setEstimateStatus(estimate.id, InvoiceStatus.denied),
                           onConvert: () => _convertToInvoice(estimate),
                           onDownloadPdf: () => _downloadConvertedInvoicePdf(estimate),
+                          onScheduleWork: () => _scheduleWork(estimate),
+                          onDownloadEstimatePdf: () => _downloadEstimatePdf(estimate),
                         ),
                       ),
                   ],
@@ -586,20 +661,28 @@ class _EstimateCard extends StatelessWidget {
     required this.role,
     required this.isConverting,
     required this.isDownloadingPdf,
+    required this.isScheduling,
+    required this.isDownloadingEstimatePdf,
     required this.onApprove,
     required this.onDeny,
     required this.onConvert,
     required this.onDownloadPdf,
+    required this.onScheduleWork,
+    required this.onDownloadEstimatePdf,
   });
 
   final Estimate estimate;
   final String role;
   final bool isConverting;
   final bool isDownloadingPdf;
+  final bool isScheduling;
+  final bool isDownloadingEstimatePdf;
   final VoidCallback onApprove;
   final VoidCallback onDeny;
   final VoidCallback onConvert;
   final VoidCallback onDownloadPdf;
+  final VoidCallback onScheduleWork;
+  final VoidCallback onDownloadEstimatePdf;
 
   @override
   Widget build(BuildContext context) {
@@ -704,32 +787,52 @@ class _EstimateCard extends StatelessWidget {
                     OutlinedButton.icon(
                       onPressed: isDownloadingPdf ? null : onDownloadPdf,
                       icon: isDownloadingPdf
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.download_outlined),
-                      label: const Text('Download PDF'),
+                      label: const Text('Download Invoice PDF'),
                     ),
                   ],
                 )
-              else
-                FilledButton.icon(
-                  onPressed: estimate.isConvertible && !isConverting ? onConvert : null,
-                  icon: isConverting
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.swap_horiz),
-                  label: Text(
-                    estimate.isApproved
-                        ? 'Convert To Invoice'
-                        : 'Approve Required Before Convert',
+              else ...[
+                if (estimate.isApproved) ...[
+                  if (estimate.isScheduled)
+                    Row(
+                      children: [
+                        const Icon(Icons.event_available, size: 16, color: Colors.green),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Work scheduled — see Appointments',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.green),
+                        ),
+                      ],
+                    )
+                  else
+                    Row(
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: isDownloadingEstimatePdf ? null : onDownloadEstimatePdf,
+                          icon: isDownloadingEstimatePdf
+                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.download_outlined),
+                          label: const Text('Download'),
+                        ),
+                        const SizedBox(width: 10),
+                        FilledButton.icon(
+                          onPressed: isScheduling ? null : onScheduleWork,
+                          icon: isScheduling
+                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.event_outlined),
+                          label: const Text('Schedule Work'),
+                        ),
+                      ],
+                    ),
+                ] else
+                  FilledButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.swap_horiz),
+                    label: const Text('Approval Required'),
                   ),
-                ),
+              ],
             ],
           ],
         ),

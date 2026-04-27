@@ -74,4 +74,27 @@ class EstimateService {
       SetOptions(merge: true),
     );
   }
+
+  static Future<Estimate?> fetchById(String estimateId) async {
+    final normalizedId = estimateId.trim();
+    if (normalizedId.isEmpty) return null;
+    final snapshot = await _collection.doc(normalizedId).get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) return null;
+    return Estimate.fromMap({...data, 'id': snapshot.id});
+  }
+
+  static Future<void> markScheduled({
+    required String estimateId,
+    required String scheduledWorkId,
+  }) async {
+    await _collection.doc(estimateId).set(
+      {
+        'isScheduled': true,
+        'scheduledWorkId': scheduledWorkId,
+        'updatedAt': DateTime.now(),
+      },
+      SetOptions(merge: true),
+    );
+  }
 }

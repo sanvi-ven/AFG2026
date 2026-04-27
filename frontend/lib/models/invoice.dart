@@ -101,6 +101,7 @@ class InvoiceStatus {
   // Kept for backwards compatibility with legacy invoice documents.
   static const approved = 'approved';
   static const denied = 'denied';
+  static const paid = 'paid';
 
   static bool isSent(String status) {
     final normalized = status.trim().toLowerCase();

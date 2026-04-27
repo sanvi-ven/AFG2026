@@ -15,6 +15,8 @@ class Estimate {
     required this.convertedToInvoice,
     this.convertedInvoiceId,
     this.convertedAt,
+    this.isScheduled = false,
+    this.scheduledWorkId,
   });
 
   final String id;
@@ -28,6 +30,8 @@ class Estimate {
   final bool convertedToInvoice;
   final String? convertedInvoiceId;
   final DateTime? convertedAt;
+  final bool isScheduled;
+  final String? scheduledWorkId;
 
   bool get isPending => status == InvoiceStatus.pending;
   bool get isApproved => status == InvoiceStatus.approved;
@@ -75,6 +79,8 @@ class Estimate {
       convertedToInvoice: map['convertedToInvoice'] as bool? ?? false,
       convertedInvoiceId: (map['convertedInvoiceId'] as String?)?.trim(),
       convertedAt: readOptionalDate(map['convertedAt']),
+      isScheduled: map['isScheduled'] as bool? ?? false,
+      scheduledWorkId: (map['scheduledWorkId'] as String?)?.trim(),
     );
   }
 
@@ -91,6 +97,8 @@ class Estimate {
       'convertedToInvoice': convertedToInvoice,
       'convertedInvoiceId': convertedInvoiceId,
       'convertedAt': convertedAt,
+      'isScheduled': isScheduled,
+      'scheduledWorkId': scheduledWorkId,
     };
   }
 }

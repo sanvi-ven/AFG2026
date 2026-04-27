@@ -18,6 +18,25 @@ class InvoicesPage extends StatefulWidget {
 
 class _InvoicesPageState extends State<InvoicesPage> {
   String? _downloadingInvoiceId;
+  String? _markingPaidInvoiceId;
+
+  Future<void> _markAsPaid(Invoice invoice) async {
+    setState(() => _markingPaidInvoiceId = invoice.id);
+    try {
+      await InvoiceService.updateStatus(invoiceId: invoice.id, status: InvoiceStatus.paid);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invoice marked as paid.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to mark as paid: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _markingPaidInvoiceId = null);
+    }
+  }
 
   Future<void> _downloadInvoicePdf(Invoice invoice) async {
     setState(() => _downloadingInvoiceId = invoice.id);
@@ -103,7 +122,9 @@ class _InvoicesPageState extends State<InvoicesPage> {
                           invoice: invoice,
                           role: widget.role,
                           isDownloadingPdf: _downloadingInvoiceId == invoice.id,
+                          isMarkingPaid: _markingPaidInvoiceId == invoice.id,
                           onDownloadPdf: () => _downloadInvoicePdf(invoice),
+                          onMarkPaid: () => _markAsPaid(invoice),
                         ),
                       ),
                   ],
@@ -121,30 +142,40 @@ class _InvoiceCard extends StatelessWidget {
     required this.invoice,
     required this.role,
     required this.isDownloadingPdf,
+    required this.isMarkingPaid,
     required this.onDownloadPdf,
+    required this.onMarkPaid,
   });
 
   final Invoice invoice;
   final String role;
   final bool isDownloadingPdf;
+  final bool isMarkingPaid;
   final VoidCallback onDownloadPdf;
+  final VoidCallback onMarkPaid;
 
   @override
   Widget build(BuildContext context) {
+    final normalizedStatus = invoice.status.trim().toLowerCase();
+    final isPaid = normalizedStatus == InvoiceStatus.paid;
     final statusKey = InvoiceStatus.displayLabel(invoice.status);
-    final statusColor = InvoiceStatus.isSent(statusKey)
-      ? Colors.green
-        : statusKey == InvoiceStatus.denied
-        ? Colors.red
-        : Colors.orange;
-    final statusText = switch (statusKey) {
-      InvoiceStatus.sent => role == 'client' ? 'Received' : 'Sent',
-      InvoiceStatus.denied => 'Denied',
-      InvoiceStatus.pending => 'Pending',
-      _ => statusKey.isEmpty
-          ? 'Pending'
-          : '${statusKey[0].toUpperCase()}${statusKey.substring(1)}',
-    };
+    final statusColor = isPaid
+        ? Colors.green
+        : InvoiceStatus.isSent(statusKey)
+            ? Colors.blue
+            : statusKey == InvoiceStatus.denied
+                ? Colors.red
+                : Colors.orange;
+    final statusText = isPaid
+        ? 'Paid'
+        : switch (statusKey) {
+            InvoiceStatus.sent => role == 'client' ? 'Received' : 'Sent',
+            InvoiceStatus.denied => 'Denied',
+            InvoiceStatus.pending => 'Pending',
+            _ => statusKey.isEmpty
+                ? 'Pending'
+                : '${statusKey[0].toUpperCase()}${statusKey.substring(1)}',
+          };
 
     return Card(
       margin: EdgeInsets.zero,
@@ -197,16 +228,26 @@ class _InvoiceCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: isDownloadingPdf ? null : onDownloadPdf,
-              icon: isDownloadingPdf
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.download_outlined),
-              label: const Text('Download PDF'),
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: isDownloadingPdf ? null : onDownloadPdf,
+                  icon: isDownloadingPdf
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.download_outlined),
+                  label: const Text('Download PDF'),
+                ),
+                if (role == 'owner' && !isPaid && InvoiceStatus.isSent(invoice.status))
+                  OutlinedButton.icon(
+                    onPressed: isMarkingPaid ? null : onMarkPaid,
+                    icon: isMarkingPaid
+                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.payments_outlined),
+                    label: const Text('Mark as Paid'),
+                  ),
+              ],
             ),
           ],
         ),
