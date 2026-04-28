@@ -4,10 +4,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../core/config/app_config.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/address_autocomplete_service.dart';
-import '../../../core/services/api_client.dart';
 import '../../../core/services/client_profile_service.dart';
 import '../../../core/state/client_session.dart';
 
@@ -107,22 +105,10 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
     });
 
     try {
-      final apiClient = ApiClient(baseUrl: AppConfig.apiBaseUrl);
-      final firstName = _firstNameController.text.trim();
-      final lastName = _lastNameController.text.trim();
-      final createdClient = await apiClient.postJson('/api/v1/public/client-signups', {
-        'first_name': firstName,
-        'last_name': lastName,
-        'email': _emailController.text.trim(),
-        'phone_number': _phoneController.text.trim(),
-        'address': _addressController.text.trim(),
-      });
-
-      final savedProfile = await ClientProfileService.getOrCreateForSignup(
-        signupId: (createdClient['id'] as String? ?? '').trim(),
-        email: (createdClient['email'] as String? ?? _emailController.text.trim()),
-        firstName: firstName,
-        lastName: lastName,
+      final savedProfile = await ClientProfileService.createSignup(
+        email: _emailController.text.trim(),
+        firstName: _firstNameController.text.trim(),
+        lastName: _lastNameController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
         address: _addressController.text.trim(),
       );

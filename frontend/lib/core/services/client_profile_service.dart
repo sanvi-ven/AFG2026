@@ -1,5 +1,7 @@
 //made with the help of chatgpt; prompt: create a flutter service class for firestore that manages a client profile model
 
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/client_profile.dart';
@@ -108,6 +110,57 @@ class ClientProfileService {
 
     final saved = await fetchBySignupId(normalizedId);
     return saved ?? profile.copyWith(signupId: normalizedId, email: normalizedEmail);
+  }
+
+  /// Creates a brand-new client signup directly in Firestore, replicating the
+  /// logic that was previously handled by the FastAPI backend POST endpoint.
+  /// Returns the newly created [ClientProfile].
+  static Future<ClientProfile> createSignup({
+    required String email,
+    required String firstName,
+    required String lastName,
+    required String phoneNumber,
+    required String address,
+  }) async {
+    final normalizedEmail = normalizeEmail(email);
+
+    // Reject duplicate emails.
+    final existing = await fetchByEmail(normalizedEmail);
+    if (existing != null) {
+      throw Exception('An account with that email address already exists.');
+    }
+
+    // Determine the next sequential 5-digit client ID.
+    final allDocs = await _signupsCollection.get();
+    int maxSeen = 0;
+    for (final doc in allDocs.docs) {
+      final candidate = doc.id.trim();
+      if (candidate.length == 5) {
+        final parsed = int.tryParse(candidate);
+        if (parsed != null) maxSeen = max(maxSeen, parsed);
+      }
+    }
+    final nextValue = maxSeen + 1;
+    if (nextValue > 99999) {
+      throw Exception('Client signup capacity reached (99999).');
+    }
+    final newId = nextValue.toString().padLeft(5, '0');
+
+    final profile = ClientProfile(
+      signupId: newId,
+      email: normalizedEmail,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      phoneNumber: phoneNumber.trim(),
+      address: address.trim(),
+    );
+
+    await _signupsCollection.doc(newId).set({
+      ...profile.toMap(),
+      'created_at': FieldValue.serverTimestamp(),
+    });
+
+    return profile;
   }
 
   static Future<ClientProfile> getOrCreateForSignup({
