@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/router/app_router.dart';
+import '../../../shared/widgets/app_logo.dart';
 
 class OwnerSigninPage extends StatefulWidget {
   const OwnerSigninPage({super.key});
@@ -78,6 +79,8 @@ class _OwnerSigninPageState extends State<OwnerSigninPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const Center(child: AppLogo(size: 72)),
+                  const SizedBox(height: 12),
                   Text('Business Owner Sign In', style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 8),
                   Text(

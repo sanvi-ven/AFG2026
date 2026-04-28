@@ -7,6 +7,7 @@ import '../../../core/services/api_client.dart';
 import '../../../core/services/client_profile_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../core/router/app_router.dart';
+import '../../../shared/widgets/app_logo.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -157,6 +158,8 @@ class _LoginPageState extends State<LoginPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const Center(child: AppLogo(size: 72)),
+                  const SizedBox(height: 12),
                   Text('Anchor', style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 8),
                   Text(

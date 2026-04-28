@@ -8,6 +8,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/address_autocomplete_service.dart';
 import '../../../core/services/client_profile_service.dart';
 import '../../../core/state/client_session.dart';
+import '../../../shared/widgets/app_logo.dart';
 
 class ClientSignupPage extends StatefulWidget {
   const ClientSignupPage({super.key});
@@ -140,7 +141,16 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Client Sign Up')),
+      appBar: AppBar(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            AppLogo(size: 22),
+            SizedBox(width: 10),
+            Text('Client Sign Up'),
+          ],
+        ),
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 540),
@@ -151,6 +161,8 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const Center(child: AppLogo(size: 56)),
+                  const SizedBox(height: 12),
                   const Text('Enter your details to continue.'),
                   const SizedBox(height: 16),
                   Row(

@@ -11,6 +11,7 @@ import '../../core/services/owner_settings_service.dart';
 import '../../core/state/client_session.dart';
 import '../../models/client_profile.dart';
 import '../../models/owner_settings.dart';
+import 'app_logo.dart';
 
 class AppScaffold extends StatelessWidget {
   const AppScaffold({
@@ -53,7 +54,16 @@ class AppScaffold extends StatelessWidget {
 
         if (isWide) {
           return Scaffold(
-            appBar: AppBar(title: Text(title)),
+            appBar: AppBar(
+              title: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const AppLogo(size: 24),
+                  const SizedBox(width: 10),
+                  Text(title),
+                ],
+              ),
+            ),
             body: Row(
               children: [
                 SizedBox(
@@ -68,7 +78,12 @@ class AppScaffold extends StatelessWidget {
                           destinations: [
                             for (final item in items)
                               NavigationRailDestination(
-                                icon: Icon(item.icon),
+                                icon: item.route == AppRouter.dashboard
+                                    ? const AppLogo(size: 20, fallbackIcon: Icons.dashboard)
+                                    : Icon(item.icon),
+                                selectedIcon: item.route == AppRouter.dashboard
+                                    ? const AppLogo(size: 22, fallbackIcon: Icons.dashboard)
+                                    : Icon(item.icon),
                                 label: Text(item.label),
                               ),
                           ],
@@ -102,7 +117,14 @@ class AppScaffold extends StatelessWidget {
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(title),
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const AppLogo(size: 22),
+                const SizedBox(width: 10),
+                Text(title),
+              ],
+            ),
             actions: showSettings
                 ? [
                     IconButton(
@@ -119,7 +141,15 @@ class AppScaffold extends StatelessWidget {
             onDestinationSelected: onDestinationSelected,
             destinations: [
               for (final item in items)
-                NavigationDestination(icon: Icon(item.icon), label: item.label),
+                NavigationDestination(
+                  icon: item.route == AppRouter.dashboard
+                      ? const AppLogo(size: 20, fallbackIcon: Icons.dashboard)
+                      : Icon(item.icon),
+                  selectedIcon: item.route == AppRouter.dashboard
+                      ? const AppLogo(size: 22, fallbackIcon: Icons.dashboard)
+                      : Icon(item.icon),
+                  label: item.label,
+                ),
             ],
           ),
         );
@@ -495,7 +525,7 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
   Widget build(BuildContext context) {
     final logo = _logoUrl;
     final localPreview = _pendingLogoBytes;
-    const localFallbackLogo = 'assets/logos/logo.png';
+    const localFallbackLogo = AppLogo.assetPath;
 
     return AlertDialog(
       title: const Text('Owner Settings'),
