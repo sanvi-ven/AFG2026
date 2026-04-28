@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd frontend && flutter build web --release",
+  "buildCommand": "if ! command -v flutter >/dev/null 2>&1; then git clone https://github.com/flutter/flutter.git --depth 1 -b stable .flutter-sdk; fi && FLUTTER_BIN=$(command -v flutter || echo \"$PWD/.flutter-sdk/bin/flutter\") && \"$FLUTTER_BIN\" config --enable-web && cd frontend && \"$FLUTTER_BIN\" pub get && \"$FLUTTER_BIN\" build web --release",
   "outputDirectory": "frontend/build/web",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
