@@ -4,10 +4,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../core/config/app_config.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/address_autocomplete_service.dart';
-import '../../../core/services/api_client.dart';
 import '../../../core/services/client_profile_service.dart';
 import '../../../core/state/client_session.dart';
 
@@ -96,40 +94,6 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
     });
   }
 
-  Future<Map<String, dynamic>> _signupViaApi({
-    required String firstName,
-    required String lastName,
-    required String email,
-    required String phoneNumber,
-    required String address,
-  }) async {
-    final primaryBaseUrl = AppConfig.apiBaseUrl.trim();
-    final candidateBaseUrls = <String>[primaryBaseUrl];
-    if (primaryBaseUrl.contains('127.0.0.1')) {
-      candidateBaseUrls.add(primaryBaseUrl.replaceAll('127.0.0.1', 'localhost'));
-    } else if (primaryBaseUrl.contains('localhost')) {
-      candidateBaseUrls.add(primaryBaseUrl.replaceAll('localhost', '127.0.0.1'));
-    }
-
-    Object? lastError;
-    for (final baseUrl in candidateBaseUrls.toSet()) {
-      try {
-        final apiClient = ApiClient(baseUrl: baseUrl);
-        return await apiClient.postJson('/api/v1/public/client-signups', {
-          'first_name': firstName,
-          'last_name': lastName,
-          'email': email,
-          'phone_number': phoneNumber,
-          'address': address,
-        });
-      } catch (error) {
-        lastError = error;
-      }
-    }
-
-    throw Exception(lastError?.toString() ?? 'Signup API unavailable.');
-  }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -141,27 +105,12 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
     });
 
     try {
-      final firstName = _firstNameController.text.trim();
-      final lastName = _lastNameController.text.trim();
-      final email = _emailController.text.trim();
-      final phoneNumber = _phoneController.text.trim();
-      final address = _addressController.text.trim();
-
-      final createdClient = await _signupViaApi(
-        firstName: firstName,
-        lastName: lastName,
-        email: email,
-        phoneNumber: phoneNumber,
-        address: address,
-      );
-
-      final savedProfile = await ClientProfileService.getOrCreateForSignup(
-        signupId: (createdClient['id'] as String? ?? '').trim(),
-        email: (createdClient['email'] as String? ?? email),
-        firstName: firstName,
-        lastName: lastName,
-        phoneNumber: phoneNumber,
-        address: address,
+      final savedProfile = await ClientProfileService.createSignup(
+        email: _emailController.text.trim(),
+        firstName: _firstNameController.text.trim(),
+        lastName: _lastNameController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        address: _addressController.text.trim(),
       );
       ClientSession.setProfile(savedProfile);
 
