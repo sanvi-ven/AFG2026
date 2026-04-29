@@ -45,9 +45,58 @@ class EstimateService {
       createdAt: now,
       updatedAt: now,
       convertedToInvoice: false,
+      revisionNumber: 1,
     );
 
     await doc.set(estimate.toMap());
+  }
+
+  static Future<void> requestChanges({
+    required String estimateId,
+    required String message,
+  }) async {
+    await _collection.doc(estimateId).set(
+      {
+        'status': InvoiceStatus.changesRequested,
+        'changeRequestMessage': message.trim(),
+        'changeRequestedAt': DateTime.now(),
+        'updatedAt': DateTime.now(),
+      },
+      SetOptions(merge: true),
+    );
+  }
+
+  static Future<void> reviseAndResendEstimate({
+    required Estimate estimate,
+    required List<InvoiceServiceItem> services,
+  }) async {
+    final now = DateTime.now();
+    final total = services.fold<double>(0, (runningTotal, item) => runningTotal + item.price);
+    final currentSnapshot = EstimateVersionSnapshot(
+      version: estimate.revisionNumber,
+      services: estimate.services,
+      total: estimate.total,
+      status: estimate.status,
+      updatedAt: estimate.updatedAt,
+    );
+
+    final originalVersionPayload =
+        (estimate.originalVersion ?? currentSnapshot).toMap();
+
+    await _collection.doc(estimate.id).set(
+      {
+        'services': services.map((item) => item.toMap()).toList(),
+        'total': total,
+        'status': InvoiceStatus.pending,
+        'revisionNumber': estimate.revisionNumber + 1,
+        'resentAt': now,
+        'updatedAt': now,
+        'changeRequestMessage': null,
+        'changeRequestedAt': null,
+        'originalVersion': originalVersionPayload,
+      },
+      SetOptions(merge: true),
+    );
   }
 
   static Future<void> updateStatus({required String estimateId, required String status}) async {

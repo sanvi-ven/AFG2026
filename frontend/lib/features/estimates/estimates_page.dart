@@ -38,6 +38,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
   String? _downloadingEstimateId;
   String? _schedulingEstimateId;
   String? _downloadingEstimatePdfId;
+  String? _requestingChangesEstimateId;
+  String? _revisingEstimateId;
   Timer? _clientSearchDebounce;
   StreamSubscription<List<ClientProfile>>? _clientsSub;
   List<ClientProfile> _knownClients = const [];
@@ -243,6 +245,81 @@ class _EstimatesPageState extends State<EstimatesPage> {
       );
     } finally {
       if (mounted) setState(() => _downloadingEstimatePdfId = null);
+    }
+  }
+
+  Future<void> _requestEstimateChanges(Estimate estimate) async {
+    final message = await showDialog<String>(
+      context: context,
+      builder: (_) => const _RequestEstimateChangesDialog(),
+    );
+    if (message == null) {
+      return;
+    }
+
+    setState(() => _requestingChangesEstimateId = estimate.id);
+    try {
+      await EstimateService.requestChanges(
+        estimateId: estimate.id,
+        message: message,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Change request sent to owner.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to request changes: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _requestingChangesEstimateId = null);
+      }
+    }
+  }
+
+  Future<void> _reviseAndResendEstimate(Estimate estimate) async {
+    final revisedServices = await showDialog<List<InvoiceServiceItem>>(
+      context: context,
+      builder: (_) => _ReviseEstimateDialog(
+        estimateNumber: estimate.estimateNumber,
+        currentVersion: estimate.revisionNumber,
+        initialServices: estimate.services,
+      ),
+    );
+    if (revisedServices == null) {
+      return;
+    }
+
+    setState(() => _revisingEstimateId = estimate.id);
+    try {
+      await EstimateService.reviseAndResendEstimate(
+        estimate: estimate,
+        services: revisedServices,
+      );
+      if (!mounted) {
+        return;
+      }
+      final nextVersion = estimate.revisionNumber + 1;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Estimate revised to v$nextVersion and re-sent to client.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to revise estimate: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _revisingEstimateId = null);
+      }
     }
   }
 
@@ -469,12 +546,15 @@ class _EstimatesPageState extends State<EstimatesPage> {
                           isDownloadingPdf: _downloadingEstimateId == estimate.id,
                           isScheduling: _schedulingEstimateId == estimate.id,
                           isDownloadingEstimatePdf: _downloadingEstimatePdfId == estimate.id,
+                          isRequestingChanges: _requestingChangesEstimateId == estimate.id,
+                          isRevising: _revisingEstimateId == estimate.id,
                           onApprove: () => _setEstimateStatus(estimate.id, InvoiceStatus.approved),
-                          onDeny: () => _setEstimateStatus(estimate.id, InvoiceStatus.denied),
+                          onRequestChanges: () => _requestEstimateChanges(estimate),
                           onConvert: () => _convertToInvoice(estimate),
                           onDownloadPdf: () => _downloadConvertedInvoicePdf(estimate),
                           onScheduleWork: () => _scheduleWork(estimate),
                           onDownloadEstimatePdf: () => _downloadEstimatePdf(estimate),
+                          onReviseAndResend: () => _reviseAndResendEstimate(estimate),
                         ),
                       ),
                   ],
@@ -663,12 +743,15 @@ class _EstimateCard extends StatelessWidget {
     required this.isDownloadingPdf,
     required this.isScheduling,
     required this.isDownloadingEstimatePdf,
+    required this.isRequestingChanges,
+    required this.isRevising,
     required this.onApprove,
-    required this.onDeny,
+    required this.onRequestChanges,
     required this.onConvert,
     required this.onDownloadPdf,
     required this.onScheduleWork,
     required this.onDownloadEstimatePdf,
+    required this.onReviseAndResend,
   });
 
   final Estimate estimate;
@@ -677,12 +760,65 @@ class _EstimateCard extends StatelessWidget {
   final bool isDownloadingPdf;
   final bool isScheduling;
   final bool isDownloadingEstimatePdf;
+  final bool isRequestingChanges;
+  final bool isRevising;
   final VoidCallback onApprove;
-  final VoidCallback onDeny;
+  final VoidCallback onRequestChanges;
   final VoidCallback onConvert;
   final VoidCallback onDownloadPdf;
   final VoidCallback onScheduleWork;
   final VoidCallback onDownloadEstimatePdf;
+  final VoidCallback onReviseAndResend;
+
+  String _displayStatus(String status) {
+    final statusKey = status.trim().toLowerCase();
+    if (statusKey.isEmpty) {
+      return 'Pending';
+    }
+    return statusKey[0].toUpperCase() + statusKey.substring(1).replaceAll('_', ' ');
+  }
+
+  Widget _versionColumn(
+    BuildContext context, {
+    required String title,
+    required List<InvoiceServiceItem> services,
+    required double total,
+    required String status,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Text('Status: ${_displayStatus(status)}'),
+          const SizedBox(height: 6),
+          for (final item in services)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  Expanded(child: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  Text('\$${item.price.toStringAsFixed(2)}'),
+                ],
+              ),
+            ),
+          const Divider(height: 16),
+          Row(
+            children: [
+              const Expanded(child: Text('Total', style: TextStyle(fontWeight: FontWeight.w700))),
+              Text('\$${total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -690,11 +826,13 @@ class _EstimateCard extends StatelessWidget {
     final statusColor = switch (statusKey) {
       InvoiceStatus.approved => Colors.green,
       InvoiceStatus.denied => Colors.red,
+      InvoiceStatus.changesRequested => Colors.deepOrange,
       _ => Colors.orange,
     };
     final statusText = switch (statusKey) {
       InvoiceStatus.approved => 'Approved',
       InvoiceStatus.denied => 'Denied',
+      InvoiceStatus.changesRequested => 'Changes requested',
       InvoiceStatus.pending => 'Pending',
       _ => statusKey.isEmpty
           ? 'Pending'
@@ -731,6 +869,25 @@ class _EstimateCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text('Client ID: ${estimate.clientId}'),
+            if (estimate.revisionNumber > 1) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Revision: v${estimate.revisionNumber}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ],
+            if (estimate.changeRequestMessage != null && estimate.changeRequestMessage!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('Client requested changes: ${estimate.changeRequestMessage!}'),
+              ),
+            ],
             const SizedBox(height: 10),
             Text('Services', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 6),
@@ -751,15 +908,74 @@ class _EstimateCard extends StatelessWidget {
                 Text('\$${estimate.total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700)),
               ],
             ),
+            if (estimate.originalVersion != null && estimate.revisionNumber > 1) ...[
+              const SizedBox(height: 12),
+              Text('Compare revisions', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 8),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final oldVersion = estimate.originalVersion!;
+                  final oldTitle = 'v${oldVersion.version} (original)';
+                  final newTitle = 'v${estimate.revisionNumber} (current)';
+                  if (constraints.maxWidth < 760) {
+                    return Column(
+                      children: [
+                        _versionColumn(
+                          context,
+                          title: oldTitle,
+                          services: oldVersion.services,
+                          total: oldVersion.total,
+                          status: oldVersion.status,
+                        ),
+                        const SizedBox(height: 10),
+                        _versionColumn(
+                          context,
+                          title: newTitle,
+                          services: estimate.services,
+                          total: estimate.total,
+                          status: estimate.status,
+                        ),
+                      ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _versionColumn(
+                          context,
+                          title: oldTitle,
+                          services: oldVersion.services,
+                          total: oldVersion.total,
+                          status: oldVersion.status,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _versionColumn(
+                          context,
+                          title: newTitle,
+                          services: estimate.services,
+                          total: estimate.total,
+                          status: estimate.status,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
             if (role == 'client' && estimate.isPending) ...[
               const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: onDeny,
-                      icon: const Icon(Icons.close),
-                      label: const Text('Deny'),
+                      onPressed: isRequestingChanges ? null : onRequestChanges,
+                      icon: isRequestingChanges
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.edit_note_outlined),
+                      label: const Text('Request Changes'),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -770,6 +986,16 @@ class _EstimateCard extends StatelessWidget {
                       label: const Text('Approve'),
                     ),
                   ),
+                ],
+              ),
+            ],
+            if (role == 'client' && estimate.isChangesRequested) ...[
+              const SizedBox(height: 12),
+              const Row(
+                children: [
+                  Icon(Icons.schedule, size: 16),
+                  SizedBox(width: 6),
+                  Expanded(child: Text('Change request sent. Waiting for revised estimate from owner.')),
                 ],
               ),
             ],
@@ -794,7 +1020,15 @@ class _EstimateCard extends StatelessWidget {
                   ],
                 )
               else ...[
-                if (estimate.isApproved) ...[
+                if (estimate.isChangesRequested) ...[
+                  FilledButton.icon(
+                    onPressed: isRevising ? null : onReviseAndResend,
+                    icon: isRevising
+                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.edit_outlined),
+                    label: const Text('Revise & Re-send'),
+                  ),
+                ] else if (estimate.isApproved) ...[
                   if (estimate.isScheduled)
                     Row(
                       children: [
@@ -838,6 +1072,244 @@ class _EstimateCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _RequestEstimateChangesDialog extends StatefulWidget {
+  const _RequestEstimateChangesDialog();
+
+  @override
+  State<_RequestEstimateChangesDialog> createState() => _RequestEstimateChangesDialogState();
+}
+
+class _RequestEstimateChangesDialogState extends State<_RequestEstimateChangesDialog> {
+  final TextEditingController _controller = TextEditingController();
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    Navigator.of(context).pop(_controller.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Request Estimate Changes'),
+      content: SizedBox(
+        width: 460,
+        child: Form(
+          key: _formKey,
+          child: TextFormField(
+            controller: _controller,
+            maxLines: 5,
+            minLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'What should be changed?',
+              hintText: 'Example: Remove pressure washing and add window cleaning.',
+              border: OutlineInputBorder(),
+            ),
+            validator: (value) {
+              final text = (value ?? '').trim();
+              if (text.isEmpty) {
+                return 'Please describe the requested changes.';
+              }
+              if (text.length < 8) {
+                return 'Please add a bit more detail.';
+              }
+              return null;
+            },
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Send Request'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReviseEstimateDialog extends StatefulWidget {
+  const _ReviseEstimateDialog({
+    required this.estimateNumber,
+    required this.currentVersion,
+    required this.initialServices,
+  });
+
+  final String estimateNumber;
+  final int currentVersion;
+  final List<InvoiceServiceItem> initialServices;
+
+  @override
+  State<_ReviseEstimateDialog> createState() => _ReviseEstimateDialogState();
+}
+
+class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
+  final List<_RevisionServiceRow> _rows = [];
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialServices.isEmpty) {
+      _rows.add(_RevisionServiceRow.empty());
+      return;
+    }
+
+    for (final item in widget.initialServices) {
+      _rows.add(
+        _RevisionServiceRow(
+          nameController: TextEditingController(text: item.name),
+          priceController: TextEditingController(text: item.price.toStringAsFixed(2)),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final row in _rows) {
+      row.dispose();
+    }
+    super.dispose();
+  }
+
+  void _addRow() {
+    setState(() => _rows.add(_RevisionServiceRow.empty()));
+  }
+
+  void _removeRow(int index) {
+    if (_rows.length == 1) {
+      return;
+    }
+    setState(() {
+      final row = _rows.removeAt(index);
+      row.dispose();
+    });
+  }
+
+  void _submit() {
+    final parsed = <InvoiceServiceItem>[];
+    for (final row in _rows) {
+      final name = row.nameController.text.trim();
+      final price = double.tryParse(row.priceController.text.trim());
+      if (name.isEmpty || price == null || price <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Each revised service must have a name and price > 0.')),
+        );
+        return;
+      }
+      parsed.add(InvoiceServiceItem(name: name, price: price));
+    }
+
+    setState(() => _isSaving = true);
+    Navigator.of(context).pop(parsed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final nextVersion = widget.currentVersion + 1;
+    return AlertDialog(
+      title: Text('Revise ${widget.estimateNumber} (v$nextVersion)'),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < _rows.length; i++) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: TextField(
+                        controller: _rows[i].nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Service name',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _rows[i].priceController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(
+                          labelText: 'Price',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _isSaving ? null : () => _removeRow(i),
+                      icon: const Icon(Icons.remove_circle_outline),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _isSaving ? null : _addRow,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add service'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isSaving ? null : _submit,
+          child: _isSaving
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Re-send Estimate'),
+        ),
+      ],
+    );
+  }
+}
+
+class _RevisionServiceRow {
+  _RevisionServiceRow({
+    required this.nameController,
+    required this.priceController,
+  });
+
+  factory _RevisionServiceRow.empty() {
+    return _RevisionServiceRow(
+      nameController: TextEditingController(),
+      priceController: TextEditingController(),
+    );
+  }
+
+  final TextEditingController nameController;
+  final TextEditingController priceController;
+
+  void dispose() {
+    nameController.dispose();
+    priceController.dispose();
   }
 }
 
