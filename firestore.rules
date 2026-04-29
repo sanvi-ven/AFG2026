@@ -3,8 +3,8 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Allow public (unauthenticated) reads on specific collections
     match /client_signups/{document=**} {
-      // Allow unauthenticated signup creation
-      allow create: if request.auth == null && validateSignupData();
+      // Allow signup creation (including Firebase email/password users)
+      allow create: if validateSignupData() && canCreateOwnSignup();
       // Allow authenticated users to read their own profile
       allow read, update, delete: if request.auth != null && resource.data.email == request.auth.token.email;
       // Allow reads by anyone (for autocomplete)
@@ -22,8 +22,16 @@ function validateSignupData() {
   let data = request.resource.data;
   return data.size() > 0 &&
          data.email is string &&
-         data.firstName is string &&
-         data.lastName is string &&
-         data.phoneNumber is string &&
+         (
+           (data.first_name is string && data.last_name is string && data.phone_number is string) ||
+           (data.firstName is string && data.lastName is string && data.phoneNumber is string)
+         ) &&
          data.address is string;
+}
+
+function canCreateOwnSignup() {
+  return request.auth == null ||
+         (request.auth.token.email is string &&
+          request.resource.data.email is string &&
+          request.resource.data.email == request.auth.token.email);
 }

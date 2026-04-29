@@ -31,7 +31,7 @@ When deploying to Vercel, set the `API_BASE_URL` environment variable:
    - **Value**: `https://your-backend-api.com` (or wherever your backend is deployed)
 4. If you don't have a backend API deployed, leave it as the default `https://api.yourdomain.com`
 
-**Note**: Client authentication (signup/login/password change) now runs through the backend API so passwords can be hashed server-side. `API_BASE_URL` is required for client sign-up and login to work on Vercel.
+**Note**: Client authentication is handled directly by Firebase Authentication and Firestore. No local backend is required for client sign-up/login/password changes.
 
 #### 3. **Deploy to Vercel**
 
