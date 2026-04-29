@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "if [ -f package.json ]; then npm install; else echo \"Skipping npm install\"; fi",
+  "buildCommand": "if command -v flutter >/dev/null 2>&1; then FLUTTER_BIN=$(command -v flutter); elif [ -x \"$PWD/.flutter-sdk/bin/flutter\" ]; then FLUTTER_BIN=\"$PWD/.flutter-sdk/bin/flutter\"; else git clone https://github.com/flutter/flutter.git --depth 1 -b stable .flutter-sdk && FLUTTER_BIN=\"$PWD/.flutter-sdk/bin/flutter\"; fi && \"$FLUTTER_BIN\" config --enable-web && \"$FLUTTER_BIN\" pub get && \"$FLUTTER_BIN\" build web --release --dart-define=API_BASE_URL=${API_BASE_URL:-https://api.yourdomain.com} && rm -rf dist && mkdir -p dist && cp -R build/web/. dist/",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
