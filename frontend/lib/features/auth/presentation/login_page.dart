@@ -2,11 +2,9 @@
 
 import 'package:flutter/material.dart';
 
-import '../../../core/config/app_config.dart';
-import '../../../core/services/api_client.dart';
-import '../../../core/services/client_profile_service.dart';
-import '../../../core/state/client_session.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/client_auth_service.dart';
+import '../../../core/state/client_session.dart';
 import '../../../shared/widgets/app_logo.dart';
 
 class LoginPage extends StatefulWidget {
@@ -18,6 +16,7 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isSubmitting = false;
   String? _error;
@@ -25,6 +24,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void dispose() {
     _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -34,41 +34,6 @@ class _LoginPageState extends State<LoginPage> {
 
   void _goToOwnerSignin() {
     Navigator.pushNamed(context, AppRouter.ownerSignin);
-  }
-
-  Future<Map<String, dynamic>> _loginViaApi(String email) async {
-    final primaryBaseUrl = AppConfig.apiBaseUrl.trim();
-    final candidateBaseUrls = <String>[primaryBaseUrl];
-    if (primaryBaseUrl.contains('127.0.0.1')) {
-      candidateBaseUrls.add(primaryBaseUrl.replaceAll('127.0.0.1', 'localhost'));
-    } else if (primaryBaseUrl.contains('localhost')) {
-      candidateBaseUrls.add(primaryBaseUrl.replaceAll('localhost', '127.0.0.1'));
-    }
-
-    Object? lastError;
-    for (final baseUrl in candidateBaseUrls.toSet()) {
-      try {
-        final apiClient = ApiClient(baseUrl: baseUrl);
-        return await apiClient.postJson('/api/v1/public/client-login', {
-          'email': email,
-        });
-      } catch (error) {
-        lastError = error;
-      }
-    }
-
-    throw Exception(lastError?.toString() ?? 'Login API unavailable.');
-  }
-
-  Future<void> _loginWithFirestoreFallback({
-    required String email,
-    required Object apiError,
-  }) async {
-    final fallbackProfile = await ClientProfileService.fetchByEmail(email);
-    if (fallbackProfile == null) {
-      throw Exception(apiError.toString().replaceFirst('Exception: ', ''));
-    }
-    ClientSession.setProfile(fallbackProfile);
   }
 
   Future<void> _loginClient() async {
@@ -82,42 +47,11 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final email = _emailController.text.trim();
-      try {
-        final client = await _loginViaApi(email);
-
-        final rawName = (client['name'] as String? ?? '').trim();
-        final nameParts = rawName.split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
-        final firstName =
-            (client['first_name'] as String? ?? (nameParts.isNotEmpty ? nameParts.first : '')).trim();
-        final lastName =
-            (client['last_name'] as String? ??
-                    (nameParts.length > 1 ? nameParts.sublist(1).join(' ') : ''))
-                .trim();
-        final rawAddress = client['address'];
-        final fallbackAddressMap = rawAddress is Map
-          ? rawAddress.map((key, value) => MapEntry(key.toString(), value))
-          : const <String, dynamic>{};
-        final parsedAddress = (client['address'] as String? ?? '').trim().isNotEmpty
-            ? (client['address'] as String).trim()
-            : [
-                (fallbackAddressMap['street'] as String? ?? '').trim(),
-                (fallbackAddressMap['country'] as String? ?? '').trim(),
-                (fallbackAddressMap['zip_code'] as String? ?? '').trim(),
-              ].where((part) => part.isNotEmpty).join(', ');
-
-        final profile = await ClientProfileService.getOrCreateForSignup(
-          signupId: (client['id'] as String? ?? '').trim(),
-          email: (client['email'] as String? ?? email),
-          firstName: firstName,
-          lastName: lastName,
-          phoneNumber: (client['phone_number'] as String? ?? client['phone'] as String? ?? '').trim(),
-          address: parsedAddress,
-        );
-        ClientSession.setProfile(profile);
-      } catch (apiError) {
-        await _loginWithFirestoreFallback(email: email, apiError: apiError);
-      }
+      final profile = await ClientAuthService.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      ClientSession.setProfile(profile);
 
       if (!mounted) {
         return;
@@ -163,29 +97,49 @@ class _LoginPageState extends State<LoginPage> {
                   Text('Anchor', style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 8),
                   Text(
-                    'Enter your email to continue.',
+                    'Enter your email and password to continue.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 20),
                   Form(
                     key: _formKey,
-                    child: TextFormField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) {
-                        final input = value?.trim() ?? '';
-                        if (input.isEmpty) {
-                          return 'Email is required';
-                        }
-                        if (!input.contains('@')) {
-                          return 'Enter a valid email';
-                        }
-                        return null;
-                      },
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _emailController,
+                          decoration: const InputDecoration(
+                            labelText: 'Email',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: TextInputType.emailAddress,
+                          validator: (value) {
+                            final input = value?.trim() ?? '';
+                            if (input.isEmpty) {
+                              return 'Email is required';
+                            }
+                            if (!input.contains('@')) {
+                              return 'Enter a valid email';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Password',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (value) {
+                            if ((value ?? '').isEmpty) {
+                              return 'Password is required';
+                            }
+                            return null;
+                          },
+                          onFieldSubmitted: (_) => _isSubmitting ? null : _loginClient(),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 12),

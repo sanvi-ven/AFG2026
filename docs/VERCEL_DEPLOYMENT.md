@@ -31,7 +31,7 @@ When deploying to Vercel, set the `API_BASE_URL` environment variable:
    - **Value**: `https://your-backend-api.com` (or wherever your backend is deployed)
 4. If you don't have a backend API deployed, leave it as the default `https://api.yourdomain.com`
 
-**Note**: The Flutter app uses Firestore directly for signups, so the API_BASE_URL is only needed if you're using other features that require API calls (like calendar integration, messages, etc.).
+**Note**: Client authentication (signup/login/password change) now runs through the backend API so passwords can be hashed server-side. `API_BASE_URL` is required for client sign-up and login to work on Vercel.
 
 #### 3. **Deploy to Vercel**
 
@@ -82,4 +82,3 @@ This ensures local testing uses the same Firestore configuration as production.
 - [ ] Verify Firebase project is not in test mode (which allows public access)
 - [ ] Test on multiple browsers (Chrome, Safari, Firefox)
 - [ ] Check browser console for any CORS errors
-

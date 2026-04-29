@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/services/client_auth_service.dart';
 import '../../core/services/client_profile_service.dart';
 import '../../core/services/owner_settings_service.dart';
 import '../../core/state/client_session.dart';
@@ -252,6 +253,9 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
   late final TextEditingController _lastNameController;
   late final TextEditingController _phoneNumberController;
   late final TextEditingController _addressController;
+  final TextEditingController _oldPasswordController = TextEditingController();
+  final TextEditingController _newPasswordController = TextEditingController();
+  final TextEditingController _confirmNewPasswordController = TextEditingController();
   bool _isSaving = false;
 
   @override
@@ -269,6 +273,9 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
     _lastNameController.dispose();
     _phoneNumberController.dispose();
     _addressController.dispose();
+    _oldPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmNewPasswordController.dispose();
     super.dispose();
   }
 
@@ -279,14 +286,25 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
 
     setState(() => _isSaving = true);
     try {
-      final updated = await ClientProfileService.save(
-        widget.initialProfile.copyWith(
-          firstName: _firstNameController.text,
-          lastName: _lastNameController.text,
-          phoneNumber: _phoneNumberController.text,
-          address: _addressController.text,
-        ),
+      final shouldChangePassword = _oldPasswordController.text.isNotEmpty ||
+          _newPasswordController.text.isNotEmpty ||
+          _confirmNewPasswordController.text.isNotEmpty;
+
+      if (shouldChangePassword) {
+        await ClientAuthService.changePassword(
+          email: widget.initialProfile.email,
+          oldPassword: _oldPasswordController.text,
+          newPassword: _newPasswordController.text,
+        );
+      }
+
+      final nextProfile = widget.initialProfile.copyWith(
+        firstName: _firstNameController.text,
+        lastName: _lastNameController.text,
+        phoneNumber: _phoneNumberController.text,
+        address: _addressController.text,
       );
+      final updated = await ClientProfileService.save(nextProfile);
       ClientSession.setProfile(updated);
       if (!mounted) {
         return;
@@ -344,6 +362,78 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
                 TextFormField(
                   controller: _addressController,
                   decoration: const InputDecoration(labelText: 'Address'),
+                ),
+                const SizedBox(height: 20),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Change password',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _oldPasswordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'Current password'),
+                  validator: (value) {
+                    final hasAnyPasswordInput = _oldPasswordController.text.isNotEmpty ||
+                        _newPasswordController.text.isNotEmpty ||
+                        _confirmNewPasswordController.text.isNotEmpty;
+                    if (!hasAnyPasswordInput) {
+                      return null;
+                    }
+                    if ((value ?? '').isEmpty) {
+                      return 'Current password is required';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _newPasswordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'New password'),
+                  validator: (value) {
+                    final hasAnyPasswordInput = _oldPasswordController.text.isNotEmpty ||
+                        _newPasswordController.text.isNotEmpty ||
+                        _confirmNewPasswordController.text.isNotEmpty;
+                    if (!hasAnyPasswordInput) {
+                      return null;
+                    }
+                    final input = value ?? '';
+                    if (input.isEmpty) {
+                      return 'New password is required';
+                    }
+                    if (input.length < 8) {
+                      return 'New password must be at least 8 characters';
+                    }
+                    if (input == _oldPasswordController.text) {
+                      return 'New password must be different';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _confirmNewPasswordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'Confirm new password'),
+                  validator: (value) {
+                    final hasAnyPasswordInput = _oldPasswordController.text.isNotEmpty ||
+                        _newPasswordController.text.isNotEmpty ||
+                        _confirmNewPasswordController.text.isNotEmpty;
+                    if (!hasAnyPasswordInput) {
+                      return null;
+                    }
+                    if ((value ?? '').isEmpty) {
+                      return 'Confirm your new password';
+                    }
+                    if (value != _newPasswordController.text) {
+                      return 'New passwords do not match';
+                    }
+                    return null;
+                  },
                 ),
               ],
             ),
