@@ -11,4 +11,3 @@ Future<void> main() async {
   );
   runApp(const SmallBizManagerApp());
 }
-w
