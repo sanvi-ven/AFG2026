@@ -51,7 +51,7 @@ class _DashboardPageState extends State<DashboardPage> {
             route: AppRouter.appointments,
           ),
           _linkCard(context,
-              title: 'Unpaid invoices',
+              title: 'Unpaid Invoices',
               subtitle: 'Pending and overdue invoice balances',
               route: AppRouter.invoices),
           _linkCard(context,
