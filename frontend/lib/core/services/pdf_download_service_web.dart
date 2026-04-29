@@ -7,16 +7,25 @@ Future<String?> downloadPdfBytesImpl({
   required Uint8List bytes,
   required String fileName,
 }) async {
+  if (bytes.isEmpty) {
+    throw Exception('Cannot download an empty PDF.');
+  }
+
+  final normalizedFileName = fileName.trim().isEmpty ? 'document.pdf' : fileName.trim();
   final blob = html.Blob(<dynamic>[bytes], 'application/pdf');
   final url = html.Url.createObjectUrlFromBlob(blob);
 
   final anchor = html.AnchorElement(href: url)
-    ..download = fileName
+    ..download = normalizedFileName
+    ..target = '_blank'
+    ..rel = 'noopener'
     ..style.display = 'none';
-  html.document.body?.append(anchor);
+  (html.document.body ?? html.document.documentElement)?.append(anchor);
   anchor.click();
   anchor.remove();
 
+  // Delay URL revocation so browsers have time to start the download.
+  await Future<void>.delayed(const Duration(seconds: 1));
   html.Url.revokeObjectUrl(url);
   return null;
 }
