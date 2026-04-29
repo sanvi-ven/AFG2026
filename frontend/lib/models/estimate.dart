@@ -22,6 +22,7 @@ class Estimate {
     this.changeRequestedAt,
     this.resentAt,
     this.originalVersion,
+    this.isArchived = false,
   });
 
   final String id;
@@ -42,6 +43,7 @@ class Estimate {
   final DateTime? changeRequestedAt;
   final DateTime? resentAt;
   final EstimateVersionSnapshot? originalVersion;
+  final bool isArchived;
 
   bool get isPending => status == InvoiceStatus.pending;
   bool get isApproved => status == InvoiceStatus.approved;
@@ -103,6 +105,7 @@ class Estimate {
               ),
             )
           : null,
+      isArchived: map['archived'] as bool? ?? false,
     );
   }
 
@@ -126,6 +129,7 @@ class Estimate {
       'changeRequestedAt': changeRequestedAt,
       'resentAt': resentAt,
       'originalVersion': originalVersion?.toMap(),
+      'archived': isArchived,
     };
   }
 }

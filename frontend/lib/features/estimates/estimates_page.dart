@@ -40,6 +40,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
   String? _downloadingEstimatePdfId;
   String? _requestingChangesEstimateId;
   String? _revisingEstimateId;
+  String? _archivingEstimateId;
   Timer? _clientSearchDebounce;
   StreamSubscription<List<ClientProfile>>? _clientsSub;
   List<ClientProfile> _knownClients = const [];
@@ -395,6 +396,39 @@ class _EstimatesPageState extends State<EstimatesPage> {
     }
   }
 
+  Future<void> _archiveEstimate(Estimate estimate) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Archive Estimate'),
+        content: Text(
+          'Archive ${estimate.estimateNumber}? It will be removed from the client\'s view and moved to your archived section.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Archive')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _archivingEstimateId = estimate.id);
+    try {
+      await EstimateService.archiveEstimate(estimate.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${estimate.estimateNumber} archived.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to archive estimate: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _archivingEstimateId = null);
+    }
+  }
+
   Future<void> _convertToInvoice(Estimate estimate) async {
     if (!estimate.isConvertible) {
       return;
@@ -522,8 +556,11 @@ class _EstimatesPageState extends State<EstimatesPage> {
                   );
                 }
 
-                final estimates = snapshot.data ?? const <Estimate>[];
-                if (estimates.isEmpty) {
+                final allEstimates = snapshot.data ?? const <Estimate>[];
+                final estimates = allEstimates.where((e) => !e.isArchived).toList();
+                final archived = allEstimates.where((e) => e.isArchived).toList();
+
+                if (estimates.isEmpty && archived.isEmpty) {
                   return Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -534,29 +571,46 @@ class _EstimatesPageState extends State<EstimatesPage> {
                   );
                 }
 
+                Widget estimateCard(Estimate estimate) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _EstimateCard(
+                        estimate: estimate,
+                        role: widget.role,
+                        isConverting: _convertingEstimateId == estimate.id,
+                        isDownloadingPdf: _downloadingEstimateId == estimate.id,
+                        isScheduling: _schedulingEstimateId == estimate.id,
+                        isDownloadingEstimatePdf: _downloadingEstimatePdfId == estimate.id,
+                        isRequestingChanges: _requestingChangesEstimateId == estimate.id,
+                        isRevising: _revisingEstimateId == estimate.id,
+                        isArchiving: _archivingEstimateId == estimate.id,
+                        onApprove: () => _setEstimateStatus(estimate.id, InvoiceStatus.approved),
+                        onRequestChanges: () => _requestEstimateChanges(estimate),
+                        onConvert: () => _convertToInvoice(estimate),
+                        onDownloadPdf: () => _downloadConvertedInvoicePdf(estimate),
+                        onScheduleWork: () => _scheduleWork(estimate),
+                        onDownloadEstimatePdf: () => _downloadEstimatePdf(estimate),
+                        onReviseAndResend: () => _reviseAndResendEstimate(estimate),
+                        onArchive: widget.role == 'owner' ? () => _archiveEstimate(estimate) : null,
+                      ),
+                    );
+
                 return Column(
                   children: [
-                    for (final estimate in estimates)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _EstimateCard(
-                          estimate: estimate,
-                          role: widget.role,
-                          isConverting: _convertingEstimateId == estimate.id,
-                          isDownloadingPdf: _downloadingEstimateId == estimate.id,
-                          isScheduling: _schedulingEstimateId == estimate.id,
-                          isDownloadingEstimatePdf: _downloadingEstimatePdfId == estimate.id,
-                          isRequestingChanges: _requestingChangesEstimateId == estimate.id,
-                          isRevising: _revisingEstimateId == estimate.id,
-                          onApprove: () => _setEstimateStatus(estimate.id, InvoiceStatus.approved),
-                          onRequestChanges: () => _requestEstimateChanges(estimate),
-                          onConvert: () => _convertToInvoice(estimate),
-                          onDownloadPdf: () => _downloadConvertedInvoicePdf(estimate),
-                          onScheduleWork: () => _scheduleWork(estimate),
-                          onDownloadEstimatePdf: () => _downloadEstimatePdf(estimate),
-                          onReviseAndResend: () => _reviseAndResendEstimate(estimate),
+                    for (final estimate in estimates) estimateCard(estimate),
+                    if (widget.role == 'owner' && archived.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      ExpansionTile(
+                        title: Text(
+                          'Archived (${archived.length})',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.outline),
                         ),
+                        tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+                        childrenPadding: EdgeInsets.zero,
+                        children: [
+                          for (final estimate in archived) estimateCard(estimate),
+                        ],
                       ),
+                    ],
                   ],
                 );
               },
@@ -752,6 +806,8 @@ class _EstimateCard extends StatelessWidget {
     required this.onScheduleWork,
     required this.onDownloadEstimatePdf,
     required this.onReviseAndResend,
+    required this.isArchiving,
+    this.onArchive,
   });
 
   final Estimate estimate;
@@ -762,6 +818,7 @@ class _EstimateCard extends StatelessWidget {
   final bool isDownloadingEstimatePdf;
   final bool isRequestingChanges;
   final bool isRevising;
+  final bool isArchiving;
   final VoidCallback onApprove;
   final VoidCallback onRequestChanges;
   final VoidCallback onConvert;
@@ -769,6 +826,7 @@ class _EstimateCard extends StatelessWidget {
   final VoidCallback onScheduleWork;
   final VoidCallback onDownloadEstimatePdf;
   final VoidCallback onReviseAndResend;
+  final VoidCallback? onArchive;
 
   String _displayStatus(String status) {
     final statusKey = status.trim().toLowerCase();
@@ -865,6 +923,18 @@ class _EstimateCard extends StatelessWidget {
                     style: TextStyle(color: statusColor, fontWeight: FontWeight.w700),
                   ),
                 ),
+                if (onArchive != null) ...[
+                  const SizedBox(width: 4),
+                  isArchiving
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                      : IconButton(
+                          onPressed: onArchive,
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: estimate.isArchived ? 'Archived' : 'Archive estimate',
+                          color: Theme.of(context).colorScheme.outline,
+                          iconSize: 20,
+                        ),
+                ],
               ],
             ),
             const SizedBox(height: 4),

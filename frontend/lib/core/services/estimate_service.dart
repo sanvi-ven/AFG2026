@@ -20,10 +20,17 @@ class EstimateService {
       final estimates = snapshot.docs.map((doc) {
         final data = doc.data();
         return Estimate.fromMap({...data, 'id': doc.id});
-      }).toList();
+      }).where((e) => role == 'owner' || !e.isArchived).toList();
       estimates.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return estimates;
     });
+  }
+
+  static Future<void> archiveEstimate(String estimateId) async {
+    await _collection.doc(estimateId).set(
+      {'archived': true, 'updatedAt': DateTime.now()},
+      SetOptions(merge: true),
+    );
   }
 
   static Future<void> createEstimate({

@@ -1,11 +1,13 @@
 //made with help of chatgpt: create a reusable app scaffold for a flutter business app that accepts title, role, selectedRoute, body, authToken
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/services/address_autocomplete_service.dart';
 import '../../core/services/client_auth_service.dart';
 import '../../core/services/client_profile_service.dart';
 import '../../core/services/owner_settings_service.dart';
@@ -257,6 +259,9 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
   final TextEditingController _newPasswordController = TextEditingController();
   final TextEditingController _confirmNewPasswordController = TextEditingController();
   bool _isSaving = false;
+  bool _isLoadingAddressSuggestions = false;
+  List<String> _addressSuggestions = const [];
+  Timer? _addressDebounce;
 
   @override
   void initState() {
@@ -276,7 +281,37 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
     _oldPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmNewPasswordController.dispose();
+    _addressDebounce?.cancel();
     super.dispose();
+  }
+
+  void _onAddressChanged(String value) {
+    _addressDebounce?.cancel();
+    final query = value.trim();
+    if (query.length < 3) {
+      setState(() {
+        _addressSuggestions = const [];
+        _isLoadingAddressSuggestions = false;
+      });
+      return;
+    }
+    setState(() => _isLoadingAddressSuggestions = true);
+    _addressDebounce = Timer(const Duration(milliseconds: 300), () async {
+      final suggestions = await AddressAutocompleteService.search(query);
+      if (!mounted) return;
+      setState(() {
+        _addressSuggestions = suggestions;
+        _isLoadingAddressSuggestions = false;
+      });
+    });
+  }
+
+  void _pickAddressSuggestion(String value) {
+    _addressController.text = value;
+    setState(() {
+      _addressSuggestions = const [];
+      _isLoadingAddressSuggestions = false;
+    });
   }
 
   Future<void> _save() async {
@@ -361,8 +396,42 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _addressController,
-                  decoration: const InputDecoration(labelText: 'Address'),
+                  decoration: InputDecoration(
+                    labelText: 'Address',
+                    suffixIcon: _isLoadingAddressSuggestions
+                        ? const Padding(
+                            padding: EdgeInsets.all(10),
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : null,
+                  ),
+                  onChanged: _onAddressChanged,
                 ),
+                if (_addressSuggestions.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Card(
+                    margin: EdgeInsets.zero,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 180),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _addressSuggestions.length,
+                        itemBuilder: (context, index) {
+                          final suggestion = _addressSuggestions[index];
+                          return ListTile(
+                            dense: true,
+                            title: Text(suggestion),
+                            onTap: () => _pickAddressSuggestion(suggestion),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 20),
                 const Align(
                   alignment: Alignment.centerLeft,
