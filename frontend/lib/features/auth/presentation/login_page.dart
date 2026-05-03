@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/services/client_auth_service.dart';
+import '../../../core/services/session_persistence_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../shared/widgets/app_logo.dart';
 
@@ -52,6 +53,7 @@ class _LoginPageState extends State<LoginPage> {
         password: _passwordController.text,
       );
       ClientSession.setProfile(profile);
+      await SessionPersistenceService.saveClientSession(profile);
 
       if (!mounted) {
         return;

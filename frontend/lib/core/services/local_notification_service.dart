@@ -20,6 +20,9 @@ class LocalNotificationService {
     const settings = InitializationSettings(android: android, iOS: ios);
 
     await _plugin.initialize(settings);
+
+    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await androidPlugin?.requestNotificationsPermission();
     _initialized = true;
   }
 

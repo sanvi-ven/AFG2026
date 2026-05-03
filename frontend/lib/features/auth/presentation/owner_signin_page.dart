@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/router/app_router.dart';
+import '../../../core/services/session_persistence_service.dart';
 import '../../../shared/widgets/app_logo.dart';
 
 class OwnerSigninPage extends StatefulWidget {
@@ -47,6 +48,12 @@ class _OwnerSigninPageState extends State<OwnerSigninPage> {
       });
       return;
     }
+
+    if (!mounted) {
+      return;
+    }
+
+    await SessionPersistenceService.saveOwnerSession();
 
     if (!mounted) {
       return;

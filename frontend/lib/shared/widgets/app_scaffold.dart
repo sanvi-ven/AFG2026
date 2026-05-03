@@ -1,6 +1,7 @@
 //made with help of chatgpt: create a reusable app scaffold for a flutter business app that accepts title, role, selectedRoute, body, authToken
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import '../../core/services/address_autocomplete_service.dart';
 import '../../core/services/client_auth_service.dart';
 import '../../core/services/client_profile_service.dart';
 import '../../core/services/owner_settings_service.dart';
+import '../../core/services/session_persistence_service.dart';
 import '../../core/state/client_session.dart';
 import '../../models/client_profile.dart';
 import '../../models/owner_settings.dart';
@@ -240,6 +242,33 @@ class _NavItem {
   final IconData icon;
 }
 
+Future<void> _confirmLogout(BuildContext context) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Log out'),
+      content: const Text('Are you sure you want to log out?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Log out'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+
+  ClientSession.clear();
+  await SessionPersistenceService.clearSession();
+  if (!context.mounted) return;
+
+  Navigator.of(context).pushNamedAndRemoveUntil(AppRouter.login, (route) => false);
+}
+
 class _ClientSettingsDialog extends StatefulWidget {
   const _ClientSettingsDialog({required this.initialProfile});
 
@@ -341,6 +370,7 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
       );
       final updated = await ClientProfileService.save(nextProfile);
       ClientSession.setProfile(updated);
+      await SessionPersistenceService.saveClientSession(updated);
       if (!mounted) {
         return;
       }
@@ -504,6 +534,20 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
                     return null;
                   },
                 ),
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving ? null : () => _confirmLogout(context),
+                    icon: const Icon(Icons.logout, size: 18),
+                    label: const Text('Log out'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -545,16 +589,17 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
   final ImagePicker _picker = ImagePicker();
   bool _isSaving = false;
   bool _isPickingLogo = false;
-  String? _logoUrl;
+  // base64-encoded logo to save into Firestore
+  String? _logoBase64;
+  // raw bytes of a newly picked image — used only for the preview widget
   Uint8List? _pendingLogoBytes;
-  String? _pendingLogoMimeType;
 
   @override
   void initState() {
     super.initState();
     _companyNameController = TextEditingController(text: widget.initialSettings.companyName);
     _addressController = TextEditingController(text: widget.initialSettings.address);
-    _logoUrl = widget.initialSettings.logoUrl;
+    _logoBase64 = widget.initialSettings.logoBase64;
   }
 
   @override
@@ -569,122 +614,57 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
       setState(() => _isPickingLogo = true);
       final picked = await _picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 1600,
-        imageQuality: 85,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 80,
       );
-      if (picked == null) {
-        return;
-      }
-
-      final fileName = picked.name;
-      if (!_isSupportedImageFile(fileName)) {
-        throw Exception('Unsupported logo format. Use PNG, JPG/JPEG, WEBP, or GIF.');
-      }
+      if (picked == null) return;
 
       final bytes = await picked.readAsBytes();
-      final mimeType = _inferMimeType(picked.name);
+      final encoded = base64Encode(bytes);
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _pendingLogoBytes = bytes;
-        _pendingLogoMimeType = mimeType;
+        _logoBase64 = encoded;
       });
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to select logo: $error')),
       );
     } finally {
-      if (mounted) {
-        setState(() => _isPickingLogo = false);
-      }
+      if (mounted) setState(() => _isPickingLogo = false);
     }
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSaving = true);
     try {
-      var nextLogoUrl = _logoUrl;
-      final bytes = _pendingLogoBytes;
-      final mimeType = _pendingLogoMimeType;
-      String? nonBlockingUploadWarning;
-      if (bytes != null && mimeType != null) {
-        try {
-          nextLogoUrl = await OwnerSettingsService.uploadLogo(bytes: bytes, mimeType: mimeType);
-        } catch (error) {
-          nonBlockingUploadWarning =
-              'Logo was not updated (${error.toString().replaceFirst('Exception: ', '')}). Other settings were saved.';
-        }
-      }
-
       final settings = OwnerSettings(
         companyName: _companyNameController.text.trim(),
         address: _addressController.text.trim(),
-        logoUrl: nextLogoUrl,
+        logoBase64: _logoBase64,
       );
       final saved = await OwnerSettingsService.save(settings);
-      if (!mounted) {
-        return;
-      }
-      if (nonBlockingUploadWarning != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(nonBlockingUploadWarning)),
-        );
-      }
+      if (!mounted) return;
       Navigator.of(context).pop(saved);
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to save owner settings: $error')),
       );
     } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
-  }
-
-  String _inferMimeType(String fileName) {
-    final lower = fileName.toLowerCase();
-    if (lower.endsWith('.png')) {
-      return 'image/png';
-    }
-    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
-      return 'image/jpeg';
-    }
-    if (lower.endsWith('.webp')) {
-      return 'image/webp';
-    }
-    if (lower.endsWith('.gif')) {
-      return 'image/gif';
-    }
-    return 'image/jpeg';
-  }
-
-  bool _isSupportedImageFile(String fileName) {
-    final lower = fileName.toLowerCase();
-    return lower.endsWith('.png') ||
-        lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.webp') ||
-        lower.endsWith('.gif');
   }
 
   @override
   Widget build(BuildContext context) {
-    final logo = _logoUrl;
-    final localPreview = _pendingLogoBytes;
-    const localFallbackLogo = AppLogo.assetPath;
+    final hasBase64 = _logoBase64 != null && _logoBase64!.isNotEmpty;
+    final hasPending = _pendingLogoBytes != null;
 
     return AlertDialog(
       title: const Text('Owner Settings'),
@@ -720,39 +700,27 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   alignment: Alignment.center,
-                  child: logo == null || logo.trim().isEmpty
-                      ? (localPreview == null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.asset(
-                                localFallbackLogo,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: hasPending
+                        ? Image.memory(_pendingLogoBytes!, fit: BoxFit.contain)
+                        : hasBase64
+                            ? Image.memory(base64Decode(_logoBase64!), fit: BoxFit.contain)
+                            : Image.asset(
+                                AppLogo.assetPath,
                                 fit: BoxFit.contain,
                                 errorBuilder: (_, __, ___) => const Text('No logo uploaded'),
                               ),
-                            )
-                          : ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.memory(
-                                localPreview,
-                                fit: BoxFit.contain,
-                              ),
-                            ))
-                      : ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            logo,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => const Text('Unable to preview logo'),
-                          ),
-                        ),
+                  ),
                 ),
                 const SizedBox(height: 8),
-                if (localPreview != null)
+                if (hasPending) ...[
                   Text(
-                    'Logo selected. It will upload when you tap Save.',
+                    'Logo ready — will be saved when you tap Save.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                if (localPreview != null) const SizedBox(height: 8),
+                  const SizedBox(height: 8),
+                ],
                 Wrap(
                   spacing: 8,
                   children: [
@@ -772,14 +740,27 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
                           ? null
                           : () {
                               setState(() {
-                                _logoUrl = null;
+                                _logoBase64 = null;
                                 _pendingLogoBytes = null;
-                                _pendingLogoMimeType = null;
                               });
                             },
                       child: const Text('Remove logo'),
                     ),
                   ],
+                ),
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving || _isPickingLogo ? null : () => _confirmLogout(context),
+                    icon: const Icon(Icons.logout, size: 18),
+                    label: const Text('Log out'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
                 ),
               ],
             ),
