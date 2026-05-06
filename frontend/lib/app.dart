@@ -13,8 +13,8 @@ import 'models/message.dart';
 import 'features/auth/presentation/login_page.dart';
 import 'features/dashboard/presentation/dashboard_page.dart';
 
-class SmallBizManagerApp extends StatelessWidget {
-  const SmallBizManagerApp({super.key});
+class AnchorApp extends StatelessWidget {
+  const AnchorApp({super.key});
 
   @override
   Widget build(BuildContext context) {

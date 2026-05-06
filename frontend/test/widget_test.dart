@@ -7,11 +7,11 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:small_biz_manager/app.dart';
+import 'package:anchor/app.dart';
 
 void main() {
   testWidgets('App renders login page', (WidgetTester tester) async {
-    await tester.pumpWidget(const SmallBizManagerApp());
+    await tester.pumpWidget(const AnchorApp());
     expect(find.text('Anchor'), findsOneWidget);
   });
 }

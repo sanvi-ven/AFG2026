@@ -54,7 +54,7 @@ FIREBASE_PROJECT_ID=afg2026a
 GOOGLE_SERVICE_ACCOUNT_PATH=service-account.json
 GOOGLE_CALENDAR_SCOPES=https://www.googleapis.com/auth/calendar
 USE_MOCK_FIRESTORE=false
-DEV_AUTH_BYPASS=true
+DEV_AUTH_BYPASS=false
 ```
 
 ### 3) Service account file (required for Google Calendar / Firestore access)
