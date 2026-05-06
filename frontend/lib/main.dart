@@ -11,5 +11,5 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   await LocalNotificationService.initialize();
-  runApp(const SmallBizManagerApp());
+  runApp(const AnchorApp());
 }
