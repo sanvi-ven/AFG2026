@@ -120,6 +120,8 @@ class AppScaffold extends StatelessWidget {
           );
         }
 
+        final textScaleFactor = _getResponsiveTextScaleFactor(constraints.maxWidth, items.length);
+        
         return Scaffold(
           appBar: AppBar(
             title: Row(
@@ -141,21 +143,28 @@ class AppScaffold extends StatelessWidget {
                 : null,
           ),
           body: body,
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
-            onDestinationSelected: onDestinationSelected,
-            destinations: [
-              for (final item in items)
-                NavigationDestination(
-                  icon: item.route == AppRouter.dashboard
-                      ? const AppLogo(size: 20, fallbackIcon: Icons.dashboard)
-                      : Icon(item.icon),
-                  selectedIcon: item.route == AppRouter.dashboard
-                      ? const AppLogo(size: 22, fallbackIcon: Icons.dashboard)
-                      : Icon(item.icon),
-                  label: item.label,
-                ),
-            ],
+          bottomNavigationBar: Theme(
+            data: Theme.of(context).copyWith(
+              textTheme: Theme.of(context).textTheme.apply(
+                    fontSizeFactor: textScaleFactor,
+                  ),
+            ),
+            child: NavigationBar(
+              selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
+              onDestinationSelected: onDestinationSelected,
+              destinations: [
+                for (final item in items)
+                  NavigationDestination(
+                    icon: item.route == AppRouter.dashboard
+                        ? const AppLogo(size: 20, fallbackIcon: Icons.dashboard)
+                        : Icon(item.icon),
+                    selectedIcon: item.route == AppRouter.dashboard
+                        ? const AppLogo(size: 22, fallbackIcon: Icons.dashboard)
+                        : Icon(item.icon),
+                    label: item.label,
+                  ),
+              ],
+            ),
           ),
         );
       },
@@ -231,6 +240,25 @@ class AppScaffold extends StatelessWidget {
     }
 
     return common;
+  }
+
+  /// Calculates responsive text scale factor for navigation bar based on screen width
+  /// On narrow screens, reduces text size to prevent overflow and squishing
+  double _getResponsiveTextScaleFactor(double screenWidth, int itemCount) {
+    // Each item gets roughly equal horizontal space
+    final spacePerItem = screenWidth / itemCount;
+    
+    // Scale factor (1.0 = 100% = normal size)
+    // If space per item is very narrow, reduce font size
+    if (spacePerItem < 60) {
+      return 0.75;
+    } else if (spacePerItem < 75) {
+      return 0.85;
+    } else if (spacePerItem < 90) {
+      return 0.92;
+    }
+    
+    return 1.0; // Full size for wider screens
   }
 }
 
