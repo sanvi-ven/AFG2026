@@ -1,4 +1,4 @@
-// This file's structure was made with the help of ChatGPT; prompt: make a flutter app router outline with onGenerateRoute and multiple routes
+// this file's structure was made with the help of chatgpt; prompt: make a flutter app router outline with onGenerateRoute and multiple routs
 
 import 'package:flutter/material.dart';
 
@@ -12,7 +12,7 @@ import '../../features/estimates/estimates_page.dart';
 import '../../features/invoices/presentation/invoices_page.dart';
 import '../../features/messages/presentation/messages_page.dart';
 
-// PageRoute with no transition animation
+/// custom page route that disables transtion animations for instant navigation.
 class _NoAnimationPageRoute<T> extends PageRoute<T> {
   _NoAnimationPageRoute({required this.builder, required this.settings});
 
@@ -49,6 +49,7 @@ class _NoAnimationPageRoute<T> extends PageRoute<T> {
   bool get maintainState => true;
 }
 
+/// central routing handler for the application.
 class AppRouter {
   static const login = '/';
   static const clientSignup = '/signup/client';
@@ -59,7 +60,8 @@ class AppRouter {
   static const estimates = '/estimates';
   static const messages = '/messages';
   static const availability = '/availability';
-
+/// generates appropriate page route based on settings and passes role/auth context
+  
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     final args = (settings.arguments as Map<String, dynamic>?) ?? {};
     final role = (args['role'] as String?) ?? 'client';
