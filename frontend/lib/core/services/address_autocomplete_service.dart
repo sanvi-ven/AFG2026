@@ -2,11 +2,15 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+/// service for searching address suggestions using openstreetmap nominatim api.
+/// provides autocomplete suggestions as users type an address.
 class AddressAutocompleteService {
   AddressAutocompleteService._();
 
   static const String _baseUrl = 'https://nominatim.openstreetmap.org/search';
 
+  /// searches for address sugestions matching the given query.
+  /// returns empty list if query is less than 3 characters or api call fails.
   static Future<List<String>> search(String query) async {
     final trimmed = query.trim();
     if (trimmed.length < 3) {
@@ -24,7 +28,7 @@ class AddressAutocompleteService {
       uri,
       headers: const {
         'Accept': 'application/json',
-        // Nominatim usage policy requires an identifying user agent.
+        // nominatim policy requires an identifying user agent.
         'User-Agent': 'AFG2026-ClientSignup/1.0 (contact: local-dev)',
       },
     );

@@ -74,21 +74,15 @@ Don't commit this file to GitHub.
 Terminal 1 (Backend):
 
 ```bash
-cd yourPATH/AFG2026/backend
+cd backend
 python3 -m pip install -r requirements.txt
-PYTHONPATH=. python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Terminal 2 (Frontend):
 
 ```bash
-cd yourPATH/AFG2026/frontend
+cd frontend
 flutter pub get
-flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8001 or flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8001
-
-Based on if business owner or client side is to be run:
-
-cd frontend && flutter run -d chrome --web-port 5174 --dart-define=API_BASE_URL=http://127.0.0.1:8000 --dart-define=DEMO_ROLE=client --dart-define=DEMO_AUTH_TOKEN=dev-client
-cd frontend && flutter run -d chrome --web-port 5174 --dart-define=API_BASE_URL=http://127.0.0.1:8000 --dart-define=DEMO_ROLE=owner --dart-define=DEMO_AUTH_TOKEN=dev-owner
-
+flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 ```
