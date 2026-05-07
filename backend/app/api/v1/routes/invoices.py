@@ -12,6 +12,7 @@ service = InvoicesService()
 
 
 @router.get("", response_model=list[InvoiceRead])
+# list invoices filtered by client id
 def list_invoices(
     client_id: Optional[str] = Query(default=None),
     _: UserRead = Depends(get_current_user),
@@ -20,11 +21,13 @@ def list_invoices(
 
 
 @router.post("", response_model=InvoiceRead)
+# create a new invoice
 def create_invoice(payload: InvoiceCreate, _: UserRead = Depends(require_owner)) -> InvoiceRead:
     return service.create_invoice(payload)
 
 
 @router.patch("/{invoice_id}/status", response_model=InvoiceRead)
+# update invoice status
 def update_invoice_status(
     invoice_id: str,
     payload: InvoiceUpdateStatus,

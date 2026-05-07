@@ -18,6 +18,7 @@ class GoogleAuthRequest(BaseModel):
 
 
 @router.post("/google", response_model=UserRead)
+# sign in or register user via google firebase
 def google_sign_in(payload: GoogleAuthRequest) -> UserRead:
     try:
         initialize_firebase_app()

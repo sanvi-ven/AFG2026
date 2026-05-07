@@ -29,6 +29,7 @@ class FirestoreRepository:
         if self.db is None and self.collection_name not in self._memory_store:
             self._memory_store[self.collection_name] = {}
 
+    # create a new document with generated id
     def create(self, payload: dict) -> dict:
         doc_id = str(uuid4())
         record = payload | {"id": doc_id}
@@ -39,6 +40,7 @@ class FirestoreRepository:
         self.db.collection(self.collection_name).document(doc_id).set(record)
         return record
 
+    # create a new document with specific id
     def create_with_id(self, doc_id: str, payload: dict) -> dict:
         record = payload | {"id": doc_id}
         if self.db is None:
@@ -48,6 +50,7 @@ class FirestoreRepository:
         self.db.collection(self.collection_name).document(doc_id).set(record)
         return record
 
+    # list documents, optionally filtered by field
     def list(self, field_name: Optional[str] = None, equals: Optional[str] = None) -> list[dict]:
         if self.db is None:
             rows = list(self._memory_store[self.collection_name].values())
@@ -62,6 +65,7 @@ class FirestoreRepository:
             docs = collection.stream()
         return [doc.to_dict() for doc in docs]
 
+    # update existing document fields
     def update(self, doc_id: str, payload: dict) -> dict:
         if self.db is None:
             current = self._memory_store[self.collection_name].get(doc_id, {"id": doc_id})
@@ -73,6 +77,7 @@ class FirestoreRepository:
         doc = self.db.collection(self.collection_name).document(doc_id).get()
         return doc.to_dict() | {"id": doc_id}
 
+    # find first document matching field value
     def get_one_by_field(self, field_name: str, equals: str) -> Optional[dict]:
         if self.db is None:
             for row in self._memory_store[self.collection_name].values():

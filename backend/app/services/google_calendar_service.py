@@ -15,6 +15,7 @@ class GoogleCalendarService:
     def __init__(self) -> None:
         self.scopes = [scope.strip() for scope in settings.google_calendar_scopes.split(",") if scope.strip()]
 
+    # build authenticated google calendar client
     def _build_client(self):
         credentials = service_account.Credentials.from_service_account_file(
             settings.google_service_account_path,
@@ -22,6 +23,7 @@ class GoogleCalendarService:
         )
         return build("calendar", "v3", credentials=credentials, cache_discovery=False)
 
+    # get available time slots for booking on given date
     def get_available_slots(
         self,
         *,
@@ -97,6 +99,7 @@ class GoogleCalendarService:
 
         return slots
 
+    # create a new event in google calendar
     def create_event(
         self,
         *,

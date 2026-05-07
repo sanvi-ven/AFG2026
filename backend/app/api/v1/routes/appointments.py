@@ -12,6 +12,7 @@ service = AppointmentsService()
 
 
 @router.get("", response_model=list[AppointmentRead])
+# list appointments filtered by business id
 def list_appointments(
     business_id: Optional[str] = Query(default=None),
     _: UserRead = Depends(get_current_user),
@@ -20,6 +21,7 @@ def list_appointments(
 
 '''learned through: https://fastapi.tiangolo.com/tutorial/dependencies/#create-a-dependency-or-dependable'''
 @router.post("", response_model=AppointmentRead)
+# create a new appointment
 def create_appointment(
     payload: AppointmentCreate,
     _: UserRead = Depends(get_current_user),
@@ -28,6 +30,7 @@ def create_appointment(
 
 
 @router.patch("/{appointment_id}", response_model=AppointmentRead)
+# update an existing appointment
 def update_appointment(
     appointment_id: str,
     payload: AppointmentUpdate,
@@ -37,6 +40,7 @@ def update_appointment(
 
 
 @router.post("/{appointment_id}/sync-calendar")
+# sync appointment to google calendar
 def sync_calendar(
     appointment_id: str,
     _: UserRead = Depends(require_owner),

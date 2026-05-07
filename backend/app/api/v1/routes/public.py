@@ -64,6 +64,7 @@ def _next_client_id() -> str:
 
 
 @router.post("/client-signups", response_model=ClientSignupRead)
+# create a new client signup account
 def create_client_signup(payload: ClientSignupCreateRequest) -> ClientSignupRead:
     if _find_client_by_email(payload.email):
         raise HTTPException(
@@ -92,6 +93,7 @@ def create_client_signup(payload: ClientSignupCreateRequest) -> ClientSignupRead
 
 
 @router.post("/client-login", response_model=ClientLoginResponse)
+# authenticate client with email and password
 def client_login(payload: ClientLoginRequest) -> ClientLoginResponse:
     client = _find_client_by_email(payload.email)
     if client is None:
@@ -118,6 +120,7 @@ def client_login(payload: ClientLoginRequest) -> ClientLoginResponse:
 
 
 @router.patch("/client-password")
+# change client password
 def change_client_password(payload: ClientPasswordChangeRequest) -> dict[str, str]:
     credentials = _find_credentials_by_email(payload.email)
     if credentials is None:
