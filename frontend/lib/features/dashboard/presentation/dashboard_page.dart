@@ -68,6 +68,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  /// build a clickable navigation card for dashboard links
   Widget _linkCard(
     BuildContext context, {
     required String title,

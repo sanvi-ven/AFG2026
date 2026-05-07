@@ -42,8 +42,8 @@ class ApiClient {
     _throwIfError(response);
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
-/// constructs http headers with content type and bearer token if avaliable.
-  
+
+  /// constructs http headers with content type and bearer token if available
   Map<String, String> _buildHeaders({bool includeJsonContentType = false}) {
     final headers = <String, String>{};
     if (includeJsonContentType) {
@@ -56,8 +56,7 @@ class ApiClient {
     return headers;
   }
 
-  /// checks response status code and throws exception with parsed error mesages from backend.
-
+  /// checks response status code and throws exception with parsed error messages from backend
   void _throwIfError(http.Response response) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return;

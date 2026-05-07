@@ -21,6 +21,7 @@ class OwnerSettingsService {
     return OwnerSettings.fromMap(data);
   }
 
+  /// save owner settings to firestore
   static Future<OwnerSettings> save(OwnerSettings settings) async {
     final payload = settings.toMap()
       ..addAll({'updated_at': FieldValue.serverTimestamp()});

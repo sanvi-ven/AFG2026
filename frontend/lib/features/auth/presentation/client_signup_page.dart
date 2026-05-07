@@ -68,6 +68,7 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
   }
 
   void _onAddressChanged(String value) {
+    // debounce address search and fetch suggestions
     _addressDebounce?.cancel();
 
     final query = value.trim();
@@ -92,6 +93,7 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
     });
   }
 
+  /// select an address suggestion and clear the suggestions list
   void _pickAddressSuggestion(String value) {
     _addressController.text = value;
     setState(() {
@@ -100,6 +102,7 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
     });
   }
 
+  /// submit the signup form with validation
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;
