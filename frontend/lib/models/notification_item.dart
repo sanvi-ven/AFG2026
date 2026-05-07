@@ -1,3 +1,4 @@
+/// represents a notification item with message and routing target
 class NotificationItem {
   const NotificationItem({
     required this.id,

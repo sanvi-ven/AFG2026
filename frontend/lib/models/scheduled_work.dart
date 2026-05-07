@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'invoice.dart';
 
+/// represents scheduled work orders from approved estimates
 class ScheduledWork {
   const ScheduledWork({
     required this.id,

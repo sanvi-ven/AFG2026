@@ -2,6 +2,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/services/api_client.dart';
 
+/// Repository for calendar availability and booking operations
 class CalendarBookingRepository {
   CalendarBookingRepository(this._apiClient);
 

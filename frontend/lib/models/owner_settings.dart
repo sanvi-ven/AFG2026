@@ -1,3 +1,4 @@
+/// stores owner company branding and contact information
 class OwnerSettings {
   const OwnerSettings({
     required this.companyName,

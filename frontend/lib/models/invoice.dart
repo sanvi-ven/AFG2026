@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// represents an invoice with services items and payment status
 class Invoice {
   const Invoice({
     required this.id,

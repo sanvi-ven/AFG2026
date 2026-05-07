@@ -6,6 +6,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/client_profile.dart';
 
+/// manages client profile data in firestore
+/// provides methods for reading, searching, and updating client profiles
 class ClientProfileService {
   ClientProfileService._();
 
@@ -13,6 +15,7 @@ class ClientProfileService {
   static final CollectionReference<Map<String, dynamic>> _signupsCollection =
       _firestore.collection('client_signups');
 
+  /// convert email to lowercase and trim whitespace for consistent lookups
   static String normalizeEmail(String email) => email.trim().toLowerCase();
 
   static Stream<List<ClientProfile>> watchAllProfiles() {
@@ -26,6 +29,8 @@ class ClientProfileService {
     });
   }
 
+  /// search profiles by firstName, lastName, email, address, or signupId
+  /// excludes profiles in the excludeSignupIds set and limits results
   static List<ClientProfile> searchProfiles({
     required List<ClientProfile> profiles,
     required String query,

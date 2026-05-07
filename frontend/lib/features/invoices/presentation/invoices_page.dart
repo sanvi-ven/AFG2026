@@ -6,6 +6,7 @@ import '../../../core/state/client_session.dart';
 import '../../../models/invoice.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
+/// page for viewing and managing invoices with pdf download and payment tracking
 class InvoicesPage extends StatefulWidget {
   const InvoicesPage({required this.role, this.authToken, super.key});
 

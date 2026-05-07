@@ -10,6 +10,7 @@ import '../../../core/services/client_auth_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../shared/widgets/app_logo.dart';
 
+/// signup page for new client registration with address autocomplete
 class ClientSignupPage extends StatefulWidget {
   const ClientSignupPage({super.key});
 

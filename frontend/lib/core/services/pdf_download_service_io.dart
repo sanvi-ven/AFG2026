@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
+/// download pdf bytes to device file system on mobile and desktop platforms
 Future<String?> downloadPdfBytesImpl({
   required Uint8List bytes,
   required String fileName,

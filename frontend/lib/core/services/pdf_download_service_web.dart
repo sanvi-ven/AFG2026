@@ -3,6 +3,7 @@
 import 'dart:typed_data';
 import 'dart:html' as html;
 
+/// download pdf bytes as browser blob on web platform
 Future<String?> downloadPdfBytesImpl({
   required Uint8List bytes,
   required String fileName,

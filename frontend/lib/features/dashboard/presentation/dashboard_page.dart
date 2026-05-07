@@ -5,6 +5,7 @@ import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../models/client_profile.dart';
 
+/// main dashboard page for authenticated users with role-based navigation
 class DashboardPage extends StatefulWidget {
   const DashboardPage({required this.role, this.authToken, super.key});
 

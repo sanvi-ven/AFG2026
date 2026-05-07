@@ -12,9 +12,11 @@ import '../../models/owner_settings.dart';
 import 'owner_settings_service.dart';
 import 'pdf_download_service.dart';
 
+/// generates and downloads invoice pdfs with company branding and line items
 class InvoicePdfService {
   InvoicePdfService._();
 
+  /// generate invoice pdf and trigger download with formatted file name
   static Future<String?> generateAndDownloadInvoicePdf({required Invoice invoice}) async {
     final bytes = await buildInvoicePdf(invoice: invoice);
     final invoicePart = invoice.invoiceNumber.trim().isEmpty ? invoice.id : invoice.invoiceNumber.trim();
@@ -22,6 +24,7 @@ class InvoicePdfService {
     return downloadPdfBytes(bytes: bytes, fileName: fileName);
   }
 
+  /// build invoice pdf document with company header, items table, and total
   static Future<Uint8List> buildInvoicePdf({required Invoice invoice}) async {
     OwnerSettings ownerSettings;
     try {
@@ -109,7 +112,7 @@ class InvoicePdfService {
     return pdf.save();
   }
 
-  /// Priority: base64 from Firestore → URL (legacy Storage) → local asset fallback.
+  /// resolve logo bytes from base64, url, or local asset fallback in priority order
   static Future<Uint8List?> _resolveLogoBytes(String? logoBase64, String? logoUrl) async {
     if (logoBase64 != null && logoBase64.isNotEmpty) {
       try {
@@ -139,6 +142,7 @@ class InvoicePdfService {
     }
   }
 
+  /// sanitize a string for safe use in file names by replacing special chars
   static String _sanitizeFilePart(String value) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) {

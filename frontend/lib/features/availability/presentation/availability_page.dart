@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/google_calendar_widget.dart';
 
+/// page for owner to manage availability and view calendar
 class AvailabilityPage extends StatelessWidget {
   const AvailabilityPage({required this.role, this.authToken, super.key});
 

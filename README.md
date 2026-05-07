@@ -2,6 +2,8 @@
 
 This project is a Flutter and FastAPI app for small-businesses (client auth later on, appointments, invoices, and estimates). Github repo: https://github.com/sanvi-ven/AFG2026
 
+Vercel: anchor-orpin.vercel.app
+
 ## IDE Used
 - Visual Studio Code is what we're using
 
@@ -86,3 +88,7 @@ cd frontend
 flutter pub get
 flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 ```
+
+To Test the Accounts:
+Ryan's Account: prendergastryanj@gmail.com	12345678
+Business Account: 12345

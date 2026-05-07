@@ -13,6 +13,7 @@ import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/google_calendar_booking_button.dart';
 import '../../../shared/widgets/google_calendar_widget.dart';
 
+/// page for managing appointments, scheduled work, and calendar bookings
 class AppointmentsPage extends StatefulWidget {
   const AppointmentsPage({required this.role, this.authToken, super.key});
 

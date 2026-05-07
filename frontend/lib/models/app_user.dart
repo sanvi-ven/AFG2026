@@ -1,3 +1,4 @@
+/// represents an authenticated app user with role info
 class AppUser {
   const AppUser({
     required this.id,

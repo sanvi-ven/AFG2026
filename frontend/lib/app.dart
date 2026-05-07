@@ -46,6 +46,7 @@ class _ClientNotificationListener extends StatefulWidget {
 
   final Widget child;
 
+  /// listen to real-time client messages and show local notifications when received
   @override
   State<_ClientNotificationListener> createState() => _ClientNotificationListenerState();
 }
@@ -118,6 +119,7 @@ class _ClientNotificationListenerState extends State<_ClientNotificationListener
   Widget build(BuildContext context) => widget.child;
 }
 
+/// gate to show dashboard or session restore based on persist stored session
 class _SessionGate extends StatefulWidget {
   const _SessionGate();
 

@@ -17,6 +17,7 @@ import '../../models/estimate.dart';
 import '../../models/invoice.dart';
 import '../../shared/widgets/app_scaffold.dart';
 
+/// page for viewing and managing estimates with client approval and owner conversion flows
 class EstimatesPage extends StatefulWidget {
   const EstimatesPage({required this.role, this.authToken, super.key});
 

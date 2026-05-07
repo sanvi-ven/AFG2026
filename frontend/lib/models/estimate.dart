@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'invoice.dart';
 
+/// represents a service estimate quote with revision and conversion tracking
 class Estimate {
   const Estimate({
     required this.id,

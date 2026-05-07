@@ -1,3 +1,4 @@
+/// represents a client profile with contact info and preferences
 class ClientProfile {
   const ClientProfile({
     required this.signupId,

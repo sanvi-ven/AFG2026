@@ -1,3 +1,4 @@
+/// represents a scheduled appointment with time window and status
 class Appointment {
   const Appointment({
     required this.id,

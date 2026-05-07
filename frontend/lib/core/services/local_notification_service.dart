@@ -1,11 +1,13 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+/// manages local push notifications for messages and alerts
 class LocalNotificationService {
   LocalNotificationService._();
 
   static final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
 
+  /// initialize notification system with android and ios permissions
   static Future<void> initialize() async {
     if (_initialized) {
       return;
@@ -26,6 +28,7 @@ class LocalNotificationService {
     _initialized = true;
   }
 
+  /// show a local notification for a new owner message to client
   static Future<void> showMessageNotification({
     required int id,
     required String title,

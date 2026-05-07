@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+/// stub implementation: show booking button that opens url on non-web platforms
 Widget buildGoogleCalendarBookingButton({
   required String scheduleUrl,
   required String label,

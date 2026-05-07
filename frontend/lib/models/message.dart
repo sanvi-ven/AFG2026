@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// represents a message log from owner broadcast to client
 class MessageLog {
   const MessageLog({
     required this.id,

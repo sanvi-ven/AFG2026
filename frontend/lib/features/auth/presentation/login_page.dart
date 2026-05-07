@@ -8,6 +8,7 @@ import '../../../core/services/session_persistence_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../shared/widgets/app_logo.dart';
 
+/// login page for client email/password authentication
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 

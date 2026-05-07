@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'firebase_service.dart';
 
+/// represents a google calendar event with metadata
 class GoogleCalendarEvent {
   final String id;
   final String summary;
@@ -29,9 +30,11 @@ class GoogleCalendarEvent {
   }
 }
 
+/// manages google calendar events via the calendar api with oauth authentication
 class GoogleCalendarService {
   static const String _calendarApiUrl = 'https://www.googleapis.com/calendar/v3';
 
+  /// fetch events from primary google calendar, optionally filtered to upcoming only
   static Future<List<GoogleCalendarEvent>> getEvents({
     int maxResults = 10,
     bool upcomingOnly = true,
@@ -71,6 +74,7 @@ class GoogleCalendarService {
     }
   }
 
+  /// create a new calendar event with start, end times and optional description
   static Future<GoogleCalendarEvent> createEvent({
     required String summary,
     required DateTime start,
@@ -107,6 +111,7 @@ class GoogleCalendarService {
     }
   }
 
+  /// delete a calendar event by id
   static Future<void> deleteEvent(String eventId) async {
     final accessToken = FirebaseService.getAccessToken();
     if (accessToken == null) {
@@ -127,6 +132,7 @@ class GoogleCalendarService {
     }
   }
 
+  /// update an existing calendar event with new details
   static Future<GoogleCalendarEvent> updateEvent({
     required String eventId,
     required String summary,

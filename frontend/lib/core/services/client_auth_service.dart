@@ -5,6 +5,8 @@ import 'package:crypto/crypto.dart';
 import '../../models/client_profile.dart';
 import 'client_profile_service.dart';
 
+/// handles client autentication with local password hashing
+/// supports signup, login, and password changing functionality
 class ClientAuthService {
   ClientAuthService._();
 
@@ -13,6 +15,7 @@ class ClientAuthService {
     return sha256.convert(bytes).toString();
   }
 
+  /// registers a new client account with email and password
   static Future<ClientProfile> signUp({
     required String email,
     required String firstName,
@@ -33,7 +36,8 @@ class ClientAuthService {
       passwordHash: passwordHash,
     );
   }
-
+/// authenticate client with email and password. throws exception if credentails dont match.
+  
   static Future<ClientProfile> login({
     required String email,
     required String password,
@@ -56,7 +60,8 @@ class ClientAuthService {
 
     return profile;
   }
-
+/// update client password after verifying the old password.
+  
   static Future<void> changePassword({
     required String email,
     required String oldPassword,
