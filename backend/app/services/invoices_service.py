@@ -6,6 +6,7 @@ from app.schemas.invoice import InvoiceCreate, InvoiceRead, InvoiceUpdateStatus
 
 
 class InvoicesService:
+    """manages invoice operations with automatic total calculation"""
     def __init__(self) -> None:
         self.repository = FirestoreRepository("invoices")
 

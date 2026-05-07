@@ -1,3 +1,6 @@
+'''made with help of chatgpt, prompt: help me create a reusable Firestore repository class in Python for a FastAPI backend'''
+
+
 from uuid import uuid4
 from typing import Optional
 
@@ -8,6 +11,7 @@ from app.core.firebase import get_firestore_client
 
 
 class FirestoreRepository:
+    """generic repository for firestore document with in-memory mock fallback"""
     _memory_store: dict[str, dict[str, dict]] = {}
 
     def __init__(self, collection_name: str) -> None:

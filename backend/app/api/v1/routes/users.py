@@ -5,6 +5,7 @@ from app.schemas.user import UserCreate, UserRead, UserUpdateRole
 from app.services.users_service import UsersService
 
 router = APIRouter()
+"""user management routes for list, create, and role updates"""
 service = UsersService()
 
 

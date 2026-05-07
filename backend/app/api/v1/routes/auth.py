@@ -9,6 +9,7 @@ from app.schemas.user import UserCreate, UserRead
 from app.services.users_service import UsersService
 
 router = APIRouter()
+"""firebase google authentication and user onboarding routes"""
 users_service = UsersService()
 
 

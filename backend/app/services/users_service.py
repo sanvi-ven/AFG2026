@@ -5,6 +5,7 @@ from app.schemas.user import UserCreate, UserRead, UserUpdateRole
 
 
 class UsersService:
+    """manages user operations via firestore repository"""
     def __init__(self) -> None:
         self.repository = FirestoreRepository("users")
 

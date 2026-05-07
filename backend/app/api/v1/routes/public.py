@@ -1,3 +1,5 @@
+'''made with the help of chatgpt, prompt: help build a FastAPI authentication backend using Firestore with routes for client signup, login, and password changes'''
+
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -14,6 +16,7 @@ from app.schemas.client_signup import (
 )
 
 router = APIRouter()
+"""public client authentication and signup routes without auth required"""
 repository = FirestoreRepository("client_signups")
 credentials_repository = FirestoreRepository("client_credentials")
 

@@ -8,6 +8,7 @@ from app.schemas.notification import (
 
 
 class NotificationsService:
+    """manages single and broadcast notifications for clients"""
     def __init__(self) -> None:
         self.repository = FirestoreRepository("notifications")
 

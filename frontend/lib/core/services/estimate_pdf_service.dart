@@ -1,3 +1,5 @@
+/// made with help of chatgpt, prompt: help me create a Flutter service that generates branded estimate PDFs using the pdf package
+
 import 'dart:convert';
 import 'dart:typed_data';
 

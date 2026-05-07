@@ -7,6 +7,7 @@ from app.core.config import settings
 
 
 def initialize_firebase_app() -> None:
+    """initialize firebase admin sdk with credentials from service account file"""
     if firebase_admin._apps:
         return
 
@@ -16,5 +17,6 @@ def initialize_firebase_app() -> None:
 
 @lru_cache
 def get_firestore_client() -> firestore.Client:
+    """get cached firestore client instance for initializing firebase"""
     initialize_firebase_app()
     return firestore.client()

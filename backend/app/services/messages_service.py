@@ -5,6 +5,7 @@ from app.schemas.message import MessageCreate, MessageRead
 
 
 class MessagesService:
+    """manages message operations for owner and client communication"""
     def __init__(self) -> None:
         self.repository = FirestoreRepository("messages")
 

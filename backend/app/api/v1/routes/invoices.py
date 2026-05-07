@@ -7,6 +7,7 @@ from app.schemas.user import UserRead
 from app.services.invoices_service import InvoicesService
 
 router = APIRouter()
+"""invoice management routes for status tracking"""
 service = InvoicesService()
 
 

@@ -43,7 +43,7 @@ class ClientProfile {
       address: '',
     );
   }
-
+/// map-https://medium.com/@emanyaqoob/map-in-dart-flutter-adf80a0299b5
   factory ClientProfile.fromMap(Map<String, dynamic> map) {
     final rawName = (map['name'] as String? ?? '').trim();
     final nameParts = rawName.split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();

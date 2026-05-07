@@ -7,6 +7,7 @@ from app.schemas.user import UserRead
 from app.services.appointments_service import AppointmentsService
 
 router = APIRouter()
+"""appointment management routes for scheduling and calendar integration"""
 service = AppointmentsService()
 
 
@@ -17,7 +18,7 @@ def list_appointments(
 ) -> list[AppointmentRead]:
     return service.list_appointments(business_id=business_id)
 
-
+'''learned through: https://fastapi.tiangolo.com/tutorial/dependencies/#create-a-dependency-or-dependable'''
 @router.post("", response_model=AppointmentRead)
 def create_appointment(
     payload: AppointmentCreate,

@@ -8,8 +8,10 @@ from googleapiclient.errors import HttpError
 
 from app.core.config import settings
 
+'''learned some of the datetime methods: https://docs.python.org/3/library/datetime.html'''
 
 class GoogleCalendarService:
+    """manages google calendar api operations for availability and event management"""
     def __init__(self) -> None:
         self.scopes = [scope.strip() for scope in settings.google_calendar_scopes.split(",") if scope.strip()]
 

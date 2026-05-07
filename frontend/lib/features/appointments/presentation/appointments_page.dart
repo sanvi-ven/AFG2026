@@ -1,3 +1,5 @@
+///made with the help of chatgpt, prompt: Help me build a Flutter template appointments page for a business management app that integrates Google Calendar scheduling
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';

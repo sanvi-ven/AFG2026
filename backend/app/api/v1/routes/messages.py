@@ -7,6 +7,7 @@ from app.schemas.user import UserRead
 from app.services.messages_service import MessagesService
 
 router = APIRouter()
+"""message management routes for owner and client communication"""
 service = MessagesService()
 
 

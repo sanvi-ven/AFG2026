@@ -1,3 +1,5 @@
+/// made with help of chatgpt, prompt: help me create a Flutter service that generates branded invoice PDFs using the pdf package and info from Firestore
+
 import 'dart:convert';
 import 'dart:typed_data';
 

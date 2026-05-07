@@ -6,6 +6,7 @@ from app.schemas.appointment import AppointmentCreate, AppointmentRead, Appointm
 
 
 class AppointmentsService:
+    """manages appointment operations with firestore and google calendar sync"""
     def __init__(self) -> None:
         self.repository = FirestoreRepository("appointments")
 

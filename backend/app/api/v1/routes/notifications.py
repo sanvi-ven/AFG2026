@@ -10,6 +10,7 @@ from app.schemas.user import UserRead
 from app.services.notifications_service import NotificationsService
 
 router = APIRouter()
+"""notification management routes for single and broadcast notifications"""
 service = NotificationsService()
 
 
