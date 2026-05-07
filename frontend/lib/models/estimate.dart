@@ -52,6 +52,7 @@ class Estimate {
   bool get isChangesRequested => status == InvoiceStatus.changesRequested;
   bool get isConvertible => isApproved && !convertedToInvoice;
 
+  /// create estimate from firestore map data
   factory Estimate.fromMap(Map<String, dynamic> map) {
     final serviceRows = (map['services'] as List<dynamic>? ?? const <dynamic>[])
         .whereType<Map<String, dynamic>>()
@@ -150,6 +151,7 @@ class EstimateVersionSnapshot {
   final String status;
   final DateTime updatedAt;
 
+  /// create version snapshot from firestore map
   factory EstimateVersionSnapshot.fromMap(Map<String, dynamic> map) {
     final serviceRows = (map['services'] as List<dynamic>? ?? const <dynamic>[])
         .whereType<Map<String, dynamic>>()
@@ -175,6 +177,7 @@ class EstimateVersionSnapshot {
     );
   }
 
+  /// convert version snapshot to firestore map
   Map<String, dynamic> toMap() {
     return {
       'version': version,

@@ -18,8 +18,10 @@ class OwnerSettings {
       (logoBase64 != null && logoBase64!.isNotEmpty) ||
       (logoUrl != null && logoUrl!.isNotEmpty);
 
+  /// create empty owner settings instance
   factory OwnerSettings.empty() => const OwnerSettings(companyName: '', address: '');
 
+  /// create settings from firestore map
   factory OwnerSettings.fromMap(Map<String, dynamic> map) {
     final logo = (map['logo_url'] as String?)?.trim();
     final base64 = (map['logo_base64'] as String?)?.trim();
@@ -31,6 +33,7 @@ class OwnerSettings {
     );
   }
 
+  /// convert settings to firestore map
   Map<String, dynamic> toMap() {
     return {
       'company_name': companyName.trim(),
@@ -40,6 +43,7 @@ class OwnerSettings {
     };
   }
 
+  /// create copy with updated fields
   OwnerSettings copyWith({
     String? companyName,
     String? address,

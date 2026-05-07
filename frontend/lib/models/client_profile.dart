@@ -23,11 +23,13 @@ class ClientProfile {
     return email.split('@').first;
   }
 
+  /// get full name from first and last names
   String get fullName {
     final combined = '${firstName.trim()} ${lastName.trim()}'.trim();
     return combined.isEmpty ? greetingName : combined;
   }
 
+  /// create empty profile for new client signup
   factory ClientProfile.emptyForSignup({
     required String signupId,
     required String email,
@@ -67,6 +69,7 @@ class ClientProfile {
     );
   }
 
+  /// convert profile to firestore map format
   Map<String, dynamic> toMap() {
     return {
       'id': signupId.trim(),
@@ -78,6 +81,7 @@ class ClientProfile {
     };
   }
 
+  /// create copy of profile with updated fields
   ClientProfile copyWith({
     String? signupId,
     String? email,

@@ -16,6 +16,7 @@ class Appointment {
   final DateTime endTime;
   final String status;
 
+  /// create appointment from json response
   factory Appointment.fromJson(Map<String, dynamic> json) {
     return Appointment(
       id: json['id'] as String,

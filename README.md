@@ -38,50 +38,11 @@ Recommended VS Code extensions:
 - `backend/` is the FastAPI server
 - `frontend/` is the Flutter app
 
-## Instructor Setup (From ZIP)
-
-### 1) Unzip and open project
-- Unzip the folder.
-- Open the root folder in VS Code.
-
-### 2) Backend environment file
-In `backend/`, create a `.env` file by copying `.env.example`.
-
-The `backend/.env`:
-
-```env
-APP_NAME=Anchor
-API_V1_PREFIX=/api/v1
-FIREBASE_PROJECT_ID=afg2026a
-GOOGLE_SERVICE_ACCOUNT_PATH=service-account.json
-GOOGLE_CALENDAR_SCOPES=https://www.googleapis.com/auth/calendar
-USE_MOCK_FIRESTORE=false
-DEV_AUTH_BYPASS=false
-```
-
-### 3) Service account file (required for Google Calendar / Firestore access)
-The file's contents will be sent in an email. Please create the service-account.json under the backend folder:
-
-- `backend/service-account.json`
-
-The filename must match:
-- `GOOGLE_SERVICE_ACCOUNT_PATH=service-account.json`
-
-Don't commit this file to GitHub.
-
 ## Run the App
 
 ### Run Commands
 
-Terminal 1 (Backend):
-
-```bash
-cd backend
-python3 -m pip install -r requirements.txt
-python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-```
-
-Terminal 2 (Frontend):
+Terminal 1 (Frontend):
 
 ```bash
 cd frontend
@@ -89,6 +50,6 @@ flutter pub get
 flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 ```
 
-To Test the Accounts:
+### To Test the Accounts:
 Ryan's Account: prendergastryanj@gmail.com	12345678
-Business Account: 12345
+Business Account Password: 12345
