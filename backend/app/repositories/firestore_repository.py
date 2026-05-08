@@ -1,4 +1,4 @@
-'''made with help of chatgpt, prompt: help me create a reusable Firestore repository class in Python for a FastAPI backend'''
+'''made with help of chatgpt 4.0, prompt: help me create a reusable Firestore repository class in Python for a FastAPI backend'''
 
 
 from uuid import uuid4

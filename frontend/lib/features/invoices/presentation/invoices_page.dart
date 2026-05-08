@@ -1,4 +1,4 @@
-/// made with the help of chatgpt, prompt: how to build a Flutter invoices page for a business app that shows invoices from Firestore in real time
+/// made with the help of chatgpt 4.0, prompt: how to build a Flutter invoices page for a business app that shows invoices from Firestore in real time
 
 import 'package:flutter/material.dart';
 

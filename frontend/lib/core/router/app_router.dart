@@ -1,4 +1,4 @@
-// this file's structure was made with the help of chatgpt; prompt: make a flutter app router outline with onGenerateRoute and multiple routs
+// this file's structure was made with the help of chatgpt 4.0; prompt: make a flutter app router outline with onGenerateRoute and multiple routs
 
 import 'package:flutter/material.dart';
 

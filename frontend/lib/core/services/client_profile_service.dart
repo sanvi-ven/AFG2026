@@ -1,4 +1,4 @@
-//made with the help of chatgpt; prompt: create a flutter service class for firestore that manages a client profile model
+//made with the help of chatgpt 4.0; prompt: create a flutter service class for firestore that manages a client profile model
 
 import 'dart:math';
 

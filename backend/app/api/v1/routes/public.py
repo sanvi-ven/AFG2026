@@ -1,4 +1,4 @@
-'''made with the help of chatgpt, prompt: help build a FastAPI authentication backend using Firestore with routes for client signup, login, and password changes'''
+'''made with the help of chatgpt 4.0, prompt: help build a FastAPI authentication backend using Firestore with routes for client signup, login, and password changes'''
 
 from datetime import datetime, timezone
 from typing import Optional

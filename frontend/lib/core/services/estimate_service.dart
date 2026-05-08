@@ -1,4 +1,4 @@
-/// made with help of chatgpt, prompt: help me create a Flutter service that manages estimate data in Firestore with real-time updates and status tracking
+/// made with help of chatgpt 4.0, prompt: help me create a Flutter service that manages estimate data in Firestore with real-time updates and status tracking
 library;
 
 import 'package:cloud_firestore/cloud_firestore.dart';

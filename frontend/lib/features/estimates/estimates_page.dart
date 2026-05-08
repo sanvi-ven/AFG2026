@@ -1,4 +1,4 @@
-//made with help of chatgpt: create flutter page that shows list of estimates from firestore stream, how to add aprove/deny buttons for client, and convert to invoice button for owner
+//made with help of chatgpt 4.0: create flutter page that shows list of estimates from firestore stream, how to add aprove/deny buttons for client, and convert to invoice button for owner
 
 import 'dart:async';
 

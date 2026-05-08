@@ -1,4 +1,4 @@
-// made with help of chatgpt: create a flutter client signup page outline with a form. include fields for first name, last name, email, phone, and searchable address
+// made with help of chatgpt 4.0: create a flutter client signup page outline with a form. include fields for first name, last name, email, phone, and searchable address
 
 import 'dart:async';
 

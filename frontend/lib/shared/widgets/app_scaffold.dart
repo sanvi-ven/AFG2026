@@ -1,4 +1,4 @@
-//made with help of chatgpt: create a reusable app scaffold for a flutter business app that accepts title, role, selectedRoute, body, authToken
+//made with help of chatgpt 4.0: create a reusable app scaffold for a flutter business app that accepts title, role, selectedRoute, body, authToken
 
 import 'dart:async';
 import 'dart:convert';
