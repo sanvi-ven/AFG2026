@@ -250,13 +250,21 @@ class AppScaffold extends StatelessWidget {
     final spacePerItem = screenWidth / itemCount;
     
     // Scale factor (1.0 = 100% = normal size)
-    // If space per item is very narrow, reduce font size
-    if (spacePerItem < 60) {
-      return 0.75;
-    } else if (spacePerItem < 75) {
-      return 0.85;
-    } else if (spacePerItem < 90) {
-      return 0.92;
+    // Aggressive early shrinking to prevent wrapping on mobile
+    if (spacePerItem < 50) {
+      return 0.55;
+    } else if (spacePerItem < 60) {
+      return 0.60;
+    } else if (spacePerItem < 70) {
+      return 0.67;
+    } else if (spacePerItem < 80) {
+      return 0.72;
+    } else if (spacePerItem < 95) {
+      return 0.82;
+    } else if (spacePerItem < 100) {
+      return 0.88;
+    } else if (spacePerItem < 110) {
+      return 0.94;
     }
     
     return 1.0; // Full size for wider screens
