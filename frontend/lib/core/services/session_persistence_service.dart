@@ -1,4 +1,5 @@
 /// made with help of chatgpt, prompt: make a Flutter service outline that keeps users logged in using local storage and stores their profile info
+library;
 
 import 'dart:convert';
 
