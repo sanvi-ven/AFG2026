@@ -1,3 +1,6 @@
+/// made with the help of chatgpt 4.0, prompt: how to build a Flutter invoices page for a business app that shows invoices from Firestore in real time
+library;
+
 import 'package:flutter/material.dart';
 
 import '../../../core/services/invoice_pdf_service.dart';
@@ -6,6 +9,7 @@ import '../../../core/state/client_session.dart';
 import '../../../models/invoice.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
+/// page for viewing and managing invoices with pdf download and payment tracking
 class InvoicesPage extends StatefulWidget {
   const InvoicesPage({required this.role, this.authToken, super.key});
 

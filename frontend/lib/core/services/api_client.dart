@@ -1,13 +1,18 @@
+//to understand how to use json serialization: https://docs.flutter.dev/data-and-backend/serialization/json
+
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+/// http client for making json requests to the backend api.
+/// handles headers, authorization, and error parsing.
 class ApiClient {
   ApiClient({required this.baseUrl, this.authToken});
 
   final String baseUrl;
   final String? authToken;
 
+  /// makes a get request and returns a single json object.
   Future<Map<String, dynamic>> getJson(String path) async {
     final response = await http.get(
       Uri.parse('$baseUrl$path'),
@@ -26,7 +31,8 @@ class ApiClient {
     final decoded = jsonDecode(response.body) as List<dynamic>;
     return decoded.cast<Map<String, dynamic>>();
   }
-
+/// makes a post request with json body and returns a single json object.
+  
   Future<Map<String, dynamic>> postJson(String path, Map<String, dynamic> body) async {
     final response = await http.post(
       Uri.parse('$baseUrl$path'),
@@ -37,6 +43,7 @@ class ApiClient {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  /// constructs http headers with content type and bearer token if available
   Map<String, String> _buildHeaders({bool includeJsonContentType = false}) {
     final headers = <String, String>{};
     if (includeJsonContentType) {
@@ -49,6 +56,7 @@ class ApiClient {
     return headers;
   }
 
+  /// checks response status code and throws exception with parsed error messages from backend
   void _throwIfError(http.Response response) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return;

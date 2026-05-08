@@ -1,4 +1,4 @@
-//made with help of chatgpt: to create a login page scaffold & how to call backedend api to login client
+//made with help of chatgpt 4.0: to create a login page scaffold & how to call backedend api to login client
 
 import 'package:flutter/material.dart';
 
@@ -8,6 +8,7 @@ import '../../../core/services/session_persistence_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../shared/widgets/app_logo.dart';
 
+/// login page for client email/password authentication
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 

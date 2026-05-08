@@ -1,4 +1,4 @@
-//made with help of chatgpt: create a simple flutter owner login page with a password field
+//made with help of chatgpt 4.0: create a simple flutter owner login page with a password field
 
 import 'package:flutter/material.dart';
 
@@ -6,6 +6,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/session_persistence_service.dart';
 import '../../../shared/widgets/app_logo.dart';
 
+/// signin page for owner with static password
 class OwnerSigninPage extends StatefulWidget {
   const OwnerSigninPage({super.key});
 

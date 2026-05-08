@@ -1,4 +1,4 @@
-//made with help of chatgpt: create flutter page that shows list of estimates from firestore stream, how to add aprove/deny buttons for client, and convert to invoice button for owner
+//made with help of chatgpt 4.0: create flutter page that shows list of estimates from firestore stream, how to add aprove/deny buttons for client, and convert to invoice button for owner
 
 import 'dart:async';
 
@@ -17,6 +17,7 @@ import '../../models/estimate.dart';
 import '../../models/invoice.dart';
 import '../../shared/widgets/app_scaffold.dart';
 
+/// page for viewing and managing estimates with client approval and owner conversion flows
 class EstimatesPage extends StatefulWidget {
   const EstimatesPage({required this.role, this.authToken, super.key});
 
@@ -98,7 +99,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
     final ts = DateTime.now().millisecondsSinceEpoch.toString();
     return 'INV-${ts.substring(ts.length - 6)}';
   }
-
+///https://api.flutter.dev/flutter/widgets/TextEditingController-class.html
   void _addServiceRow() {
     setState(() {
       _serviceRows.add(

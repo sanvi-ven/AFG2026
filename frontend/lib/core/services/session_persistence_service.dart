@@ -1,3 +1,6 @@
+/// made with help of chatgpt 4.0, prompt: make a Flutter service outline that keeps users logged in using local storage and stores their profile info
+library;
+
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -5,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/client_profile.dart';
 
+/// represents a restored user session with role and optional profile data
 class RestoredSession {
   const RestoredSession({required this.role, this.profile});
 
@@ -12,6 +16,7 @@ class RestoredSession {
   final ClientProfile? profile;
 }
 
+/// manages session persistence to local storage with role and profile info
 class SessionPersistenceService {
   SessionPersistenceService._();
 
@@ -21,6 +26,7 @@ class SessionPersistenceService {
   // 3 days in milliseconds
   static const _webExpiryMs = 3 * 24 * 60 * 60 * 1000;
 
+  /// save a client session to local storage with profile and timestamp
   static Future<void> saveClientSession(ClientProfile profile) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyRole, 'client');
@@ -28,6 +34,7 @@ class SessionPersistenceService {
     await prefs.setString(_keyClientProfile, jsonEncode(profile.toMap()));
   }
 
+  /// save an owner session to local storage with timestamp
   static Future<void> saveOwnerSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyRole, 'owner');
@@ -35,7 +42,7 @@ class SessionPersistenceService {
     await prefs.remove(_keyClientProfile);
   }
 
-  /// Returns the stored session, or null if none exists or it has expired (web only).
+  /// load a stored session from local storage, checking expiry on web
   static Future<RestoredSession?> loadSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -71,6 +78,7 @@ class SessionPersistenceService {
     }
   }
 
+  /// clear all session data from local storage
   static Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
     await Future.wait([

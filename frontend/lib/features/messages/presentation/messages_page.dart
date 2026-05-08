@@ -1,4 +1,4 @@
-// made with chatgpt: build a flutter messaging page for a service business app. owners should be able to send broadcast messages to multiple client IDs
+// made with chatgpt 4.0: build a flutter messaging page for a service business app. owners should be able to send broadcast messages to multiple client IDs
 // snapshot--https://firebase.google.com/docs/reference/js/firestore_.documentsnapshot
 
 
@@ -14,6 +14,7 @@ import '../../../models/client_profile.dart';
 import '../../../models/message.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
+/// page for owner to broadcast messages and clients to view received messages
 class MessagesPage extends StatefulWidget {
   const MessagesPage({required this.role, this.authToken, super.key});
 

@@ -13,6 +13,7 @@ users_service = UsersService()
 
 
 def _parse_display_name(claims: dict) -> str:
+    """extract display name from firebase token claims with fallbacks"""
     display_name = claims.get("name")
     if display_name and isinstance(display_name, str):
         return display_name
@@ -27,6 +28,7 @@ def _parse_display_name(claims: dict) -> str:
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> UserRead:
+    """verify firebase bearer token and return authenticated user, with dev auth bypass"""
     token = credentials.credentials
 
     try:

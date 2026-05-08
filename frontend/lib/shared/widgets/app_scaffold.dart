@@ -1,4 +1,4 @@
-//made with help of chatgpt: create a reusable app scaffold for a flutter business app that accepts title, role, selectedRoute, body, authToken
+//made with help of chatgpt 4.0: create a reusable app scaffold for a flutter business app that accepts title, role, selectedRoute, body, authToken
 
 import 'dart:async';
 import 'dart:convert';
@@ -18,6 +18,7 @@ import '../../models/client_profile.dart';
 import '../../models/owner_settings.dart';
 import 'app_logo.dart';
 
+/// reusable app scaffold with navigation, sidebar, and header for business app
 class AppScaffold extends StatelessWidget {
   const AppScaffold({
     required this.title,
@@ -120,6 +121,8 @@ class AppScaffold extends StatelessWidget {
           );
         }
 
+        final textScaleFactor = _getResponsiveTextScaleFactor(constraints.maxWidth, items.length);
+        
         return Scaffold(
           appBar: AppBar(
             title: Row(
@@ -141,21 +144,28 @@ class AppScaffold extends StatelessWidget {
                 : null,
           ),
           body: body,
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
-            onDestinationSelected: onDestinationSelected,
-            destinations: [
-              for (final item in items)
-                NavigationDestination(
-                  icon: item.route == AppRouter.dashboard
-                      ? const AppLogo(size: 20, fallbackIcon: Icons.dashboard)
-                      : Icon(item.icon),
-                  selectedIcon: item.route == AppRouter.dashboard
-                      ? const AppLogo(size: 22, fallbackIcon: Icons.dashboard)
-                      : Icon(item.icon),
-                  label: item.label,
-                ),
-            ],
+          bottomNavigationBar: Theme(
+            data: Theme.of(context).copyWith(
+              textTheme: Theme.of(context).textTheme.apply(
+                    fontSizeFactor: textScaleFactor,
+                  ),
+            ),
+            child: NavigationBar(
+              selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
+              onDestinationSelected: onDestinationSelected,
+              destinations: [
+                for (final item in items)
+                  NavigationDestination(
+                    icon: item.route == AppRouter.dashboard
+                        ? const AppLogo(size: 20, fallbackIcon: Icons.dashboard)
+                        : Icon(item.icon),
+                    selectedIcon: item.route == AppRouter.dashboard
+                        ? const AppLogo(size: 22, fallbackIcon: Icons.dashboard)
+                        : Icon(item.icon),
+                    label: item.label,
+                  ),
+              ],
+            ),
           ),
         );
       },
@@ -231,6 +241,33 @@ class AppScaffold extends StatelessWidget {
     }
 
     return common;
+  }
+
+  /// Calculates responsive text scale factor for navigation bar based on screen width
+  /// On narrow screens, reduces text size to prevent overflow and squishing
+  double _getResponsiveTextScaleFactor(double screenWidth, int itemCount) {
+    // Each item gets roughly equal horizontal space
+    final spacePerItem = screenWidth / itemCount;
+    
+    // Scale factor (1.0 = 100% = normal size)
+    // Aggressive early shrinking to prevent wrapping on mobile
+    if (spacePerItem < 50) {
+      return 0.55;
+    } else if (spacePerItem < 60) {
+      return 0.60;
+    } else if (spacePerItem < 70) {
+      return 0.67;
+    } else if (spacePerItem < 80) {
+      return 0.72;
+    } else if (spacePerItem < 95) {
+      return 0.82;
+    } else if (spacePerItem < 100) {
+      return 0.88;
+    } else if (spacePerItem < 110) {
+      return 0.94;
+    }
+    
+    return 1.0; // Full size for wider screens
   }
 }
 

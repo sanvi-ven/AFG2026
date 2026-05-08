@@ -6,22 +6,27 @@ from app.schemas.appointment import AppointmentCreate, AppointmentRead, Appointm
 
 
 class AppointmentsService:
+    """manages appointment operations with firestore and google calendar sync"""
     def __init__(self) -> None:
         self.repository = FirestoreRepository("appointments")
 
+    # create a new appointment record
     def create_appointment(self, payload: AppointmentCreate) -> AppointmentRead:
         record = payload.model_dump()
         record["status"] = AppointmentStatus.PENDING
         saved = self.repository.create(record)
         return AppointmentRead.model_validate(saved)
 
+    # list all or filtered appointments by business id
     def list_appointments(self, business_id: Optional[str] = None) -> list[AppointmentRead]:
         rows = self.repository.list("business_id", business_id) if business_id else self.repository.list()
         return [AppointmentRead.model_validate(row) for row in rows]
 
+    # update an existing appointment record
     def update_appointment(self, appointment_id: str, payload: AppointmentUpdate) -> AppointmentRead:
         updated = self.repository.update(appointment_id, payload.model_dump(exclude_none=True))
         return AppointmentRead.model_validate(updated)
 
+    # sync appointment to google calendar
     def sync_to_google_calendar(self, appointment_id: str) -> dict[str, str]:
         return {"appointment_id": appointment_id, "status": "queued_for_calendar_sync"}

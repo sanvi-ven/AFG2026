@@ -1,4 +1,4 @@
-# Small Biz Manager - MVP Architecture
+# Anchor - MVP Architecture
 
 ## Stack
 - Frontend: Flutter (Dart)

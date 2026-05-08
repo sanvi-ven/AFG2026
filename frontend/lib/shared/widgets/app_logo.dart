@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// displays the app logo with fallback to anchor icon if asset missing
 class AppLogo extends StatelessWidget {
   const AppLogo({
     super.key,

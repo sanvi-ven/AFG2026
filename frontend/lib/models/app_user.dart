@@ -1,3 +1,4 @@
+/// represents an authenticated app user with role info
 class AppUser {
   const AppUser({
     required this.id,
@@ -11,6 +12,7 @@ class AppUser {
   final String displayName;
   final String role;
 
+  /// create app user from json response data
   factory AppUser.fromJson(Map<String, dynamic> json) {
     return AppUser(
       id: json['id'] as String,
@@ -20,6 +22,7 @@ class AppUser {
     );
   }
 
+  /// convert app user to json for api requests
   Map<String, dynamic> toJson() {
     return {
       'id': id,

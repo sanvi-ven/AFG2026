@@ -5,6 +5,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'google_calendar_iframe_stub.dart'
   if (dart.library.html) 'google_calendar_iframe_web.dart' as calendar_iframe;
 
+/// displays google calendar in an embedded webview for calendar management
 class GoogleCalendarWidget extends StatefulWidget {
   const GoogleCalendarWidget({
     required this.calendarSrc,

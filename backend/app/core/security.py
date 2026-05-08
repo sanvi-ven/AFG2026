@@ -4,6 +4,7 @@ _password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:
+    """hash a plaintext password using bcrypt"""
     return _password_context.hash(password)
 
 

@@ -2,6 +2,8 @@
 
 This project is a Flutter and FastAPI app for small-businesses (client auth later on, appointments, invoices, and estimates). Github repo: https://github.com/sanvi-ven/AFG2026
 
+Vercel: anchor-orpin.vercel.app
+
 ## IDE Used
 - Visual Studio Code is what we're using
 
@@ -36,59 +38,18 @@ Recommended VS Code extensions:
 - `backend/` is the FastAPI server
 - `frontend/` is the Flutter app
 
-## Instructor Setup (From ZIP)
-
-### 1) Unzip and open project
-- Unzip the folder.
-- Open the root folder in VS Code.
-
-### 2) Backend environment file
-In `backend/`, create a `.env` file by copying `.env.example`.
-
-The `backend/.env`:
-
-```env
-APP_NAME=Anchor
-API_V1_PREFIX=/api/v1
-FIREBASE_PROJECT_ID=afg2026a
-GOOGLE_SERVICE_ACCOUNT_PATH=service-account.json
-GOOGLE_CALENDAR_SCOPES=https://www.googleapis.com/auth/calendar
-USE_MOCK_FIRESTORE=false
-DEV_AUTH_BYPASS=true
-```
-
-### 3) Service account file (required for Google Calendar / Firestore access)
-The file's contents will be sent in an email. Please create the service-account.json under the backend folder:
-
-- `backend/service-account.json`
-
-The filename must match:
-- `GOOGLE_SERVICE_ACCOUNT_PATH=service-account.json`
-
-Don't commit this file to GitHub.
-
 ## Run the App
 
 ### Run Commands
 
-Terminal 1 (Backend):
+Terminal 1 (Frontend):
 
 ```bash
-cd yourPATH/AFG2026/backend
-python3 -m pip install -r requirements.txt
-PYTHONPATH=. python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8001
-```
-
-Terminal 2 (Frontend):
-
-```bash
-cd yourPATH/AFG2026/frontend
+cd frontend
 flutter pub get
-flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8001 or flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8001
-
-Based on if business owner or client side is to be run:
-
-cd frontend && flutter run -d chrome --web-port 5174 --dart-define=API_BASE_URL=http://127.0.0.1:8000 --dart-define=DEMO_ROLE=client --dart-define=DEMO_AUTH_TOKEN=dev-client
-cd frontend && flutter run -d chrome --web-port 5174 --dart-define=API_BASE_URL=http://127.0.0.1:8000 --dart-define=DEMO_ROLE=owner --dart-define=DEMO_AUTH_TOKEN=dev-owner
-
+flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 ```
+
+### To Test the Accounts:
+Ryan's Account: prendergastryanj@gmail.com	12345678
+Business Account Password: 12345

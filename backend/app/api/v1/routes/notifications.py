@@ -10,15 +10,18 @@ from app.schemas.user import UserRead
 from app.services.notifications_service import NotificationsService
 
 router = APIRouter()
+"""notification management routes for single and broadcast notifications"""
 service = NotificationsService()
 
 
 @router.post("/single", response_model=NotificationRead)
+# send single notification to one client
 def send_single(payload: SingleNotificationCreate, _: UserRead = Depends(require_owner)) -> NotificationRead:
     return service.send_single(payload)
 
 
 @router.post("/broadcast", response_model=NotificationRead)
+# send broadcast notification to all clients
 def send_broadcast(
     payload: BroadcastNotificationCreate,
     _: UserRead = Depends(require_owner),

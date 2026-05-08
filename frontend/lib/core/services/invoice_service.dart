@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/invoice.dart';
 
+/// manages invoice data in firestore with real-time updates and conversions
 class InvoiceService {
   InvoiceService._();
 
@@ -11,6 +12,7 @@ class InvoiceService {
   static final CollectionReference<Map<String, dynamic>> _collection =
       _firestore.collection('invoices');
 
+  /// listen to real-time invoice updates, filtered by role and clientId
   static Stream<List<Invoice>> watchInvoices({required String role, String? clientId}) {
     Query<Map<String, dynamic>> query = _collection;
     if (role == 'client' && clientId != null && clientId.trim().isNotEmpty) {
@@ -27,6 +29,7 @@ class InvoiceService {
     });
   }
 
+  /// create a new invoice with services and auto-calculated total
   static Future<void> createInvoice({
     required String invoiceNumber,
     required String clientId,
@@ -53,6 +56,7 @@ class InvoiceService {
     await doc.set(invoice.toMap());
   }
 
+  /// create a new invoice from an approved estimate and return the invoice id
   static Future<String> createInvoiceFromEstimate({
     required String invoiceNumber,
     required String clientId,
@@ -79,6 +83,7 @@ class InvoiceService {
     return doc.id;
   }
 
+  /// fetch a single invoice by id
   static Future<Invoice?> getInvoiceById(String invoiceId) async {
     final normalizedId = invoiceId.trim();
     if (normalizedId.isEmpty) {
@@ -94,6 +99,7 @@ class InvoiceService {
     return Invoice.fromMap({...data, 'id': snapshot.id});
   }
 
+  /// update invoice status to pending, sent, paid, etc
   static Future<void> updateStatus({required String invoiceId, required String status}) async {
     await _collection.doc(invoiceId).set(
       {
