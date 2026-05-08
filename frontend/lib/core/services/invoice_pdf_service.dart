@@ -1,4 +1,4 @@
-/// made with help of chatgpt, prompt: help me create a Flutter service that generates branded invoice PDFs using the pdf package and info from Firestore
+/// made with help of chatgpt 4.0, prompt: help me create a Flutter service that generates branded invoice PDFs using the pdf package and info from Firestore
 library;
 
 import 'dart:convert';

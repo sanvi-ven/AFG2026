@@ -1,4 +1,4 @@
-///made with the help of chatgpt, prompt: Help me build a Flutter template appointments page for a business management app that integrates Google Calendar scheduling
+///made with the help of chatgpt 4.0, prompt: Help me build a Flutter template appointments page for a business management app that integrates Google Calendar scheduling
 library;
 
 import 'package:flutter/material.dart';

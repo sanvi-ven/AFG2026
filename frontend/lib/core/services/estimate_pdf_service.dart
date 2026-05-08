@@ -1,4 +1,4 @@
-/// made with help of chatgpt, prompt: help me create a Flutter service that generates branded estimate PDFs using the pdf package
+/// made with help of chatgpt 4.0, prompt: help me create a Flutter service that generates branded estimate PDFs using the pdf package
 library;
 
 import 'dart:convert';
