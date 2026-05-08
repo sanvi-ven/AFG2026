@@ -115,12 +115,30 @@ class ClientProfileService {
   /// Creates a brand-new client signup directly in Firestore, replicating the
   /// logic that was previously handled by the FastAPI backend POST endpoint.
   /// Returns the newly created [ClientProfile].
+  static Future<String?> fetchPasswordHash(String email) async {
+    final normalizedEmail = normalizeEmail(email);
+    final query = await _signupsCollection.where('email', isEqualTo: normalizedEmail).limit(1).get();
+    if (query.docs.isEmpty) return null;
+    return query.docs.first.data()['password_hash'] as String?;
+  }
+
+  static Future<void> updatePasswordHash({
+    required String email,
+    required String passwordHash,
+  }) async {
+    final normalizedEmail = normalizeEmail(email);
+    final query = await _signupsCollection.where('email', isEqualTo: normalizedEmail).limit(1).get();
+    if (query.docs.isEmpty) throw Exception('Client not found.');
+    await _signupsCollection.doc(query.docs.first.id).update({'password_hash': passwordHash});
+  }
+
   static Future<ClientProfile> createSignup({
     required String email,
     required String firstName,
     required String lastName,
     required String phoneNumber,
     required String address,
+    String? passwordHash,
   }) async {
     final normalizedEmail = normalizeEmail(email);
 
@@ -158,6 +176,7 @@ class ClientProfileService {
     await _signupsCollection.doc(newId).set({
       ...profile.toMap(),
       'created_at': FieldValue.serverTimestamp(),
+      if (passwordHash != null) 'password_hash': passwordHash,
     });
 
     return profile;

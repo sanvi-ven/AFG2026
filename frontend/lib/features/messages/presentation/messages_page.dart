@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/services/client_profile_service.dart';
-import '../../../core/services/local_notification_service.dart';
 import '../../../core/services/message_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../models/client_profile.dart';
@@ -31,11 +30,7 @@ class _MessagesPageState extends State<MessagesPage> {
   final _clientIdsController = TextEditingController();
 
   bool _isSending = false;
-  bool _notificationBootstrapDone = false;
   bool _isLoadingClientSuggestions = true;
-  String? _activeClientId;
-  Set<String> _knownMessageIds = <String>{};
-  StreamSubscription<List<MessageLog>>? _notificationSub;
   StreamSubscription<List<ClientProfile>>? _clientDirectorySub;
   Timer? _clientSuggestionDebounce;
   List<ClientProfile> _knownClients = const [];
@@ -76,7 +71,6 @@ class _MessagesPageState extends State<MessagesPage> {
     _titleController.dispose();
     _bodyController.dispose();
     _clientIdsController.dispose();
-    _notificationSub?.cancel();
     super.dispose();
   }
 
@@ -251,50 +245,10 @@ class _MessagesPageState extends State<MessagesPage> {
     }
   }
 
-  void _ensureClientNotificationListener(String? clientId) {
-    if (widget.role != 'client' ||
-        clientId == null ||
-        clientId.trim().isEmpty) {
-      return;
-    }
-    if (_activeClientId == clientId && _notificationSub != null) {
-      return;
-    }
-
-    _activeClientId = clientId;
-    _notificationBootstrapDone = false;
-    _knownMessageIds = <String>{};
-    _notificationSub?.cancel();
-
-    _notificationSub = MessageService.watchClientMessages(clientId: clientId)
-        .listen((messages) async {
-      if (!_notificationBootstrapDone) {
-        _knownMessageIds = messages.map((item) => item.id).toSet();
-        _notificationBootstrapDone = true;
-        return;
-      }
-
-      for (final message in messages) {
-        if (_knownMessageIds.contains(message.id)) {
-          continue;
-        }
-        _knownMessageIds.add(message.id);
-        if (!message.read) {
-          await LocalNotificationService.showMessageNotification(
-            id: message.id.hashCode,
-            title: message.title,
-            body: message.body,
-          );
-        }
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final profile = ClientSession.profile.value;
     final clientId = profile?.signupId;
-    _ensureClientNotificationListener(clientId);
 
     return AppScaffold(
       title: widget.role == 'owner' ? 'Broadcast Center' : 'Inbox',

@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/services/address_autocomplete_service.dart';
-import '../../../core/services/client_profile_service.dart';
+import '../../../core/services/client_auth_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../shared/widgets/app_logo.dart';
 
@@ -24,6 +24,8 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _isSubmitting = false;
   bool _isLoadingAddressSuggestions = false;
   String? _error;
@@ -58,6 +60,8 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
     _emailController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _addressDebounce?.cancel();
     super.dispose();
   }
@@ -106,12 +110,14 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
     });
 
     try {
-      final savedProfile = await ClientProfileService.createSignup(
+      final password = _passwordController.text;
+      final savedProfile = await ClientAuthService.signUp(
         email: _emailController.text.trim(),
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
         address: _addressController.text.trim(),
+        password: password,
       );
       ClientSession.setProfile(savedProfile);
 
@@ -208,6 +214,40 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
                     decoration: const InputDecoration(labelText: 'Phone', border: OutlineInputBorder()),
                     keyboardType: TextInputType.phone,
                     validator: (value) => (value == null || value.trim().isEmpty) ? 'Phone is required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _passwordController,
+                    decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+                    obscureText: true,
+                    validator: (value) {
+                      final input = value ?? '';
+                      if (input.isEmpty) {
+                        return 'Password is required';
+                      }
+                      if (input.length < 8) {
+                        return 'Password must be at least 8 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _confirmPasswordController,
+                    decoration: const InputDecoration(
+                      labelText: 'Confirm password',
+                      border: OutlineInputBorder(),
+                    ),
+                    obscureText: true,
+                    validator: (value) {
+                      if ((value ?? '').isEmpty) {
+                        return 'Confirm your password';
+                      }
+                      if (value != _passwordController.text) {
+                        return 'Passwords do not match';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 12),
                   TextFormField(

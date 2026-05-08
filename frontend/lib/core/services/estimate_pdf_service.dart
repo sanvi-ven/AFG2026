@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -29,7 +30,7 @@ class EstimatePdfService {
       ownerSettings = OwnerSettings.empty();
     }
 
-    final logoBytes = await _resolveLogoBytes(ownerSettings.logoUrl);
+    final logoBytes = await _resolveLogoBytes(ownerSettings.logoBase64, ownerSettings.logoUrl);
     final companyName = ownerSettings.companyName.trim().isEmpty
         ? 'Business Name'
         : ownerSettings.companyName.trim();
@@ -109,7 +110,16 @@ class EstimatePdfService {
     return pdf.save();
   }
 
-  static Future<Uint8List?> _resolveLogoBytes(String? logoUrl) async {
+  /// Priority: base64 from Firestore → URL (legacy Storage) → local asset fallback.
+  static Future<Uint8List?> _resolveLogoBytes(String? logoBase64, String? logoUrl) async {
+    if (logoBase64 != null && logoBase64.isNotEmpty) {
+      try {
+        return base64Decode(logoBase64);
+      } catch (_) {
+        // fall through
+      }
+    }
+
     final remoteUrl = logoUrl?.trim() ?? '';
     if (remoteUrl.isNotEmpty) {
       try {
@@ -118,7 +128,7 @@ class EstimatePdfService {
           return response.bodyBytes;
         }
       } catch (_) {
-        // Fall through to local fallback asset.
+        // fall through
       }
     }
 

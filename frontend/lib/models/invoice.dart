@@ -101,6 +101,7 @@ class InvoiceStatus {
   // Kept for backwards compatibility with legacy invoice documents.
   static const approved = 'approved';
   static const denied = 'denied';
+  static const changesRequested = 'changes_requested';
   static const paid = 'paid';
 
   static bool isSent(String status) {
