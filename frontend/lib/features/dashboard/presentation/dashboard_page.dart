@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/owner_settings_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../models/client_profile.dart';
+import '../../../models/owner_settings.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({required this.role, this.authToken, super.key});
@@ -16,6 +18,16 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  late final Future<OwnerSettings> _ownerSettingsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _ownerSettingsFuture = widget.role == 'owner'
+        ? OwnerSettingsService.fetch().catchError((_) => OwnerSettings.empty())
+        : Future.value(OwnerSettings.empty());
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -26,20 +38,34 @@ class _DashboardPageState extends State<DashboardPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          ValueListenableBuilder<ClientProfile?>(
-            valueListenable: ClientSession.profile,
-            builder: (context, profile, _) {
-              final welcomeName = widget.role == 'owner'
-                  ? 'Business Owner'
-                  : (profile?.greetingName.trim().isNotEmpty == true
-                      ? profile!.greetingName
-                      : 'Client');
-              return Text(
-                'Welcome $welcomeName',
-                style: Theme.of(context).textTheme.headlineSmall,
-              );
-            },
-          ),
+          if (widget.role == 'owner')
+            FutureBuilder<OwnerSettings>(
+              future: _ownerSettingsFuture,
+              builder: (context, snapshot) {
+                final companyName = snapshot.data?.companyName.trim();
+                final welcomeName = companyName != null && companyName.isNotEmpty
+                    ? companyName
+                    : 'Business Owner';
+
+                return Text(
+                  'Welcome, $welcomeName',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                );
+              },
+            )
+          else
+            ValueListenableBuilder<ClientProfile?>(
+              valueListenable: ClientSession.profile,
+              builder: (context, profile, _) {
+                final welcomeName = profile?.greetingName.trim().isNotEmpty == true
+                    ? profile!.greetingName
+                    : 'Client';
+                return Text(
+                  'Welcome, $welcomeName',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                );
+              },
+            ),
           const SizedBox(height: 12),
           _linkCard(
             context,
