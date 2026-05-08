@@ -1,3 +1,5 @@
+///made with the help of chatgpt, prompt: Help me build a Flutter template appointments page for a business management app that integrates Google Calendar scheduling
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -13,6 +15,7 @@ import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/google_calendar_booking_button.dart';
 import '../../../shared/widgets/google_calendar_widget.dart';
 
+/// page for managing appointments, scheduled work, and calendar bookings
 class AppointmentsPage extends StatefulWidget {
   const AppointmentsPage({required this.role, this.authToken, super.key});
 

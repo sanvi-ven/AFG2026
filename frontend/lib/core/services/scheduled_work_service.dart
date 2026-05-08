@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/invoice.dart';
 import '../../models/scheduled_work.dart';
 
+/// manages scheduled work orders from approved estimates
 class ScheduledWorkService {
   ScheduledWorkService._();
 
@@ -10,6 +11,7 @@ class ScheduledWorkService {
   static final CollectionReference<Map<String, dynamic>> _collection =
       _firestore.collection('scheduled_work');
 
+  /// listen to real-time scheduled work updates, filtered by role and clientId
   static Stream<List<ScheduledWork>> watchScheduledWork({
     required String role,
     String? clientId,
@@ -29,6 +31,7 @@ class ScheduledWorkService {
     });
   }
 
+  /// create a new scheduled work order from an estimate and return work id
   static Future<String> createScheduledWork({
     required String estimateId,
     required String estimateNumber,
@@ -57,6 +60,7 @@ class ScheduledWorkService {
     return doc.id;
   }
 
+  /// mark a scheduled work order as completed
   static Future<void> markCompleted({required String workId}) async {
     await _collection.doc(workId).set(
       {
@@ -67,6 +71,7 @@ class ScheduledWorkService {
     );
   }
 
+  /// mark scheduled work as invoiced and link to invoice id
   static Future<void> markInvoiced({
     required String workId,
     required String invoiceId,

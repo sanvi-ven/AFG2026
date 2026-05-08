@@ -8,6 +8,7 @@ import '../../dashboard/presentation/dashboard_page.dart';
 import 'login_page.dart';
 import '../data/auth_repository.dart';
 
+/// gate that checks firebase user state and loads owner role via backend
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 

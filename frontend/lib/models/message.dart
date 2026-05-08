@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// represents a message log from owner broadcast to client
 class MessageLog {
   const MessageLog({
     required this.id,
@@ -25,6 +26,7 @@ class MessageLog {
 
   bool get isUnread => !read;
 
+  /// create message log from firestore map
   factory MessageLog.fromMap(Map<String, dynamic> map) {
     DateTime readDate(dynamic value) {
       if (value is Timestamp) {
@@ -62,6 +64,7 @@ class MessageLog {
     );
   }
 
+  /// convert message to firestore map
   Map<String, dynamic> toMap() {
     return {
       'id': id,

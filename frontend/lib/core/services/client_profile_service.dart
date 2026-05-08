@@ -6,6 +6,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/client_profile.dart';
 
+/// manages client profile data in firestore
+/// provides methods for reading, searching, and updating client profiles
 class ClientProfileService {
   ClientProfileService._();
 
@@ -13,6 +15,7 @@ class ClientProfileService {
   static final CollectionReference<Map<String, dynamic>> _signupsCollection =
       _firestore.collection('client_signups');
 
+  /// convert email to lowercase and trim whitespace for consistent lookups
   static String normalizeEmail(String email) => email.trim().toLowerCase();
 
   static Stream<List<ClientProfile>> watchAllProfiles() {
@@ -26,6 +29,8 @@ class ClientProfileService {
     });
   }
 
+  /// search profiles by firstName, lastName, email, address, or signupId
+  /// excludes profiles in the excludeSignupIds set and limits results
   static List<ClientProfile> searchProfiles({
     required List<ClientProfile> profiles,
     required String query,
@@ -85,6 +90,7 @@ class ClientProfileService {
     return ClientProfile.fromMap(data).copyWith(signupId: normalizedId);
   }
 
+  /// search profiles by email with normalized lookup
   static Future<ClientProfile?> fetchByEmail(String email) async {
     final normalizedEmail = normalizeEmail(email);
     final query = await _signupsCollection.where('email', isEqualTo: normalizedEmail).limit(1).get();
@@ -96,6 +102,7 @@ class ClientProfileService {
     return ClientProfile.fromMap(doc.data()).copyWith(signupId: doc.id);
   }
 
+  /// save or update a client profile in firestore
   static Future<ClientProfile> save(ClientProfile profile) async {
     final normalizedId = profile.signupId.trim();
     if (normalizedId.isEmpty) {
@@ -112,9 +119,7 @@ class ClientProfileService {
     return saved ?? profile.copyWith(signupId: normalizedId, email: normalizedEmail);
   }
 
-  /// Creates a brand-new client signup directly in Firestore, replicating the
-  /// logic that was previously handled by the FastAPI backend POST endpoint.
-  /// Returns the newly created [ClientProfile].
+  /// fetch the password hash for a client email
   static Future<String?> fetchPasswordHash(String email) async {
     final normalizedEmail = normalizeEmail(email);
     final query = await _signupsCollection.where('email', isEqualTo: normalizedEmail).limit(1).get();
@@ -122,6 +127,7 @@ class ClientProfileService {
     return query.docs.first.data()['password_hash'] as String?;
   }
 
+  /// update the password hash for a client email
   static Future<void> updatePasswordHash({
     required String email,
     required String passwordHash,
@@ -132,6 +138,7 @@ class ClientProfileService {
     await _signupsCollection.doc(query.docs.first.id).update({'password_hash': passwordHash});
   }
 
+  /// create a new client signup with profile and password hash
   static Future<ClientProfile> createSignup({
     required String email,
     required String firstName,

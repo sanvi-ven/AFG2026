@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+/// button that opens external google calendar booking url
 class GoogleCalendarBookingButton extends StatelessWidget {
   const GoogleCalendarBookingButton({
     required this.scheduleUrl,

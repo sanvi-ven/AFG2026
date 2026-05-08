@@ -18,6 +18,7 @@ import '../../models/client_profile.dart';
 import '../../models/owner_settings.dart';
 import 'app_logo.dart';
 
+/// reusable app scaffold with navigation, sidebar, and header for business app
 class AppScaffold extends StatelessWidget {
   const AppScaffold({
     required this.title,

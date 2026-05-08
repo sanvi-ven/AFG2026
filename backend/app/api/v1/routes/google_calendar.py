@@ -13,10 +13,12 @@ from app.schemas.google_calendar import (
 from app.services.google_calendar_service import GoogleCalendarService
 
 router = APIRouter()
+"""google calendar availability and booking routes"""
 service = GoogleCalendarService()
 
-
+'''learned error handling: https://fastapi.tiangolo.com/tutorial/handling-errors/'''
 @router.get("/availability/slots", response_model=AvailabilitySlotsResponse)
+# get available time slots for booking
 def get_availability_slots(
     date_value: date = Query(alias="date"),
     start_hour: int = Query(default=8, ge=0, le=23),
@@ -62,6 +64,7 @@ def get_availability_slots(
     )
 
 
+# book a calendar event
 @router.post("/book", response_model=BookCalendarEventResponse)
 def book_calendar_event(
     payload: BookCalendarEventRequest,

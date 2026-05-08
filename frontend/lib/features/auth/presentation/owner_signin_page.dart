@@ -6,6 +6,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/session_persistence_service.dart';
 import '../../../shared/widgets/app_logo.dart';
 
+/// signin page for owner with static password
 class OwnerSigninPage extends StatefulWidget {
   const OwnerSigninPage({super.key});
 

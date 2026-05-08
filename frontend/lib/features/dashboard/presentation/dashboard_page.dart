@@ -7,6 +7,7 @@ import '../../../shared/widgets/app_scaffold.dart';
 import '../../../models/client_profile.dart';
 import '../../../models/owner_settings.dart';
 
+/// main dashboard page for authenticated users with role-based navigation
 class DashboardPage extends StatefulWidget {
   const DashboardPage({required this.role, this.authToken, super.key});
 
@@ -93,6 +94,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  /// build a clickable navigation card for dashboard links
   Widget _linkCard(
     BuildContext context, {
     required String title,

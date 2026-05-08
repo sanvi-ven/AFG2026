@@ -3,6 +3,7 @@
 import 'dart:typed_data';
 import 'dart:html' as html;
 
+/// download pdf bytes as browser blob on web platform
 Future<String?> downloadPdfBytesImpl({
   required Uint8List bytes,
   required String fileName,
@@ -24,7 +25,7 @@ Future<String?> downloadPdfBytesImpl({
   anchor.click();
   anchor.remove();
 
-  // Delay URL revocation so browsers have time to start the download.
+  // delay url take back so browsers have time to start the download.
   await Future<void>.delayed(const Duration(seconds: 1));
   html.Url.revokeObjectUrl(url);
   return null;

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/owner_settings.dart';
 
+/// manages owner company settings and branding stored in firestore
 class OwnerSettingsService {
   OwnerSettingsService._();
 
@@ -10,6 +11,7 @@ class OwnerSettingsService {
   static final CollectionReference<Map<String, dynamic>> _collection =
       _firestore.collection('owner_settings');
 
+  /// fetch the current owner settings from firestore
   static Future<OwnerSettings> fetch() async {
     final snapshot = await _collection.doc(_docId).get();
     final data = snapshot.data();
@@ -19,6 +21,7 @@ class OwnerSettingsService {
     return OwnerSettings.fromMap(data);
   }
 
+  /// save owner settings to firestore
   static Future<OwnerSettings> save(OwnerSettings settings) async {
     final payload = settings.toMap()
       ..addAll({'updated_at': FieldValue.serverTimestamp()});

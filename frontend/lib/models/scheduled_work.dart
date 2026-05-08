@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'invoice.dart';
 
+/// represents scheduled work orders from approved estimates
 class ScheduledWork {
   const ScheduledWork({
     required this.id,
@@ -29,16 +30,21 @@ class ScheduledWork {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  /// check if this work is scheduled
   bool get isScheduled => status == ScheduledWorkStatus.scheduled;
+  /// check if this work is completed
   bool get isCompleted => status == ScheduledWorkStatus.completed;
+  /// check if this work has been invoiced
   bool get isInvoiced => status == ScheduledWorkStatus.invoiced;
 
+  /// create scheduled work instance from firestore map data
   factory ScheduledWork.fromMap(Map<String, dynamic> map) {
     final serviceRows = (map['services'] as List<dynamic>? ?? const <dynamic>[])
         .whereType<Map<String, dynamic>>()
         .map(InvoiceServiceItem.fromMap)
         .toList();
 
+    // helper to parse date from timestamp or string
     DateTime readDate(dynamic value) {
       if (value is Timestamp) return value.toDate();
       if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
@@ -60,6 +66,7 @@ class ScheduledWork {
     );
   }
 
+  /// convert scheduled work instance to firestore map for storage
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -77,8 +84,12 @@ class ScheduledWork {
   }
 }
 
+/// status constants for scheduled work lifecycle
 class ScheduledWorkStatus {
+  /// initial status when work is scheduled
   static const scheduled = 'scheduled';
+  /// status when work is finished
   static const completed = 'completed';
+  /// status when completed work has been invoiced
   static const invoiced = 'invoiced';
 }

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/message.dart';
 
+/// manages client messages and owner broadcast communications
 class MessageService {
   MessageService._();
 
@@ -9,6 +10,7 @@ class MessageService {
   static final CollectionReference<Map<String, dynamic>> _collection =
       _firestore.collection('client_messages');
 
+  /// listen to real-time messages sent to a specific client
   static Stream<List<MessageLog>> watchClientMessages({required String clientId}) {
     return _collection.where('targetClientId', isEqualTo: clientId.trim()).snapshots().map((snapshot) {
       final messages = snapshot.docs.map((doc) {
@@ -20,6 +22,7 @@ class MessageService {
     });
   }
 
+  /// listen to owner broadcast summaries grouped and counted by broadcast id
   static Stream<List<OwnerBroadcastSummary>> watchOwnerBroadcasts() {
     return _collection.where('senderRole', isEqualTo: 'owner').snapshots().map((snapshot) {
       final grouped = <String, List<MessageLog>>{};
@@ -81,6 +84,7 @@ class MessageService {
     return normalized.length;
   }
 
+  /// mark a single message as read
   static Future<void> markAsRead({required String messageId}) async {
     await _collection.doc(messageId).set(
       {
@@ -91,6 +95,7 @@ class MessageService {
     );
   }
 
+  /// mark all unread messages for a client as read
   static Future<void> markAllAsRead({required String clientId}) async {
     final snapshot = await _collection
         .where('targetClientId', isEqualTo: clientId.trim())

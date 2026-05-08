@@ -1,6 +1,7 @@
 import '../../../core/services/api_client.dart';
 import '../../../models/app_user.dart';
 
+/// Repository for authentication operations against backend
 class AuthRepository {
   AuthRepository(this._apiClient);
 

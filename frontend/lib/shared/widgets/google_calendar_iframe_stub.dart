@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// stub implementation: show calendar url as text on non-web platforms
 Widget buildGoogleCalendarIFrame({
   required String src,
   required double height,

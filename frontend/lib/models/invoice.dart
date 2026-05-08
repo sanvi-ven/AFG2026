@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// represents an invoice with services items and payment status
 class Invoice {
   const Invoice({
     required this.id,
@@ -27,6 +28,7 @@ class Invoice {
   bool get isApproved => InvoiceStatus.isSent(status);
   bool get isDenied => status == InvoiceStatus.denied;
 
+  /// create invoice from firestore map data
   factory Invoice.fromMap(Map<String, dynamic> map) {
     final serviceRows = (map['services'] as List<dynamic>? ?? const <dynamic>[])
         .whereType<Map<String, dynamic>>()
@@ -80,6 +82,7 @@ class InvoiceServiceItem {
   final String name;
   final double price;
 
+  /// create service item from firestore map
   factory InvoiceServiceItem.fromMap(Map<String, dynamic> map) {
     return InvoiceServiceItem(
       name: (map['name'] as String? ?? '').trim(),

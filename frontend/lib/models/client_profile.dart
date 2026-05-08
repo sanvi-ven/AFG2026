@@ -1,3 +1,4 @@
+/// represents a client profile with contact info and preferences
 class ClientProfile {
   const ClientProfile({
     required this.signupId,
@@ -22,11 +23,13 @@ class ClientProfile {
     return email.split('@').first;
   }
 
+  /// get full name from first and last names
   String get fullName {
     final combined = '${firstName.trim()} ${lastName.trim()}'.trim();
     return combined.isEmpty ? greetingName : combined;
   }
 
+  /// create empty profile for new client signup
   factory ClientProfile.emptyForSignup({
     required String signupId,
     required String email,
@@ -42,7 +45,7 @@ class ClientProfile {
       address: '',
     );
   }
-
+/// map-https://medium.com/@emanyaqoob/map-in-dart-flutter-adf80a0299b5
   factory ClientProfile.fromMap(Map<String, dynamic> map) {
     final rawName = (map['name'] as String? ?? '').trim();
     final nameParts = rawName.split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
@@ -66,6 +69,7 @@ class ClientProfile {
     );
   }
 
+  /// convert profile to firestore map format
   Map<String, dynamic> toMap() {
     return {
       'id': signupId.trim(),
@@ -77,6 +81,7 @@ class ClientProfile {
     };
   }
 
+  /// create copy of profile with updated fields
   ClientProfile copyWith({
     String? signupId,
     String? email,

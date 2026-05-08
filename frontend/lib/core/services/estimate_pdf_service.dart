@@ -1,3 +1,5 @@
+/// made with help of chatgpt, prompt: help me create a Flutter service that generates branded estimate PDFs using the pdf package
+
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -12,9 +14,11 @@ import '../../models/owner_settings.dart';
 import 'owner_settings_service.dart';
 import 'pdf_download_service.dart';
 
+/// generates and downloads estimate pdfs with company branding and estimate details
 class EstimatePdfService {
   EstimatePdfService._();
 
+  /// generates estimate pdf and downloads it with a sanitized filename
   static Future<String?> generateAndDownloadEstimatePdf({required Estimate estimate}) async {
     final bytes = await buildEstimatePdf(estimate: estimate);
     final part = estimate.estimateNumber.trim().isEmpty ? estimate.id : estimate.estimateNumber.trim();
@@ -22,6 +26,7 @@ class EstimatePdfService {
     return downloadPdfBytes(bytes: bytes, fileName: fileName);
   }
 
+  /// builds complete pdf with company header, estimate info, services table, and total
   static Future<Uint8List> buildEstimatePdf({required Estimate estimate}) async {
     OwnerSettings ownerSettings;
     try {
@@ -110,7 +115,7 @@ class EstimatePdfService {
     return pdf.save();
   }
 
-  /// Priority: base64 from Firestore → URL (legacy Storage) → local asset fallback.
+  /// resolve logo bytes from base64, url, or local asset fallback
   static Future<Uint8List?> _resolveLogoBytes(String? logoBase64, String? logoUrl) async {
     if (logoBase64 != null && logoBase64.isNotEmpty) {
       try {
@@ -140,12 +145,14 @@ class EstimatePdfService {
     }
   }
 
+  /// capitalize first letter of status string
   static String _capitalizeStatus(String status) {
     final s = status.trim();
     if (s.isEmpty) return 'Pending';
     return '${s[0].toUpperCase()}${s.substring(1)}';
   }
-
+/// remove special characters from filename for safe file storage
+  
   static String _sanitizeFilePart(String value) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return 'document';

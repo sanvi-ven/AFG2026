@@ -10,6 +10,7 @@ import '../../../core/services/client_auth_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../shared/widgets/app_logo.dart';
 
+/// signup page for new client registration with address autocomplete
 class ClientSignupPage extends StatefulWidget {
   const ClientSignupPage({super.key});
 
@@ -67,6 +68,7 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
   }
 
   void _onAddressChanged(String value) {
+    // debounce address search and fetch suggestions
     _addressDebounce?.cancel();
 
     final query = value.trim();
@@ -91,6 +93,7 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
     });
   }
 
+  /// select an address suggestion and clear the suggestions list
   void _pickAddressSuggestion(String value) {
     _addressController.text = value;
     setState(() {
@@ -99,6 +102,7 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
     });
   }
 
+  /// submit the signup form with validation
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;

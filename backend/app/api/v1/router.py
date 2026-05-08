@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.routes import appointments, auth, google_calendar, invoices, messages, notifications, public, users
 
+'''aggregates all v1 api route routers with prefixes and tags'''
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(public.router, prefix="/public", tags=["public"])

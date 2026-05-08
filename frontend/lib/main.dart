@@ -5,6 +5,7 @@ import 'app.dart';
 import 'core/services/local_notification_service.dart';
 import 'firebase_options.dart';
 
+/// entry point that initializes firebase and starts the app
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(

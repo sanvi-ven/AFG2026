@@ -7,18 +7,21 @@ from app.schemas.user import UserRead
 from app.services.appointments_service import AppointmentsService
 
 router = APIRouter()
+"""appointment management routes for scheduling and calendar integration"""
 service = AppointmentsService()
 
 
 @router.get("", response_model=list[AppointmentRead])
+# list appointments filtered by business id
 def list_appointments(
     business_id: Optional[str] = Query(default=None),
     _: UserRead = Depends(get_current_user),
 ) -> list[AppointmentRead]:
     return service.list_appointments(business_id=business_id)
 
-
+'''learned through: https://fastapi.tiangolo.com/tutorial/dependencies/#create-a-dependency-or-dependable'''
 @router.post("", response_model=AppointmentRead)
+# create a new appointment
 def create_appointment(
     payload: AppointmentCreate,
     _: UserRead = Depends(get_current_user),
@@ -27,6 +30,7 @@ def create_appointment(
 
 
 @router.patch("/{appointment_id}", response_model=AppointmentRead)
+# update an existing appointment
 def update_appointment(
     appointment_id: str,
     payload: AppointmentUpdate,
@@ -36,6 +40,7 @@ def update_appointment(
 
 
 @router.post("/{appointment_id}/sync-calendar")
+# sync appointment to google calendar
 def sync_calendar(
     appointment_id: str,
     _: UserRead = Depends(require_owner),

@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """application settings and configuration from environment"""
     app_name: str = "Anchor API"
     api_v1_prefix: str = "/api/v1"
     firebase_project_id: str = "afg2026a"

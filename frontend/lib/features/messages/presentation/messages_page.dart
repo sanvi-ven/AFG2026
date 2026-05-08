@@ -14,6 +14,7 @@ import '../../../models/client_profile.dart';
 import '../../../models/message.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
+/// page for owner to broadcast messages and clients to view received messages
 class MessagesPage extends StatefulWidget {
   const MessagesPage({required this.role, this.authToken, super.key});
 

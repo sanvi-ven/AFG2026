@@ -7,10 +7,12 @@ from app.schemas.user import UserRead
 from app.services.messages_service import MessagesService
 
 router = APIRouter()
+"""message management routes for owner and client communication"""
 service = MessagesService()
 
 
 @router.get("", response_model=list[MessageRead])
+# list messages filtered by business id
 def list_messages(
     business_id: Optional[str] = Query(default=None),
     _: UserRead = Depends(get_current_user),
@@ -19,5 +21,6 @@ def list_messages(
 
 
 @router.post("", response_model=MessageRead)
+# create a new message
 def create_message(payload: MessageCreate, _: UserRead = Depends(get_current_user)) -> MessageRead:
     return service.create_message(payload)

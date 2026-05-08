@@ -6,6 +6,7 @@ from app.core.config import settings
 
 
 def create_application() -> FastAPI:
+    """create the fastapi app with cors middleware and routes"""
     app = FastAPI(title=settings.app_name)
     app.add_middleware(
         CORSMiddleware,
