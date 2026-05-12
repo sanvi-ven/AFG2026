@@ -1,4 +1,5 @@
 /// made with help of chatgpt 4.0, prompt: help me create a Flutter service that manages google calendar events using the calendar api with oauth authentication
+library;
 
 import 'package:http/http.dart' as http;
 import 'dart:convert';

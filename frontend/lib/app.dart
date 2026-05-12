@@ -1,4 +1,5 @@
 /// made withe the help of chatgpt 4.0, prompt: Help me structure the main Flutter app for a business management platform with routing, theme setup
+library;
 
 import 'dart:async';
 
