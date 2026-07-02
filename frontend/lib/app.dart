@@ -11,6 +11,7 @@ import 'core/services/local_notification_service.dart';
 import 'core/services/message_service.dart';
 import 'core/services/session_persistence_service.dart';
 import 'core/state/client_session.dart';
+import 'core/state/employee_session.dart';
 import 'core/theme/app_theme.dart';
 import 'models/message.dart';
 import 'features/auth/presentation/login_page.dart';
@@ -24,10 +25,14 @@ class AnchorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     // check if demo mode is enabled to skip auth for development
     final demoRole = AppConfig.demoRole.trim();
-    final useDemoRole = demoRole == 'owner' || demoRole == 'client';
+    final useDemoRole = demoRole == 'owner' || demoRole == 'client' || demoRole == 'employee';
     final demoToken = AppConfig.demoAuthToken.trim().isNotEmpty
         ? AppConfig.demoAuthToken.trim()
-        : (demoRole == 'owner' ? 'dev-owner' : 'dev-client');
+        : (demoRole == 'owner'
+            ? 'dev-owner'
+            : demoRole == 'employee'
+                ? 'dev-employee'
+                : 'dev-client');
 
     return MaterialApp(
       title: 'Anchor',
@@ -167,6 +172,9 @@ class _SessionGateState extends State<_SessionGate> {
     if (session?.role == 'client' && session?.profile != null) {
       ClientSession.setProfile(session!.profile!);
     }
+    if (session?.role == 'employee' && session?.employeeProfile != null) {
+      EmployeeSession.setProfile(session!.employeeProfile!);
+    }
     // update ui once session loading completes
     if (mounted) {
       setState(() {
@@ -187,7 +195,11 @@ class _SessionGateState extends State<_SessionGate> {
     if (session != null) {
       return DashboardPage(
         role: session.role,
-        authToken: session.role == 'owner' ? 'dev-owner' : 'dev-client',
+        authToken: session.role == 'owner'
+            ? 'dev-owner'
+            : session.role == 'employee'
+                ? 'dev-employee'
+                : 'dev-client',
       );
     }
     return const LoginPage();

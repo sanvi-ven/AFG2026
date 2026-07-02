@@ -29,7 +29,11 @@ def google_sign_in(payload: GoogleAuthRequest) -> UserRead:
         ) from exc
 
     if settings.dev_auth_bypass and payload.id_token.startswith("dev-"):
-        role = UserRole.OWNER if payload.id_token == "dev-owner" else UserRole.CLIENT
+        role = (
+            UserRole.OWNER if payload.id_token == "dev-owner"
+            else UserRole.EMPLOYEE if payload.id_token == "dev-employee"
+            else UserRole.CLIENT
+        )
         firebase_uid = payload.id_token
         email = f"{firebase_uid}@example.com"
         existing_dev_user = users_service.get_by_firebase_uid(firebase_uid)

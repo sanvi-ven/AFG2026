@@ -7,13 +7,15 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/client_profile.dart';
+import '../../models/employee_profile.dart';
 
 /// represents a restored user session with role and optional profile data
 class RestoredSession {
-  const RestoredSession({required this.role, this.profile});
+  const RestoredSession({required this.role, this.profile, this.employeeProfile});
 
   final String role;
   final ClientProfile? profile;
+  final EmployeeProfile? employeeProfile;
 }
 
 /// manages session persistence to local storage with role and profile info
@@ -23,6 +25,7 @@ class SessionPersistenceService {
   static const _keyRole = 'session_role';
   static const _keyLoggedInAt = 'session_logged_in_at';
   static const _keyClientProfile = 'session_client_profile';
+  static const _keyEmployeeProfile = 'session_employee_profile';
   // 3 days in milliseconds
   static const _webExpiryMs = 3 * 24 * 60 * 60 * 1000;
 
@@ -32,6 +35,16 @@ class SessionPersistenceService {
     await prefs.setString(_keyRole, 'client');
     await prefs.setInt(_keyLoggedInAt, DateTime.now().millisecondsSinceEpoch);
     await prefs.setString(_keyClientProfile, jsonEncode(profile.toMap()));
+    await prefs.remove(_keyEmployeeProfile);
+  }
+
+  /// save an employee session to local storage with profile and timestamp
+  static Future<void> saveEmployeeSession(EmployeeProfile profile) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyRole, 'employee');
+    await prefs.setInt(_keyLoggedInAt, DateTime.now().millisecondsSinceEpoch);
+    await prefs.setString(_keyEmployeeProfile, jsonEncode(profile.toMap()));
+    await prefs.remove(_keyClientProfile);
   }
 
   /// save an owner session to local storage with timestamp
@@ -40,6 +53,7 @@ class SessionPersistenceService {
     await prefs.setString(_keyRole, 'owner');
     await prefs.setInt(_keyLoggedInAt, DateTime.now().millisecondsSinceEpoch);
     await prefs.remove(_keyClientProfile);
+    await prefs.remove(_keyEmployeeProfile);
   }
 
   /// load a stored session from local storage, checking expiry on web
@@ -68,6 +82,15 @@ class SessionPersistenceService {
         return RestoredSession(role: 'client', profile: profile);
       }
 
+      if (role == 'employee') {
+        final profileJson = prefs.getString(_keyEmployeeProfile);
+        if (profileJson == null || profileJson.isEmpty) return null;
+        final profileMap = jsonDecode(profileJson) as Map<String, dynamic>;
+        final employeeProfile = EmployeeProfile.fromMap(profileMap);
+        if (employeeProfile.employeeId.isEmpty) return null;
+        return RestoredSession(role: 'employee', employeeProfile: employeeProfile);
+      }
+
       if (role == 'owner') {
         return const RestoredSession(role: 'owner');
       }
@@ -85,6 +108,7 @@ class SessionPersistenceService {
       prefs.remove(_keyRole),
       prefs.remove(_keyLoggedInAt),
       prefs.remove(_keyClientProfile),
+      prefs.remove(_keyEmployeeProfile),
     ]);
   }
 }

@@ -9,9 +9,11 @@ import '../../../core/services/estimate_pdf_service.dart';
 import '../../../core/services/estimate_service.dart';
 import '../../../core/services/invoice_service.dart';
 import '../../../core/services/scheduled_work_service.dart';
+import '../../../core/services/team_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../models/invoice.dart';
 import '../../../models/scheduled_work.dart';
+import '../../../models/team.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/google_calendar_booking_button.dart';
 import '../../../shared/widgets/google_calendar_widget.dart';
@@ -161,57 +163,65 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
               ),
             )
           else
-            StreamBuilder<List<ScheduledWork>>(
-              stream: ScheduledWorkService.watchScheduledWork(
-                role: widget.role,
-                clientId: clientId,
-              ),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text('Failed to load scheduled work: ${snapshot.error}'),
-                    ),
-                  );
-                }
+            StreamBuilder<List<Team>>(
+              stream: widget.role == 'owner' ? TeamService.watchAllTeams() : const Stream.empty(),
+              builder: (context, teamsSnapshot) {
+                final teams = teamsSnapshot.data ?? const <Team>[];
 
-                final items = snapshot.data ?? const <ScheduledWork>[];
-                if (items.isEmpty) {
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        widget.role == 'owner'
-                            ? 'No work scheduled yet. Approve an estimate and click "Schedule Work" to get started.'
-                            : 'No upcoming work scheduled for you yet.',
-                      ),
-                    ),
-                  );
-                }
-
-                return Column(
-                  children: [
-                    for (final item in items)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _ScheduledWorkCard(
-                          work: item,
-                          role: widget.role,
-                          isCompleting: _completingWorkId == item.id,
-                          isConverting: _convertingWorkId == item.id,
-                          isDownloadingPdf: _downloadingEstimatePdfWorkId == item.id,
-                          isMarkingPaid: _markingPaidWorkId == item.id,
-                          onMarkComplete: () => _markComplete(item),
-                          onConvertToInvoice: () => _convertToInvoice(item),
-                          onDownloadEstimatePdf: () => _downloadEstimatePdf(item),
-                          onMarkPaid: () => _markInvoicePaid(item),
+                return StreamBuilder<List<ScheduledWork>>(
+                  stream: ScheduledWorkService.watchScheduledWork(
+                    role: widget.role,
+                    clientId: clientId,
+                  ),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text('Failed to load scheduled work: ${snapshot.error}'),
                         ),
-                      ),
-                  ],
+                      );
+                    }
+
+                    final items = snapshot.data ?? const <ScheduledWork>[];
+                    if (items.isEmpty) {
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            widget.role == 'owner'
+                                ? 'No work scheduled yet. Approve an estimate and click "Schedule Work" to get started.'
+                                : 'No upcoming work scheduled for you yet.',
+                          ),
+                        ),
+                      );
+                    }
+
+                    return Column(
+                      children: [
+                        for (final item in items)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _ScheduledWorkCard(
+                              work: item,
+                              role: widget.role,
+                              teams: teams,
+                              isCompleting: _completingWorkId == item.id,
+                              isConverting: _convertingWorkId == item.id,
+                              isDownloadingPdf: _downloadingEstimatePdfWorkId == item.id,
+                              isMarkingPaid: _markingPaidWorkId == item.id,
+                              onMarkComplete: () => _markComplete(item),
+                              onConvertToInvoice: () => _convertToInvoice(item),
+                              onDownloadEstimatePdf: () => _downloadEstimatePdf(item),
+                              onMarkPaid: () => _markInvoicePaid(item),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 );
               },
             ),
@@ -250,6 +260,7 @@ class _ScheduledWorkCard extends StatefulWidget {
   const _ScheduledWorkCard({
     required this.work,
     required this.role,
+    required this.teams,
     required this.isCompleting,
     required this.isConverting,
     required this.isDownloadingPdf,
@@ -262,6 +273,7 @@ class _ScheduledWorkCard extends StatefulWidget {
 
   final ScheduledWork work;
   final String role;
+  final List<Team> teams;
   final bool isCompleting;
   final bool isConverting;
   final bool isDownloadingPdf;
@@ -373,6 +385,16 @@ class _ScheduledWorkCardState extends State<_ScheduledWorkCard> {
             if (widget.role == 'owner') ...[
               const SizedBox(height: 4),
               Text('Client ID: ${work.clientId}'),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: work.teamId,
+                decoration: const InputDecoration(labelText: 'Assigned team', border: OutlineInputBorder()),
+                items: [
+                  const DropdownMenuItem<String>(value: null, child: Text('Unassigned')),
+                  for (final team in widget.teams) DropdownMenuItem<String>(value: team.id, child: Text(team.name)),
+                ],
+                onChanged: (value) => ScheduledWorkService.assignTeam(workId: work.id, teamId: value),
+              ),
             ],
             const SizedBox(height: 10),
             Text('Services', style: Theme.of(context).textTheme.titleSmall),

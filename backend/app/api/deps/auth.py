@@ -40,7 +40,11 @@ def get_current_user(
         ) from exc
 
     if settings.dev_auth_bypass and token.startswith("dev-"):
-        role = UserRole.OWNER if token == "dev-owner" else UserRole.CLIENT
+        role = (
+            UserRole.OWNER if token == "dev-owner"
+            else UserRole.EMPLOYEE if token == "dev-employee"
+            else UserRole.CLIENT
+        )
         existing_dev_user = users_service.get_by_firebase_uid(token)
         if existing_dev_user:
             return existing_dev_user

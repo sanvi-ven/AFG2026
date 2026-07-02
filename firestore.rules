@@ -11,6 +11,38 @@ service cloud.firestore {
       allow read: if request.auth == null;
     }
     
+    // Employee accounts, gated the same way client_signups is: no real
+    // Firebase Auth session exists in this app today (see owner/client login
+    // flows), so this mirrors the client_signups trust model rather than
+    // pretending to check a role that can't actually be verified here.
+    match /employee_signups/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Invite codes must be readable pre-"login" so employee signup can
+    // validate a code before an account exists.
+    match /invite_codes/{document=**} {
+      allow read, write: if true;
+    }
+
+    match /teams/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Jobs (scheduled work orders). Previously had no rule at all here,
+    // which fell through to default-deny for every role, owner included.
+    match /scheduled_work/{document=**} {
+      allow read, write: if true;
+    }
+
+    match /time_entries/{document=**} {
+      allow read, write: if true;
+    }
+
+    match /job_completion_forms/{document=**} {
+      allow read, write: if true;
+    }
+
     // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;

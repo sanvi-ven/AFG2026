@@ -350,6 +350,10 @@ class _EstimatesPageState extends State<EstimatesPage> {
 
     setState(() => _schedulingEstimateId = estimate.id);
     try {
+      // Denormalize the client's address/phone onto the job record so employee
+      // screens never need read access to the client_signups collection.
+      final client = await ClientProfileService.fetchBySignupId(estimate.clientId);
+
       final workId = await ScheduledWorkService.createScheduledWork(
         estimateId: estimate.id,
         estimateNumber: estimate.estimateNumber,
@@ -357,6 +361,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
         services: estimate.services,
         total: estimate.total,
         scheduledDate: scheduledDateTime,
+        address: client?.address ?? '',
+        phoneNumber: client?.phoneNumber ?? '',
       );
       await EstimateService.markScheduled(estimateId: estimate.id, scheduledWorkId: workId);
       if (!mounted) return;

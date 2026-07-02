@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/owner_settings_service.dart';
 import '../../../core/state/client_session.dart';
+import '../../../core/state/employee_session.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../models/client_profile.dart';
@@ -54,6 +55,19 @@ class _DashboardPageState extends State<DashboardPage> {
                 );
               },
             )
+          else if (widget.role == 'employee')
+            ValueListenableBuilder(
+              valueListenable: EmployeeSession.profile,
+              builder: (context, profile, _) {
+                final welcomeName = profile?.greetingName.trim().isNotEmpty == true
+                    ? profile!.greetingName
+                    : 'there';
+                return Text(
+                  'Welcome, $welcomeName',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                );
+              },
+            )
           else
             ValueListenableBuilder<ClientProfile?>(
               valueListenable: ClientSession.profile,
@@ -68,27 +82,42 @@ class _DashboardPageState extends State<DashboardPage> {
               },
             ),
           const SizedBox(height: 12),
-          _linkCard(
-            context,
-            title:
-                widget.role == 'client' ? 'Book Appointment' : 'Appointments',
-            subtitle: widget.role == 'client'
-                ? 'Pick an available slot from the bookings calendar'
-                : 'View and manage upcoming bookings',
-            route: AppRouter.appointments,
-          ),
-          _linkCard(context,
-              title: 'Unpaid Invoices',
-              subtitle: 'Pending and overdue invoice balances',
-              route: AppRouter.invoices),
-          _linkCard(context,
-              title: 'Estimates',
-              subtitle: 'Review requests and quotes',
-              route: AppRouter.estimates),
-          _linkCard(context,
-              title: 'Announcements',
-              subtitle: 'Latest updates from the business owner',
-              route: AppRouter.messages),
+          if (widget.role == 'employee') ...[
+            _linkCard(
+              context,
+              title: 'My Jobs',
+              subtitle: "See today's and upcoming jobs for your team",
+              route: AppRouter.myJobs,
+            ),
+            _linkCard(
+              context,
+              title: 'My Hours',
+              subtitle: 'Clock in/out and view your shift history',
+              route: AppRouter.myHours,
+            ),
+          ] else ...[
+            _linkCard(
+              context,
+              title:
+                  widget.role == 'client' ? 'Book Appointment' : 'Appointments',
+              subtitle: widget.role == 'client'
+                  ? 'Pick an available slot from the bookings calendar'
+                  : 'View and manage upcoming bookings',
+              route: AppRouter.appointments,
+            ),
+            _linkCard(context,
+                title: 'Unpaid Invoices',
+                subtitle: 'Pending and overdue invoice balances',
+                route: AppRouter.invoices),
+            _linkCard(context,
+                title: 'Estimates',
+                subtitle: 'Review requests and quotes',
+                route: AppRouter.estimates),
+            _linkCard(context,
+                title: 'Announcements',
+                subtitle: 'Latest updates from the business owner',
+                route: AppRouter.messages),
+          ],
         ],
       ),
     );

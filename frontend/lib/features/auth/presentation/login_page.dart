@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/services/client_auth_service.dart';
+import '../../../core/services/employee_auth_service.dart';
 import '../../../core/services/session_persistence_service.dart';
 import '../../../core/state/client_session.dart';
+import '../../../core/state/employee_session.dart';
 import '../../../shared/widgets/app_logo.dart';
 
 /// login page for client email/password authentication
@@ -22,6 +24,7 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   bool _isSubmitting = false;
   String? _error;
+  String _selectedRole = 'client';
 
   @override
   void dispose() {
@@ -31,14 +34,17 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _goToSignup() {
-    Navigator.pushNamed(context, AppRouter.clientSignup);
+    Navigator.pushNamed(
+      context,
+      _selectedRole == 'employee' ? AppRouter.employeeSignup : AppRouter.clientSignup,
+    );
   }
 
   void _goToOwnerSignin() {
     Navigator.pushNamed(context, AppRouter.ownerSignin);
   }
 
-  Future<void> _loginClient() async {
+  Future<void> _login() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -49,6 +55,23 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
+      if (_selectedRole == 'employee') {
+        final profile = await EmployeeAuthService.login(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+        EmployeeSession.setProfile(profile);
+        await SessionPersistenceService.saveEmployeeSession(profile);
+
+        if (!mounted) return;
+        Navigator.pushReplacementNamed(
+          context,
+          AppRouter.dashboard,
+          arguments: {'role': 'employee', 'authToken': 'dev-employee'},
+        );
+        return;
+      }
+
       final profile = await ClientAuthService.login(
         email: _emailController.text.trim(),
         password: _passwordController.text,
@@ -103,7 +126,18 @@ class _LoginPageState extends State<LoginPage> {
                     'Enter your email and password to continue.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'client', label: Text('Client')),
+                      ButtonSegment(value: 'employee', label: Text('Employee')),
+                    ],
+                    selected: {_selectedRole},
+                    onSelectionChanged: (selection) {
+                      setState(() => _selectedRole = selection.first);
+                    },
+                  ),
+                  const SizedBox(height: 16),
                   Form(
                     key: _formKey,
                     child: Column(
@@ -140,14 +174,14 @@ class _LoginPageState extends State<LoginPage> {
                             }
                             return null;
                           },
-                          onFieldSubmitted: (_) => _isSubmitting ? null : _loginClient(),
+                          onFieldSubmitted: (_) => _isSubmitting ? null : _login(),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 12),
                   FilledButton(
-                    onPressed: _isSubmitting ? null : _loginClient,
+                    onPressed: _isSubmitting ? null : _login,
                     child: _isSubmitting
                         ? const SizedBox(
                             width: 18,
@@ -159,7 +193,7 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 12),
                   OutlinedButton(
                     onPressed: _goToSignup,
-                    child: const Text('Create Client Profile'),
+                    child: Text(_selectedRole == 'employee' ? 'Create Employee Profile' : 'Create Client Profile'),
                   ),
                   const SizedBox(height: 8),
                   TextButton(

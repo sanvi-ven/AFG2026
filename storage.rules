@@ -1,0 +1,15 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Job completion photos. Same trust model as firestore.rules: this app
+    // has no real Firebase Auth session for owner/client/employee today, so
+    // this is permissive by necessity rather than checking an unverifiable role.
+    match /job_photos/{workId}/{phase}/{fileName} {
+      allow read, write: if true;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

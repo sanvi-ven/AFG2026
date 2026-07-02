@@ -11,21 +11,32 @@ class ScheduledWorkService {
   static final CollectionReference<Map<String, dynamic>> _collection =
       _firestore.collection('scheduled_work');
 
-  /// listen to real-time scheduled work updates, filtered by role and clientId
+  /// listen to real-time scheduled work updates, filtered by role and clientId/teamId
   static Stream<List<ScheduledWork>> watchScheduledWork({
     required String role,
     String? clientId,
+    String? teamId,
   }) {
     Query<Map<String, dynamic>> query = _collection;
     if (role == 'client' && clientId != null && clientId.trim().isNotEmpty) {
       query = query.where('clientId', isEqualTo: clientId.trim());
     }
+    if (role == 'employee' && teamId != null && teamId.trim().isNotEmpty) {
+      query = query.where('teamId', isEqualTo: teamId.trim());
+    }
 
     return query.snapshots().map((snapshot) {
-      final items = snapshot.docs.map((doc) {
+      var items = snapshot.docs.map((doc) {
         final data = doc.data();
         return ScheduledWork.fromMap({...data, 'id': doc.id});
       }).toList();
+
+      if (role == 'employee') {
+        final now = DateTime.now();
+        final startOfToday = DateTime(now.year, now.month, now.day);
+        items = items.where((item) => !item.scheduledDate.isBefore(startOfToday)).toList();
+      }
+
       items.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
       return items;
     });
@@ -39,6 +50,9 @@ class ScheduledWorkService {
     required List<InvoiceServiceItem> services,
     required double total,
     required DateTime scheduledDate,
+    String? teamId,
+    String address = '',
+    String phoneNumber = '',
   }) async {
     final now = DateTime.now();
     final doc = _collection.doc();
@@ -52,12 +66,26 @@ class ScheduledWorkService {
       total: total,
       scheduledDate: scheduledDate,
       status: ScheduledWorkStatus.scheduled,
+      teamId: teamId,
+      address: address,
+      phoneNumber: phoneNumber,
       createdAt: now,
       updatedAt: now,
     );
 
     await doc.set(work.toMap());
     return doc.id;
+  }
+
+  /// owner action: assign (or clear) the crew responsible for a job
+  static Future<void> assignTeam({required String workId, String? teamId}) async {
+    await _collection.doc(workId).set(
+      {
+        'teamId': teamId,
+        'updatedAt': DateTime.now(),
+      },
+      SetOptions(merge: true),
+    );
   }
 
   /// mark a scheduled work order as completed

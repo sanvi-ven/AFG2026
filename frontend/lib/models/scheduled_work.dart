@@ -14,6 +14,9 @@ class ScheduledWork {
     required this.scheduledDate,
     required this.status,
     this.invoiceId,
+    this.teamId,
+    this.address = '',
+    this.phoneNumber = '',
     required this.createdAt,
     required this.updatedAt,
   });
@@ -27,6 +30,13 @@ class ScheduledWork {
   final DateTime scheduledDate;
   final String status;
   final String? invoiceId;
+  /// crew assigned to work this job; null means unassigned
+  final String? teamId;
+  /// job-site address, denormalized from the client's profile at creation time
+  /// so employee screens never need to read the client_signups collection
+  final String address;
+  /// job-site contact number, denormalized for the same reason as [address]
+  final String phoneNumber;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -61,6 +71,9 @@ class ScheduledWork {
       scheduledDate: readDate(map['scheduledDate']),
       status: (map['status'] as String? ?? ScheduledWorkStatus.scheduled).trim(),
       invoiceId: (map['invoiceId'] as String?)?.trim(),
+      teamId: (map['teamId'] as String?)?.trim().isEmpty ?? true ? null : (map['teamId'] as String).trim(),
+      address: (map['address'] as String? ?? '').trim(),
+      phoneNumber: (map['phoneNumber'] as String? ?? '').trim(),
       createdAt: readDate(map['createdAt']),
       updatedAt: readDate(map['updatedAt']),
     );
@@ -78,6 +91,9 @@ class ScheduledWork {
       'scheduledDate': scheduledDate,
       'status': status,
       'invoiceId': invoiceId,
+      'teamId': teamId,
+      'address': address,
+      'phoneNumber': phoneNumber,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
     };

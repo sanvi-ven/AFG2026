@@ -11,10 +11,14 @@ import '../../core/router/app_router.dart';
 import '../../core/services/address_autocomplete_service.dart';
 import '../../core/services/client_auth_service.dart';
 import '../../core/services/client_profile_service.dart';
+import '../../core/services/employee_auth_service.dart';
+import '../../core/services/employee_profile_service.dart';
 import '../../core/services/owner_settings_service.dart';
 import '../../core/services/session_persistence_service.dart';
 import '../../core/state/client_session.dart';
+import '../../core/state/employee_session.dart';
 import '../../models/client_profile.dart';
+import '../../models/employee_profile.dart';
 import '../../models/owner_settings.dart';
 import 'app_logo.dart';
 
@@ -56,7 +60,8 @@ class AppScaffold extends StatelessWidget {
         final isWide = constraints.maxWidth >= 900;
         final showClientSettings = role == 'client';
         final showOwnerSettings = role == 'owner';
-        final showSettings = showClientSettings || showOwnerSettings;
+        final showEmployeeSettings = role == 'employee';
+        final showSettings = showClientSettings || showOwnerSettings || showEmployeeSettings;
 
         if (isWide) {
           return Scaffold(
@@ -107,7 +112,14 @@ class AppScaffold extends StatelessWidget {
                                     return Text(profile?.email ?? 'Update your profile');
                                   },
                                 )
-                              : const Text('Update business details'),
+                              : showEmployeeSettings
+                                  ? ValueListenableBuilder<EmployeeProfile?>(
+                                      valueListenable: EmployeeSession.profile,
+                                      builder: (context, profile, _) {
+                                        return Text(profile?.email ?? 'Update your profile');
+                                      },
+                                    )
+                                  : const Text('Update business details'),
                           onTap: () => _openSettingsDialog(context),
                         ),
                       ],
@@ -177,8 +189,33 @@ class AppScaffold extends StatelessWidget {
       await _openOwnerSettingsDialog(context);
       return;
     }
+    if (role == 'employee') {
+      await _openEmployeeSettingsDialog(context);
+      return;
+    }
 
     await _openClientSettingsDialog(context);
+  }
+
+  Future<void> _openEmployeeSettingsDialog(BuildContext context) async {
+    final currentProfile = EmployeeSession.profile.value;
+    if (currentProfile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Log in before editing settings.')),
+      );
+      return;
+    }
+
+    final saved = await showDialog<EmployeeProfile>(
+      context: context,
+      builder: (_) => _EmployeeSettingsDialog(initialProfile: currentProfile),
+    );
+
+    if (saved != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated.')),
+      );
+    }
   }
 
   Future<void> _openClientSettingsDialog(BuildContext context) async {
@@ -228,6 +265,14 @@ class AppScaffold extends StatelessWidget {
   }
 
   List<_NavItem> _navItems(String role) {
+    if (role == 'employee') {
+      return const <_NavItem>[
+        _NavItem(label: 'Anchor', route: AppRouter.dashboard, icon: Icons.dashboard),
+        _NavItem(label: 'My Jobs', route: AppRouter.myJobs, icon: Icons.work_outline),
+        _NavItem(label: 'My Hours', route: AppRouter.myHours, icon: Icons.access_time),
+      ];
+    }
+
     final common = <_NavItem>[
       const _NavItem(label: 'Anchor', route: AppRouter.dashboard, icon: Icons.dashboard),
       const _NavItem(label: 'Appointments', route: AppRouter.appointments, icon: Icons.calendar_month),
@@ -237,7 +282,10 @@ class AppScaffold extends StatelessWidget {
     ];
 
     if (role == 'owner') {
-      return common;
+      return [
+        ...common,
+        const _NavItem(label: 'Team', route: AppRouter.teamAdmin, icon: Icons.groups_outlined),
+      ];
     }
 
     return common;
@@ -555,6 +603,234 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
                   controller: _confirmNewPasswordController,
                   obscureText: true,
                   decoration: const InputDecoration(labelText: 'Confirm new password'),
+                  validator: (value) {
+                    final hasAnyPasswordInput = _oldPasswordController.text.isNotEmpty ||
+                        _newPasswordController.text.isNotEmpty ||
+                        _confirmNewPasswordController.text.isNotEmpty;
+                    if (!hasAnyPasswordInput) {
+                      return null;
+                    }
+                    if ((value ?? '').isEmpty) {
+                      return 'Confirm your new password';
+                    }
+                    if (value != _newPasswordController.text) {
+                      return 'New passwords do not match';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving ? null : () => _confirmLogout(context),
+                    icon: const Icon(Icons.logout, size: 18),
+                    label: const Text('Log out'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isSaving ? null : _save,
+          child: _isSaving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+class _EmployeeSettingsDialog extends StatefulWidget {
+  const _EmployeeSettingsDialog({required this.initialProfile});
+
+  final EmployeeProfile initialProfile;
+
+  @override
+  State<_EmployeeSettingsDialog> createState() => _EmployeeSettingsDialogState();
+}
+
+class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _firstNameController;
+  late final TextEditingController _lastNameController;
+  late final TextEditingController _phoneNumberController;
+  final TextEditingController _oldPasswordController = TextEditingController();
+  final TextEditingController _newPasswordController = TextEditingController();
+  final TextEditingController _confirmNewPasswordController = TextEditingController();
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _firstNameController = TextEditingController(text: widget.initialProfile.firstName);
+    _lastNameController = TextEditingController(text: widget.initialProfile.lastName);
+    _phoneNumberController = TextEditingController(text: widget.initialProfile.phoneNumber);
+  }
+
+  @override
+  void dispose() {
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _phoneNumberController.dispose();
+    _oldPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmNewPasswordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final shouldChangePassword = _oldPasswordController.text.isNotEmpty ||
+          _newPasswordController.text.isNotEmpty ||
+          _confirmNewPasswordController.text.isNotEmpty;
+
+      if (shouldChangePassword) {
+        await EmployeeAuthService.changePassword(
+          email: widget.initialProfile.email,
+          oldPassword: _oldPasswordController.text,
+          newPassword: _newPasswordController.text,
+        );
+      }
+
+      final nextProfile = widget.initialProfile.copyWith(
+        firstName: _firstNameController.text,
+        lastName: _lastNameController.text,
+        phoneNumber: _phoneNumberController.text,
+      );
+      final updated = await EmployeeProfileService.save(nextProfile);
+      EmployeeSession.setProfile(updated);
+      await SessionPersistenceService.saveEmployeeSession(updated);
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(updated);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update profile: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Employee Settings'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  initialValue: widget.initialProfile.email,
+                  enabled: false,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _firstNameController,
+                  decoration: const InputDecoration(labelText: 'First name'),
+                  validator: (value) => (value == null || value.trim().isEmpty) ? 'First name is required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _lastNameController,
+                  decoration: const InputDecoration(labelText: 'Last name'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _phoneNumberController,
+                  decoration: const InputDecoration(labelText: 'Phone'),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 20),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Change password',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _oldPasswordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'Current password'),
+                  validator: (value) {
+                    final hasAnyPasswordInput = _oldPasswordController.text.isNotEmpty ||
+                        _newPasswordController.text.isNotEmpty ||
+                        _confirmNewPasswordController.text.isNotEmpty;
+                    if (!hasAnyPasswordInput) {
+                      return null;
+                    }
+                    if ((value ?? '').isEmpty) {
+                      return 'Current password is required';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _newPasswordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'New password'),
+                  validator: (value) {
+                    final hasAnyPasswordInput = _oldPasswordController.text.isNotEmpty ||
+                        _newPasswordController.text.isNotEmpty ||
+                        _confirmNewPasswordController.text.isNotEmpty;
+                    if (!hasAnyPasswordInput) {
+                      return null;
+                    }
+                    final input = value ?? '';
+                    if (input.isEmpty) {
+                      return 'New password is required';
+                    }
+                    if (input.length < 8) {
+                      return 'New password must be at least 8 characters';
+                    }
+                    if (input == _oldPasswordController.text) {
+                      return 'New password must be different';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _confirmNewPasswordController,
+                  decoration: const InputDecoration(labelText: 'Confirm new password'),
+                  obscureText: true,
                   validator: (value) {
                     final hasAnyPasswordInput = _oldPasswordController.text.isNotEmpty ||
                         _newPasswordController.text.isNotEmpty ||
