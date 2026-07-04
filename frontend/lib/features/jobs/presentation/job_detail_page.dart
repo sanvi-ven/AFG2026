@@ -8,6 +8,7 @@ import '../../../core/state/employee_session.dart';
 import '../../../models/job_completion_form.dart';
 import '../../../models/scheduled_work.dart';
 import '../../../shared/widgets/app_scaffold.dart';
+import '../../../shared/widgets/get_directions_button.dart';
 
 /// job detail + one-time completion form (start/end time, notes, before/after photos)
 class JobDetailPage extends StatefulWidget {
@@ -180,8 +181,11 @@ class _JobDetailPageState extends State<JobDetailPage> {
               children: [
                 Text(dateFormatter.format(job.scheduledDate), style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 10),
-                if (job.address.isNotEmpty)
+                if (job.address.isNotEmpty) ...[
                   Row(children: [const Icon(Icons.location_on_outlined, size: 16), const SizedBox(width: 6), Expanded(child: Text(job.address))]),
+                  const SizedBox(height: 8),
+                  Align(alignment: Alignment.centerLeft, child: GetDirectionsButton(address: job.address)),
+                ],
                 if (job.phoneNumber.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Row(children: [const Icon(Icons.phone_outlined, size: 16), const SizedBox(width: 6), Text(job.phoneNumber)]),

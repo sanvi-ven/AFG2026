@@ -6,6 +6,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/client_profile.dart';
 
+/// characters used for claim codes; ambiguous-looking characters (0/O, 1/I) are excluded
+const String _claimCodeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
 /// manages client profile data in firestore
 /// provides methods for reading, searching, and updating client profiles
 class ClientProfileService {
@@ -138,21 +141,25 @@ class ClientProfileService {
     await _signupsCollection.doc(query.docs.first.id).update({'password_hash': passwordHash});
   }
 
-  /// create a new client signup with profile and password hash
+  /// create a new client signup with profile and password hash.
+  /// pass `email: null` for an owner-created "dummy" client with no login —
+  /// a placeholder email is generated so existing email-keyed lookups keep working.
   static Future<ClientProfile> createSignup({
-    required String email,
+    String? email,
     required String firstName,
     required String lastName,
     required String phoneNumber,
     required String address,
     String? passwordHash,
   }) async {
-    final normalizedEmail = normalizeEmail(email);
+    final normalizedEmail = email == null || email.trim().isEmpty ? null : normalizeEmail(email);
 
-    // Reject duplicate emails.
-    final existing = await fetchByEmail(normalizedEmail);
-    if (existing != null) {
-      throw Exception('An account with that email address already exists.');
+    if (normalizedEmail != null) {
+      // Reject duplicate emails.
+      final existing = await fetchByEmail(normalizedEmail);
+      if (existing != null) {
+        throw Exception('An account with that email address already exists.');
+      }
     }
 
     // Determine the next sequential 5-digit client ID.
@@ -170,10 +177,11 @@ class ClientProfileService {
       throw Exception('Client signup capacity reached (99999).');
     }
     final newId = nextValue.toString().padLeft(5, '0');
+    final resolvedEmail = normalizedEmail ?? 'client.$newId@no-login.internal';
 
     final profile = ClientProfile(
       signupId: newId,
-      email: normalizedEmail,
+      email: resolvedEmail,
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       phoneNumber: phoneNumber.trim(),
@@ -187,6 +195,118 @@ class ClientProfileService {
     });
 
     return profile;
+  }
+
+  /// owner action: create a client record for someone who won't use the app
+  /// themselves — no email/password required up front.
+  static Future<ClientProfile> createDummyClient({
+    required String firstName,
+    required String lastName,
+    required String phoneNumber,
+    required String address,
+  }) {
+    return createSignup(
+      email: null,
+      firstName: firstName,
+      lastName: lastName,
+      phoneNumber: phoneNumber,
+      address: address,
+    );
+  }
+
+  /// change a client's email, rejecting the change if another account already uses it
+  static Future<void> updateEmail(String signupId, String newEmail) async {
+    final normalizedId = signupId.trim();
+    final normalizedEmail = normalizeEmail(newEmail);
+
+    final existing = await fetchByEmail(normalizedEmail);
+    if (existing != null && existing.signupId != normalizedId) {
+      throw Exception('That email is already used by another account.');
+    }
+
+    await _signupsCollection.doc(normalizedId).set({'email': normalizedEmail}, SetOptions(merge: true));
+  }
+
+  static final Random _claimCodeRandom = Random();
+
+  static String _generateClaimCode() {
+    return List.generate(
+      6,
+      (_) => _claimCodeAlphabet[_claimCodeRandom.nextInt(_claimCodeAlphabet.length)],
+    ).join();
+  }
+
+  /// owner action: generate (or regenerate) a one-time code the owner reads out
+  /// to a dummy client so they can claim their account with a real email/password
+  static Future<String> generateClaimCode(String signupId) async {
+    final code = _generateClaimCode();
+    await _signupsCollection.doc(signupId.trim()).set({
+      'claim_code': code,
+      'claim_code_created_at': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    return code;
+  }
+
+  /// look up the dummy client account a claim code belongs to
+  static Future<ClientProfile?> fetchByClaimCode(String code) async {
+    final normalizedCode = code.trim().toUpperCase();
+    if (normalizedCode.isEmpty) return null;
+
+    final query = await _signupsCollection.where('claim_code', isEqualTo: normalizedCode).limit(1).get();
+    if (query.docs.isEmpty) return null;
+
+    final doc = query.docs.first;
+    return ClientProfile.fromMap(doc.data()).copyWith(signupId: doc.id);
+  }
+
+  /// consume a claim code once the account has been successfully claimed
+  static Future<void> clearClaimCode(String signupId) async {
+    await _signupsCollection.doc(signupId.trim()).set({
+      'claim_code': FieldValue.delete(),
+      'claim_code_created_at': FieldValue.delete(),
+    }, SetOptions(merge: true));
+  }
+
+  /// resolve a clientId to a display name for sorting/labeling; falls back to the id itself
+  static String displayNameFor(List<ClientProfile> profiles, String clientId) {
+    for (final profile in profiles) {
+      if (profile.signupId == clientId) {
+        return profile.fullName;
+      }
+    }
+    return clientId;
+  }
+
+  /// owner action: hide a client from active use without deleting their history
+  static Future<void> archiveClient(String signupId) async {
+    await _signupsCollection.doc(signupId.trim()).set({'archived': true}, SetOptions(merge: true));
+  }
+
+  /// owner action: permanently remove an archived client, refusing if they
+  /// still have estimates, invoices, or scheduled jobs on file
+  static Future<void> deleteClientPermanently(String signupId) async {
+    final normalizedId = signupId.trim();
+    final firestore = FirebaseFirestore.instance;
+
+    final linkedCollections = {
+      'estimates': 'estimates',
+      'invoices': 'invoices',
+      'scheduled_work': 'scheduled jobs',
+    };
+    for (final entry in linkedCollections.entries) {
+      final match = await firestore
+          .collection(entry.key)
+          .where('clientId', isEqualTo: normalizedId)
+          .limit(1)
+          .get();
+      if (match.docs.isNotEmpty) {
+        throw Exception(
+          "This client still has ${entry.value} on file and can't be permanently deleted.",
+        );
+      }
+    }
+
+    await _signupsCollection.doc(normalizedId).delete();
   }
 
   static Future<ClientProfile> getOrCreateForSignup({

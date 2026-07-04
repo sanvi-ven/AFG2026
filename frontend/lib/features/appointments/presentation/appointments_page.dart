@@ -5,25 +5,31 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/router/app_router.dart';
+import '../../../core/services/client_profile_service.dart';
 import '../../../core/services/estimate_pdf_service.dart';
 import '../../../core/services/estimate_service.dart';
 import '../../../core/services/invoice_service.dart';
 import '../../../core/services/scheduled_work_service.dart';
 import '../../../core/services/team_service.dart';
 import '../../../core/state/client_session.dart';
+import '../../../models/client_profile.dart';
 import '../../../models/invoice.dart';
 import '../../../models/scheduled_work.dart';
 import '../../../models/team.dart';
+import '../../../shared/utils/list_highlight_controller.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/google_calendar_booking_button.dart';
 import '../../../shared/widgets/google_calendar_widget.dart';
+import '../../../shared/widgets/sort_control.dart';
 
 /// page for managing appointments, scheduled work, and calendar bookings
 class AppointmentsPage extends StatefulWidget {
-  const AppointmentsPage({required this.role, this.authToken, super.key});
+  const AppointmentsPage({required this.role, this.authToken, this.highlightId, super.key});
 
   final String role;
   final String? authToken;
+  final String? highlightId;
 
   @override
   State<AppointmentsPage> createState() => _AppointmentsPageState();
@@ -40,6 +46,8 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   String? _convertingWorkId;
   String? _downloadingEstimatePdfWorkId;
   String? _markingPaidWorkId;
+  ListSortMode _sortMode = ListSortMode.newestFirst;
+  late final ListHighlightController _highlight = ListHighlightController(widget.highlightId);
 
   Future<void> _openGoogleCalendar() async {
     const url = 'https://calendar.google.com/calendar/u/0/r/week';
@@ -69,8 +77,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   Future<void> _convertToInvoice(ScheduledWork work) async {
     setState(() => _convertingWorkId = work.id);
     try {
-      final ts = DateTime.now().millisecondsSinceEpoch.toString();
-      final invoiceNumber = 'INV-${ts.substring(ts.length - 6)}';
+      final invoiceNumber = work.estimateNumber;
 
       final invoiceId = await InvoiceService.createInvoiceFromEstimate(
         invoiceNumber: invoiceNumber,
@@ -140,6 +147,14 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     }
   }
 
+  void _viewEstimate(ScheduledWork work) {
+    Navigator.pushNamed(
+      context,
+      AppRouter.estimates,
+      arguments: {'role': widget.role, 'authToken': widget.authToken, 'highlightId': work.estimateId},
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final profile = ClientSession.profile.value;
@@ -168,58 +183,99 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
               builder: (context, teamsSnapshot) {
                 final teams = teamsSnapshot.data ?? const <Team>[];
 
-                return StreamBuilder<List<ScheduledWork>>(
-                  stream: ScheduledWorkService.watchScheduledWork(
-                    role: widget.role,
-                    clientId: clientId,
-                  ),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Text('Failed to load scheduled work: ${snapshot.error}'),
-                        ),
-                      );
-                    }
+                return StreamBuilder<List<ClientProfile>>(
+                  stream: ClientProfileService.watchAllProfiles(),
+                  builder: (context, clientsSnapshot) {
+                    final clients = clientsSnapshot.data ?? const <ClientProfile>[];
 
-                    final items = snapshot.data ?? const <ScheduledWork>[];
-                    if (items.isEmpty) {
-                      return Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Text(
-                            widget.role == 'owner'
-                                ? 'No work scheduled yet. Approve an estimate and click "Schedule Work" to get started.'
-                                : 'No upcoming work scheduled for you yet.',
-                          ),
-                        ),
-                      );
-                    }
-
-                    return Column(
-                      children: [
-                        for (final item in items)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _ScheduledWorkCard(
-                              work: item,
-                              role: widget.role,
-                              teams: teams,
-                              isCompleting: _completingWorkId == item.id,
-                              isConverting: _convertingWorkId == item.id,
-                              isDownloadingPdf: _downloadingEstimatePdfWorkId == item.id,
-                              isMarkingPaid: _markingPaidWorkId == item.id,
-                              onMarkComplete: () => _markComplete(item),
-                              onConvertToInvoice: () => _convertToInvoice(item),
-                              onDownloadEstimatePdf: () => _downloadEstimatePdf(item),
-                              onMarkPaid: () => _markInvoicePaid(item),
+                    return StreamBuilder<List<ScheduledWork>>(
+                      stream: ScheduledWorkService.watchScheduledWork(
+                        role: widget.role,
+                        clientId: clientId,
+                      ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError) {
+                          return Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text('Failed to load scheduled work: ${snapshot.error}'),
                             ),
-                          ),
-                      ],
+                          );
+                        }
+
+                        final items = snapshot.data ?? const <ScheduledWork>[];
+                        if (items.isEmpty) {
+                          return Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                widget.role == 'owner'
+                                    ? 'No work scheduled yet. Approve an estimate and click "Schedule Work" to get started.'
+                                    : 'No upcoming work scheduled for you yet.',
+                              ),
+                            ),
+                          );
+                        }
+
+                        final sorted = [...items];
+                        switch (_sortMode) {
+                          case ListSortMode.newestFirst:
+                            sorted.sort((a, b) => b.scheduledDate.compareTo(a.scheduledDate));
+                            break;
+                          case ListSortMode.oldestFirst:
+                            sorted.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
+                            break;
+                          case ListSortMode.client:
+                            sorted.sort((a, b) => ClientProfileService.displayNameFor(clients, a.clientId)
+                                .toLowerCase()
+                                .compareTo(ClientProfileService.displayNameFor(clients, b.clientId).toLowerCase()));
+                            break;
+                        }
+
+                        _highlight.maybeScrollTo(
+                          sorted.map((e) => e.id).toList(),
+                          () {
+                            if (mounted) setState(() {});
+                          },
+                        );
+
+                        return Column(
+                          children: [
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: SortControl(
+                                value: _sortMode,
+                                onChanged: (mode) => setState(() => _sortMode = mode),
+                              ),
+                            ),
+                            for (final item in sorted)
+                              KeyedSubtree(
+                                key: _highlight.keyFor(item.id),
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _ScheduledWorkCard(
+                                    work: item,
+                                    role: widget.role,
+                                    teams: teams,
+                                    isHighlighted: _highlight.isHighlighted(item.id),
+                                    isCompleting: _completingWorkId == item.id,
+                                    isConverting: _convertingWorkId == item.id,
+                                    isDownloadingPdf: _downloadingEstimatePdfWorkId == item.id,
+                                    isMarkingPaid: _markingPaidWorkId == item.id,
+                                    onMarkComplete: () => _markComplete(item),
+                                    onConvertToInvoice: () => _convertToInvoice(item),
+                                    onDownloadEstimatePdf: () => _downloadEstimatePdf(item),
+                                    onMarkPaid: () => _markInvoicePaid(item),
+                                    onViewEstimate: () => _viewEstimate(item),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
                     );
                   },
                 );
@@ -261,6 +317,7 @@ class _ScheduledWorkCard extends StatefulWidget {
     required this.work,
     required this.role,
     required this.teams,
+    required this.isHighlighted,
     required this.isCompleting,
     required this.isConverting,
     required this.isDownloadingPdf,
@@ -269,11 +326,13 @@ class _ScheduledWorkCard extends StatefulWidget {
     required this.onConvertToInvoice,
     required this.onDownloadEstimatePdf,
     required this.onMarkPaid,
+    required this.onViewEstimate,
   });
 
   final ScheduledWork work;
   final String role;
   final List<Team> teams;
+  final bool isHighlighted;
   final bool isCompleting;
   final bool isConverting;
   final bool isDownloadingPdf;
@@ -282,6 +341,7 @@ class _ScheduledWorkCard extends StatefulWidget {
   final VoidCallback onConvertToInvoice;
   final VoidCallback onDownloadEstimatePdf;
   final VoidCallback onMarkPaid;
+  final VoidCallback onViewEstimate;
 
   @override
   State<_ScheduledWorkCard> createState() => _ScheduledWorkCardState();
@@ -342,7 +402,14 @@ class _ScheduledWorkCardState extends State<_ScheduledWorkCard> {
 
     final invoicePaid = _invoice?.status == InvoiceStatus.paid;
 
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: widget.isHighlighted
+            ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
+            : null,
+      ),
+      child: Card(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -453,6 +520,11 @@ class _ScheduledWorkCardState extends State<_ScheduledWorkCard> {
                       : const Icon(Icons.download_outlined),
                   label: const Text('Download Estimate'),
                 ),
+                OutlinedButton.icon(
+                  onPressed: widget.onViewEstimate,
+                  icon: const Icon(Icons.request_quote_outlined),
+                  label: const Text('View Original Estimate'),
+                ),
                 // Owner-only actions
                 if (widget.role == 'owner') ...[
                   if (work.isScheduled)
@@ -484,6 +556,7 @@ class _ScheduledWorkCardState extends State<_ScheduledWorkCard> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

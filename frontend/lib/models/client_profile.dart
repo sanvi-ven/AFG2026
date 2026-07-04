@@ -7,6 +7,8 @@ class ClientProfile {
     required this.lastName,
     required this.phoneNumber,
     required this.address,
+    this.hasPassword = false,
+    this.archived = false,
   });
 
   final String signupId;
@@ -15,6 +17,12 @@ class ClientProfile {
   final String lastName;
   final String phoneNumber;
   final String address;
+  /// true once this client has a real login (password set) — false for
+  /// owner-created "dummy" clients who have never logged in themselves
+  final bool hasPassword;
+  /// true once the owner has archived this client (hidden from active use,
+  /// eligible for permanent delete)
+  final bool archived;
 
   String get greetingName {
     if (firstName.trim().isNotEmpty) {
@@ -43,6 +51,7 @@ class ClientProfile {
       lastName: '',
       phoneNumber: '',
       address: '',
+      hasPassword: false,
     );
   }
 /// map-https://medium.com/@emanyaqoob/map-in-dart-flutter-adf80a0299b5
@@ -66,6 +75,8 @@ class ClientProfile {
       lastName: (map['last_name'] as String? ?? map['lastName'] as String? ?? (nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '')).trim(),
       phoneNumber: (map['phone_number'] as String? ?? map['phone'] as String? ?? '').trim(),
       address: (map['address'] as String? ?? fallbackAddress).trim(),
+      hasPassword: (map['password_hash'] as String?)?.isNotEmpty ?? false,
+      archived: map['archived'] as bool? ?? false,
     );
   }
 
@@ -89,6 +100,8 @@ class ClientProfile {
     String? lastName,
     String? phoneNumber,
     String? address,
+    bool? hasPassword,
+    bool? archived,
   }) {
     return ClientProfile(
       signupId: signupId ?? this.signupId,
@@ -97,6 +110,8 @@ class ClientProfile {
       lastName: lastName ?? this.lastName,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       address: address ?? this.address,
+      hasPassword: hasPassword ?? this.hasPassword,
+      archived: archived ?? this.archived,
     );
   }
 }

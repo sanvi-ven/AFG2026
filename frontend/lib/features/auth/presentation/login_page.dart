@@ -44,6 +44,10 @@ class _LoginPageState extends State<LoginPage> {
     Navigator.pushNamed(context, AppRouter.ownerSignin);
   }
 
+  void _goToClaimAccount() {
+    Navigator.pushNamed(context, AppRouter.claimAccount);
+  }
+
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -200,6 +204,13 @@ class _LoginPageState extends State<LoginPage> {
                     onPressed: _goToOwnerSignin,
                     child: const Text('Business Owner Sign In'),
                   ),
+                  if (_selectedRole == 'client') ...[
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: _goToClaimAccount,
+                      child: const Text('Have work done already? Claim your account'),
+                    ),
+                  ],
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     Text(

@@ -50,6 +50,53 @@ class MessageService {
       return summaries;
     });
   }
+  /// owner-side view: one thread summary per client that has any message
+  /// (owner-authored or client-authored), sorted by most recent activity.
+  static Stream<List<ClientThreadSummary>> watchClientThreads() {
+    return _collection.snapshots().map((snapshot) {
+      final grouped = <String, List<MessageLog>>{};
+      for (final doc in snapshot.docs) {
+        final message = MessageLog.fromMap({...doc.data(), 'id': doc.id});
+        grouped.putIfAbsent(message.targetClientId, () => <MessageLog>[]).add(message);
+      }
+
+      final summaries = grouped.entries.map((entry) {
+        final logs = entry.value..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        final unreadFromClient = logs.where((m) => m.senderRole == 'client' && m.isUnread).length;
+        return ClientThreadSummary(
+          clientId: entry.key,
+          lastMessage: logs.first,
+          unreadFromClientCount: unreadFromClient,
+        );
+      }).toList();
+
+      summaries.sort((a, b) => b.lastMessage.createdAt.compareTo(a.lastMessage.createdAt));
+      return summaries;
+    });
+  }
+
+  /// single-doc reply, used for both owner and client two-way messages
+  /// (unlike [sendBroadcast], which fans out to multiple clients at once).
+  static Future<void> sendReply({
+    required String senderRole,
+    required String targetClientId,
+    required String title,
+    required String body,
+  }) async {
+    final doc = _collection.doc();
+    final message = MessageLog(
+      id: doc.id,
+      broadcastId: targetClientId.trim(),
+      senderRole: senderRole.trim(),
+      targetClientId: targetClientId.trim(),
+      title: title.trim(),
+      body: body.trim(),
+      read: false,
+      createdAt: DateTime.now(),
+    );
+    await doc.set(message.toMap());
+  }
+
 //learned through chatgpt prompt: i have a list of firestore message documents in flutter. how can i group them by a category (broadcastId) and create a summary object with counts
   static Future<int> sendBroadcast({
     required String title,

@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/router/app_router.dart';
 import '../../core/services/client_profile_service.dart';
 import '../../core/services/estimate_pdf_service.dart';
 import '../../core/services/estimate_service.dart';
@@ -15,14 +16,18 @@ import '../../core/state/client_session.dart';
 import '../../models/client_profile.dart';
 import '../../models/estimate.dart';
 import '../../models/invoice.dart';
+import '../../shared/utils/list_highlight_controller.dart';
 import '../../shared/widgets/app_scaffold.dart';
+import '../../shared/widgets/sort_control.dart';
+import '../clients/presentation/quick_add_client_dialog.dart';
 
 /// page for viewing and managing estimates with client approval and owner conversion flows
 class EstimatesPage extends StatefulWidget {
-  const EstimatesPage({required this.role, this.authToken, super.key});
+  const EstimatesPage({required this.role, this.authToken, this.highlightId, super.key});
 
   final String role;
   final String? authToken;
+  final String? highlightId;
 
   @override
   State<EstimatesPage> createState() => _EstimatesPageState();
@@ -48,10 +53,19 @@ class _EstimatesPageState extends State<EstimatesPage> {
   List<ClientProfile> _clientSuggestions = const [];
   ClientProfile? _selectedClient;
   bool _isLoadingClientSuggestions = true;
+  ListSortMode _sortMode = ListSortMode.newestFirst;
+  late final ListHighlightController _highlight = ListHighlightController(widget.highlightId);
 
   @override
   void initState() {
     super.initState();
+    if (widget.role == 'owner') {
+      EstimateService.peekNextEstimateNumber().then((preview) {
+        if (mounted && _estimateNumberController.text.trim().isEmpty) {
+          setState(() => _estimateNumberController.text = preview);
+        }
+      });
+    }
     _clientsSub = ClientProfileService.watchAllProfiles().listen((profiles) {
       if (!mounted) {
         return;
@@ -69,7 +83,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
         }
 
         _clientSuggestions = ClientProfileService.searchProfiles(
-          profiles: profiles,
+          profiles: profiles.where((profile) => !profile.archived).toList(),
           query: query,
           limit: 8,
         );
@@ -90,15 +104,6 @@ class _EstimatesPageState extends State<EstimatesPage> {
     super.dispose();
   }
 
-  String _defaultEstimateNumber() {
-    final ts = DateTime.now().millisecondsSinceEpoch.toString();
-    return 'EST-${ts.substring(ts.length - 6)}';
-  }
-
-  String _defaultInvoiceNumber() {
-    final ts = DateTime.now().millisecondsSinceEpoch.toString();
-    return 'INV-${ts.substring(ts.length - 6)}';
-  }
 ///https://api.flutter.dev/flutter/widgets/TextEditingController-class.html
   void _addServiceRow() {
     setState(() {
@@ -142,7 +147,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
       }
       setState(() {
         _clientSuggestions = ClientProfileService.searchProfiles(
-          profiles: _knownClients,
+          profiles: _knownClients.where((profile) => !profile.archived).toList(),
           query: query,
           limit: 8,
         );
@@ -158,10 +163,52 @@ class _EstimatesPageState extends State<EstimatesPage> {
     });
   }
 
+  Future<void> _openQuickAddClient() async {
+    final profile = await showQuickAddClientDialog(context);
+    if (profile == null || !mounted) return;
+    _clientIdController.text = profile.signupId;
+    setState(() {
+      _selectedClient = profile;
+      _clientSuggestions = const [];
+    });
+  }
+
+  void _viewInAppointments(Estimate estimate) {
+    final workId = estimate.scheduledWorkId;
+    if (workId == null || workId.isEmpty) return;
+    Navigator.pushNamed(
+      context,
+      AppRouter.appointments,
+      arguments: {'role': widget.role, 'authToken': widget.authToken, 'highlightId': workId},
+    );
+  }
+
+  Future<void> _approveByOwner(Estimate estimate) async {
+    final result = await showDialog<_OwnerApprovalResult>(
+      context: context,
+      builder: (_) => const _OwnerApprovalDialog(),
+    );
+    if (result == null) return;
+
+    try {
+      await EstimateService.approveByOwner(
+        estimateId: estimate.id,
+        method: result.method,
+        note: result.note,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Estimate approved on the client\'s behalf.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to approve estimate: $error')),
+      );
+    }
+  }
+
   Future<void> _submitEstimate() async {
-    final estimateNumber = _estimateNumberController.text.trim().isEmpty
-        ? _defaultEstimateNumber()
-        : _estimateNumberController.text.trim();
     final clientId = _clientIdController.text.trim();
 
     if (clientId.isEmpty) {
@@ -196,6 +243,13 @@ class _EstimatesPageState extends State<EstimatesPage> {
         return;
       }
 
+      // Always advance the counter once per estimate created, regardless of
+      // whether the owner overrode the suggested number below.
+      final consumedNumber = await EstimateService.consumeNextEstimateNumber();
+      final estimateNumber = _estimateNumberController.text.trim().isEmpty
+          ? consumedNumber
+          : _estimateNumberController.text.trim();
+
       await EstimateService.createEstimate(
         estimateNumber: estimateNumber,
         clientId: clientId,
@@ -205,13 +259,17 @@ class _EstimatesPageState extends State<EstimatesPage> {
         return;
       }
 
-      _estimateNumberController.clear();
+      final nextPreview = await EstimateService.peekNextEstimateNumber();
       _clientIdController.clear();
       for (final row in _serviceRows) {
         row.nameController.clear();
         row.priceController.clear();
       }
+      if (!mounted) {
+        return;
+      }
       setState(() {
+        _estimateNumberController.text = nextPreview;
         _selectedClient = null;
         _clientSuggestions = const [];
       });
@@ -444,7 +502,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
     setState(() => _convertingEstimateId = estimate.id);
     try {
       final invoiceId = await InvoiceService.createInvoiceFromEstimate(
-        invoiceNumber: _defaultInvoiceNumber(),
+        invoiceNumber: estimate.estimateNumber,
         clientId: estimate.clientId,
         services: estimate.services,
         sourceEstimateId: estimate.id,
@@ -531,6 +589,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
               clientSuggestions: _clientSuggestions,
               onClientIdChanged: _onClientSearchChanged,
               onClientSuggestionSelected: _pickClientSuggestion,
+              onCreateClient: _openQuickAddClient,
               serviceRows: _serviceRows,
               isSubmitting: _isSubmitting,
               onAddService: _addServiceRow,
@@ -564,8 +623,34 @@ class _EstimatesPageState extends State<EstimatesPage> {
                 }
 
                 final allEstimates = snapshot.data ?? const <Estimate>[];
-                final estimates = allEstimates.where((e) => !e.isArchived).toList();
-                final archived = allEstimates.where((e) => e.isArchived).toList();
+                var estimates = allEstimates.where((e) => !e.isArchived).toList();
+                var archived = allEstimates.where((e) => e.isArchived).toList();
+
+                void applySort(List<Estimate> list) {
+                  switch (_sortMode) {
+                    case ListSortMode.newestFirst:
+                      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                      break;
+                    case ListSortMode.oldestFirst:
+                      list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+                      break;
+                    case ListSortMode.client:
+                      list.sort((a, b) => ClientProfileService.displayNameFor(_knownClients, a.clientId)
+                          .toLowerCase()
+                          .compareTo(ClientProfileService.displayNameFor(_knownClients, b.clientId).toLowerCase()));
+                      break;
+                  }
+                }
+
+                applySort(estimates);
+                applySort(archived);
+
+                _highlight.maybeScrollTo(
+                  allEstimates.map((e) => e.id).toList(),
+                  () {
+                    if (mounted) setState(() {});
+                  },
+                );
 
                 if (estimates.isEmpty && archived.isEmpty) {
                   return Card(
@@ -578,31 +663,44 @@ class _EstimatesPageState extends State<EstimatesPage> {
                   );
                 }
 
-                Widget estimateCard(Estimate estimate) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _EstimateCard(
-                        estimate: estimate,
-                        role: widget.role,
-                        isConverting: _convertingEstimateId == estimate.id,
-                        isDownloadingPdf: _downloadingEstimateId == estimate.id,
-                        isScheduling: _schedulingEstimateId == estimate.id,
-                        isDownloadingEstimatePdf: _downloadingEstimatePdfId == estimate.id,
-                        isRequestingChanges: _requestingChangesEstimateId == estimate.id,
-                        isRevising: _revisingEstimateId == estimate.id,
-                        isArchiving: _archivingEstimateId == estimate.id,
-                        onApprove: () => _setEstimateStatus(estimate.id, InvoiceStatus.approved),
-                        onRequestChanges: () => _requestEstimateChanges(estimate),
-                        onConvert: () => _convertToInvoice(estimate),
-                        onDownloadPdf: () => _downloadConvertedInvoicePdf(estimate),
-                        onScheduleWork: () => _scheduleWork(estimate),
-                        onDownloadEstimatePdf: () => _downloadEstimatePdf(estimate),
-                        onReviseAndResend: () => _reviseAndResendEstimate(estimate),
-                        onArchive: widget.role == 'owner' ? () => _archiveEstimate(estimate) : null,
+                Widget estimateCard(Estimate estimate) => KeyedSubtree(
+                      key: _highlight.keyFor(estimate.id),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _EstimateCard(
+                          estimate: estimate,
+                          role: widget.role,
+                          isHighlighted: _highlight.isHighlighted(estimate.id),
+                          isConverting: _convertingEstimateId == estimate.id,
+                          isDownloadingPdf: _downloadingEstimateId == estimate.id,
+                          isScheduling: _schedulingEstimateId == estimate.id,
+                          isDownloadingEstimatePdf: _downloadingEstimatePdfId == estimate.id,
+                          isRequestingChanges: _requestingChangesEstimateId == estimate.id,
+                          isRevising: _revisingEstimateId == estimate.id,
+                          isArchiving: _archivingEstimateId == estimate.id,
+                          onApprove: () => _setEstimateStatus(estimate.id, InvoiceStatus.approved),
+                          onRequestChanges: () => _requestEstimateChanges(estimate),
+                          onConvert: () => _convertToInvoice(estimate),
+                          onDownloadPdf: () => _downloadConvertedInvoicePdf(estimate),
+                          onScheduleWork: () => _scheduleWork(estimate),
+                          onDownloadEstimatePdf: () => _downloadEstimatePdf(estimate),
+                          onReviseAndResend: () => _reviseAndResendEstimate(estimate),
+                          onArchive: widget.role == 'owner' ? () => _archiveEstimate(estimate) : null,
+                          onViewInAppointments: () => _viewInAppointments(estimate),
+                          onOwnerApprove: () => _approveByOwner(estimate),
+                        ),
                       ),
                     );
 
                 return Column(
                   children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: SortControl(
+                        value: _sortMode,
+                        onChanged: (mode) => setState(() => _sortMode = mode),
+                      ),
+                    ),
                     for (final estimate in estimates) estimateCard(estimate),
                     if (widget.role == 'owner' && archived.isNotEmpty) ...[
                       const SizedBox(height: 4),
@@ -637,6 +735,7 @@ class _OwnerEstimateForm extends StatelessWidget {
     required this.clientSuggestions,
     required this.onClientIdChanged,
     required this.onClientSuggestionSelected,
+    required this.onCreateClient,
     required this.serviceRows,
     required this.isSubmitting,
     required this.onAddService,
@@ -651,6 +750,7 @@ class _OwnerEstimateForm extends StatelessWidget {
   final List<ClientProfile> clientSuggestions;
   final ValueChanged<String> onClientIdChanged;
   final ValueChanged<ClientProfile> onClientSuggestionSelected;
+  final VoidCallback onCreateClient;
   final List<_ServiceRow> serviceRows;
   final bool isSubmitting;
   final VoidCallback onAddService;
@@ -670,29 +770,42 @@ class _OwnerEstimateForm extends StatelessWidget {
             TextField(
               controller: estimateNumberController,
               decoration: const InputDecoration(
-                labelText: 'Estimate number (optional)',
+                labelText: 'Estimate number',
                 border: OutlineInputBorder(),
-                hintText: 'EST-123456',
+                hintText: 'EST-0001',
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: clientIdController,
-              decoration: InputDecoration(
-                labelText: 'Client (ID, name, or address)',
-                border: const OutlineInputBorder(),
-                suffixIcon: isLoadingClientSuggestions
-                    ? const Padding(
-                        padding: EdgeInsets.all(10),
-                        child: SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : null,
-              ),
-              onChanged: onClientIdChanged,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: clientIdController,
+                    decoration: InputDecoration(
+                      labelText: 'Client (ID, name, or address)',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: isLoadingClientSuggestions
+                          ? const Padding(
+                              padding: EdgeInsets.all(10),
+                              child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : null,
+                    ),
+                    onChanged: onClientIdChanged,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: onCreateClient,
+                  icon: const Icon(Icons.person_add_alt_1_outlined),
+                  label: const Text('New Client'),
+                ),
+              ],
             ),
             if (selectedClient != null) ...[
               const SizedBox(height: 8),
@@ -800,6 +913,7 @@ class _EstimateCard extends StatelessWidget {
   const _EstimateCard({
     required this.estimate,
     required this.role,
+    required this.isHighlighted,
     required this.isConverting,
     required this.isDownloadingPdf,
     required this.isScheduling,
@@ -813,12 +927,15 @@ class _EstimateCard extends StatelessWidget {
     required this.onScheduleWork,
     required this.onDownloadEstimatePdf,
     required this.onReviseAndResend,
+    required this.onViewInAppointments,
+    required this.onOwnerApprove,
     required this.isArchiving,
     this.onArchive,
   });
 
   final Estimate estimate;
   final String role;
+  final bool isHighlighted;
   final bool isConverting;
   final bool isDownloadingPdf;
   final bool isScheduling;
@@ -833,6 +950,8 @@ class _EstimateCard extends StatelessWidget {
   final VoidCallback onScheduleWork;
   final VoidCallback onDownloadEstimatePdf;
   final VoidCallback onReviseAndResend;
+  final VoidCallback onViewInAppointments;
+  final VoidCallback onOwnerApprove;
   final VoidCallback? onArchive;
 
   String _displayStatus(String status) {
@@ -904,7 +1023,14 @@ class _EstimateCard extends StatelessWidget {
           : '${statusKey[0].toUpperCase()}${statusKey.substring(1)}',
     };
 
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: isHighlighted
+            ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
+            : null,
+      ),
+      child: Card(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -963,6 +1089,22 @@ class _EstimateCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text('Client requested changes: ${estimate.changeRequestMessage!}'),
+              ),
+            ],
+            if (estimate.approvedByOwner) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'Approved by owner — confirmed via ${estimate.ownerApprovalMethod ?? 'phone/text'}'
+                  '${(estimate.ownerApprovalNote?.isNotEmpty ?? false) ? ': ${estimate.ownerApprovalNote}' : ''}',
+                  style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
+                ),
               ),
             ],
             const SizedBox(height: 10),
@@ -1107,15 +1249,10 @@ class _EstimateCard extends StatelessWidget {
                   ),
                 ] else if (estimate.isApproved) ...[
                   if (estimate.isScheduled)
-                    Row(
-                      children: [
-                        const Icon(Icons.event_available, size: 16, color: Colors.green),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Work scheduled — see Appointments',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.green),
-                        ),
-                      ],
+                    OutlinedButton.icon(
+                      onPressed: onViewInAppointments,
+                      icon: const Icon(Icons.event_available, size: 16, color: Colors.green),
+                      label: const Text('View in Appointments'),
                     )
                   else
                     Row(
@@ -1137,6 +1274,12 @@ class _EstimateCard extends StatelessWidget {
                         ),
                       ],
                     ),
+                ] else if (estimate.isPending) ...[
+                  FilledButton.icon(
+                    onPressed: onOwnerApprove,
+                    icon: const Icon(Icons.phone_in_talk_outlined),
+                    label: const Text('Approve (Phone/Text Confirmed)'),
+                  ),
                 ] else
                   FilledButton.icon(
                     onPressed: null,
@@ -1148,6 +1291,83 @@ class _EstimateCard extends StatelessWidget {
           ],
         ),
       ),
+      ),
+    );
+  }
+}
+
+class _OwnerApprovalResult {
+  const _OwnerApprovalResult({required this.method, required this.note});
+
+  final String method;
+  final String note;
+}
+
+class _OwnerApprovalDialog extends StatefulWidget {
+  const _OwnerApprovalDialog();
+
+  @override
+  State<_OwnerApprovalDialog> createState() => _OwnerApprovalDialogState();
+}
+
+class _OwnerApprovalDialogState extends State<_OwnerApprovalDialog> {
+  final _noteController = TextEditingController();
+  String _method = 'phone';
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(_OwnerApprovalResult(method: _method, note: _noteController.text.trim()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Approve on Client\'s Behalf'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('How did the client confirm approval?'),
+            const SizedBox(height: 10),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'phone', label: Text('Phone call')),
+                ButtonSegment(value: 'text', label: Text('Text message')),
+              ],
+              selected: {_method},
+              onSelectionChanged: (selection) => setState(() => _method = selection.first),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _noteController,
+              maxLines: 3,
+              minLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Note (optional)',
+                hintText: 'Example: Called client 6/12, confirmed verbally.',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Approve'),
+        ),
+      ],
     );
   }
 }

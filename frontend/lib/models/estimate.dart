@@ -24,6 +24,10 @@ class Estimate {
     this.resentAt,
     this.originalVersion,
     this.isArchived = false,
+    this.approvedByOwner = false,
+    this.ownerApprovalMethod,
+    this.ownerApprovalNote,
+    this.ownerApprovedAt,
   });
 
   final String id;
@@ -45,6 +49,12 @@ class Estimate {
   final DateTime? resentAt;
   final EstimateVersionSnapshot? originalVersion;
   final bool isArchived;
+  /// true when the owner approved on the client's behalf (e.g. phone/text confirmation)
+  final bool approvedByOwner;
+  /// 'phone' or 'text' — how the owner confirmed the client's approval
+  final String? ownerApprovalMethod;
+  final String? ownerApprovalNote;
+  final DateTime? ownerApprovedAt;
 
   bool get isPending => status == InvoiceStatus.pending;
   bool get isApproved => status == InvoiceStatus.approved;
@@ -108,6 +118,10 @@ class Estimate {
             )
           : null,
       isArchived: map['archived'] as bool? ?? false,
+      approvedByOwner: map['approvedByOwner'] as bool? ?? false,
+      ownerApprovalMethod: (map['ownerApprovalMethod'] as String?)?.trim(),
+      ownerApprovalNote: (map['ownerApprovalNote'] as String?)?.trim(),
+      ownerApprovedAt: readOptionalDate(map['ownerApprovedAt']),
     );
   }
 
@@ -132,6 +146,10 @@ class Estimate {
       'resentAt': resentAt,
       'originalVersion': originalVersion?.toMap(),
       'archived': isArchived,
+      'approvedByOwner': approvedByOwner,
+      'ownerApprovalMethod': ownerApprovalMethod,
+      'ownerApprovalNote': ownerApprovalNote,
+      'ownerApprovedAt': ownerApprovedAt,
     };
   }
 }

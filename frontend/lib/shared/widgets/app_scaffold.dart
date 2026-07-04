@@ -17,6 +17,7 @@ import '../../core/services/owner_settings_service.dart';
 import '../../core/services/session_persistence_service.dart';
 import '../../core/state/client_session.dart';
 import '../../core/state/employee_session.dart';
+import '../../core/state/owner_session.dart';
 import '../../models/client_profile.dart';
 import '../../models/employee_profile.dart';
 import '../../models/owner_settings.dart';
@@ -284,7 +285,14 @@ class AppScaffold extends StatelessWidget {
     if (role == 'owner') {
       return [
         ...common,
+        const _NavItem(label: 'Clients', route: AppRouter.clients, icon: Icons.people_outline),
         const _NavItem(label: 'Team', route: AppRouter.teamAdmin, icon: Icons.groups_outlined),
+        const _NavItem(label: 'Reports', route: AppRouter.reports, icon: Icons.bar_chart_outlined),
+        const _NavItem(
+          label: "Today's Route",
+          route: AppRouter.todaysRoute,
+          icon: Icons.alt_route_outlined,
+        ),
       ];
     }
 
@@ -348,6 +356,7 @@ Future<void> _confirmLogout(BuildContext context) async {
   if (confirmed != true || !context.mounted) return;
 
   ClientSession.clear();
+  OwnerSession.clear();
   await SessionPersistenceService.clearSession();
   if (!context.mounted) return;
 
@@ -899,6 +908,7 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _companyNameController;
   late final TextEditingController _addressController;
+  late final TextEditingController _nextEstimateNumberController;
   final ImagePicker _picker = ImagePicker();
   bool _isSaving = false;
   bool _isPickingLogo = false;
@@ -912,6 +922,8 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
     super.initState();
     _companyNameController = TextEditingController(text: widget.initialSettings.companyName);
     _addressController = TextEditingController(text: widget.initialSettings.address);
+    _nextEstimateNumberController =
+        TextEditingController(text: widget.initialSettings.nextEstimateNumber.toString());
     _logoBase64 = widget.initialSettings.logoBase64;
   }
 
@@ -919,6 +931,7 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
   void dispose() {
     _companyNameController.dispose();
     _addressController.dispose();
+    _nextEstimateNumberController.dispose();
     super.dispose();
   }
 
@@ -960,6 +973,8 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
         companyName: _companyNameController.text.trim(),
         address: _addressController.text.trim(),
         logoBase64: _logoBase64,
+        nextEstimateNumber: int.tryParse(_nextEstimateNumberController.text.trim()) ??
+            widget.initialSettings.nextEstimateNumber,
       );
       final saved = await OwnerSettingsService.save(settings);
       if (!mounted) return;
@@ -1002,6 +1017,22 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
                   decoration: const InputDecoration(labelText: 'Business address'),
                   validator: (value) =>
                       (value == null || value.trim().isEmpty) ? 'Business address is required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _nextEstimateNumberController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Next quote number',
+                    helperText: 'The next estimate created will use EST-#### starting from this number.',
+                  ),
+                  validator: (value) {
+                    final parsed = int.tryParse((value ?? '').trim());
+                    if (parsed == null || parsed < 1) {
+                      return 'Enter a whole number of 1 or more';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16),
                 const Text('Logo', style: TextStyle(fontWeight: FontWeight.w600)),

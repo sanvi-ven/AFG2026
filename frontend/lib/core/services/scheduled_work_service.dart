@@ -42,6 +42,32 @@ class ScheduledWorkService {
     });
   }
 
+  /// jobs scheduled for exactly [day] (calendar-day match on scheduledDate),
+  /// optionally restricted to one team; omit [teamId] for a cross-team view.
+  static Stream<List<ScheduledWork>> watchJobsForDay({required DateTime day, String? teamId}) {
+    Query<Map<String, dynamic>> query = _collection;
+    if (teamId != null && teamId.trim().isNotEmpty) {
+      query = query.where('teamId', isEqualTo: teamId.trim());
+    }
+
+    final startOfDay = DateTime(day.year, day.month, day.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    return query.snapshots().map((snapshot) {
+      var items = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return ScheduledWork.fromMap({...data, 'id': doc.id});
+      }).toList();
+
+      items = items
+          .where((item) =>
+              !item.scheduledDate.isBefore(startOfDay) && item.scheduledDate.isBefore(endOfDay))
+          .toList();
+      items.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
+      return items;
+    });
+  }
+
   /// create a new scheduled work order from an estimate and return work id
   static Future<String> createScheduledWork({
     required String estimateId,

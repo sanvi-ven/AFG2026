@@ -273,6 +273,31 @@ class _InviteCodesTabState extends State<_InviteCodesTab> {
     }
   }
 
+  Future<void> _confirmDelete(InviteCode code) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Invite Code'),
+        content: Text(
+          "Delete ${code.code}? This can't be undone and the code will stop working immediately.",
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await InviteCodeService.deleteCode(code.code);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -319,11 +344,10 @@ class _InviteCodesTabState extends State<_InviteCodesTab> {
                     child: ListTile(
                       title: Text(code.code),
                       subtitle: Text(code.label.isEmpty ? 'No label' : code.label),
-                      trailing: Switch(
-                        value: code.active,
-                        onChanged: (value) => value
-                            ? null
-                            : InviteCodeService.deactivate(code.code),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        tooltip: 'Delete invite code',
+                        onPressed: () => _confirmDelete(code),
                       ),
                     ),
                   ),

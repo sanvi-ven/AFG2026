@@ -34,24 +34,21 @@ class InviteCodeService {
     }
 
     await doc.set(
-      InviteCode(code: normalizedCode, active: true, label: label.trim(), createdAt: DateTime.now()).toMap(),
+      InviteCode(code: normalizedCode, label: label.trim(), createdAt: DateTime.now()).toMap(),
     );
   }
 
-  /// owner action: deactivate a code without deleting its history
-  static Future<void> deactivate(String code) async {
-    await _collection.doc(code.trim().toUpperCase()).set({'active': false}, SetOptions(merge: true));
+  /// owner action: permanently delete a code; it stops working immediately
+  static Future<void> deleteCode(String code) async {
+    await _collection.doc(code.trim().toUpperCase()).delete();
   }
 
-  /// employee signup-time check that a code exists and is active
+  /// employee signup-time check that a code exists
   static Future<bool> validate(String code) async {
     final normalizedCode = code.trim().toUpperCase();
     if (normalizedCode.isEmpty) return false;
 
     final snapshot = await _collection.doc(normalizedCode).get();
-    final data = snapshot.data();
-    if (!snapshot.exists || data == null) return false;
-
-    return data['active'] as bool? ?? false;
+    return snapshot.exists;
   }
 }

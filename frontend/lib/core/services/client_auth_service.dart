@@ -60,8 +60,38 @@ class ClientAuthService {
 
     return profile;
   }
+  /// turn an owner-created dummy client into a real login: validates the
+  /// one-time claim code, then sets the real email and password on that
+  /// same client record so existing estimates/invoices stay linked.
+  static Future<ClientProfile> claimAccount({
+    required String code,
+    required String email,
+    required String password,
+  }) async {
+    final profile = await ClientProfileService.fetchByClaimCode(code);
+    if (profile == null) {
+      throw Exception('That claim code is invalid or has already been used.');
+    }
+
+    final normalizedEmail = ClientProfileService.normalizeEmail(email);
+    final existingByEmail = await ClientProfileService.fetchByEmail(normalizedEmail);
+    if (existingByEmail != null && existingByEmail.signupId != profile.signupId) {
+      throw Exception('An account with that email address already exists.');
+    }
+
+    await ClientProfileService.updateEmail(profile.signupId, normalizedEmail);
+    await ClientProfileService.updatePasswordHash(
+      email: normalizedEmail,
+      passwordHash: _hashPassword(password),
+    );
+    await ClientProfileService.clearClaimCode(profile.signupId);
+
+    final updated = await ClientProfileService.fetchBySignupId(profile.signupId);
+    return updated ?? profile.copyWith(email: normalizedEmail, hasPassword: true);
+  }
+
 /// update client password after verifying the old password.
-  
+
   static Future<void> changePassword({
     required String email,
     required String oldPassword,

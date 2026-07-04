@@ -12,6 +12,7 @@ import 'core/services/message_service.dart';
 import 'core/services/session_persistence_service.dart';
 import 'core/state/client_session.dart';
 import 'core/state/employee_session.dart';
+import 'core/state/owner_session.dart';
 import 'core/theme/app_theme.dart';
 import 'models/message.dart';
 import 'features/auth/presentation/login_page.dart';
@@ -38,9 +39,11 @@ class AnchorApp extends StatelessWidget {
       title: 'Anchor',
       theme: AppTheme.light(),
       builder: (context, child) {
-        // wrap app with notification listener to recieve messages
+        // wrap app with notification listeners to recieve messages
         return _ClientNotificationListener(
-          child: child ?? const SizedBox.shrink(),
+          child: _OwnerNotificationListener(
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
       home: useDemoRole
@@ -144,6 +147,84 @@ class _ClientNotificationListenerState extends State<_ClientNotificationListener
   Widget build(BuildContext context) => widget.child;
 }
 
+class _OwnerNotificationListener extends StatefulWidget {
+  const _OwnerNotificationListener({required this.child});
+
+  final Widget child;
+
+  /// listen for new client-authored replies and show local notifications
+  @override
+  State<_OwnerNotificationListener> createState() => _OwnerNotificationListenerState();
+}
+
+class _OwnerNotificationListenerState extends State<_OwnerNotificationListener> {
+  StreamSubscription<List<ClientThreadSummary>>? _subscription;
+  bool _bootstrapDone = false;
+  Set<String> _knownMessageIds = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    OwnerSession.isSignedIn.addListener(_syncSubscription);
+    _syncSubscription();
+  }
+
+  @override
+  void dispose() {
+    OwnerSession.isSignedIn.removeListener(_syncSubscription);
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  void _syncSubscription() {
+    if (!OwnerSession.isSignedIn.value) {
+      _bootstrapDone = false;
+      _knownMessageIds = <String>{};
+      _subscription?.cancel();
+      _subscription = null;
+      return;
+    }
+
+    if (_subscription != null) {
+      return;
+    }
+
+    _bootstrapDone = false;
+    _knownMessageIds = <String>{};
+
+    _subscription = MessageService.watchClientThreads().listen((threads) async {
+      final latestClientMessages = threads
+          .where((thread) => thread.lastMessage.senderRole == 'client')
+          .map((thread) => thread.lastMessage)
+          .toList();
+
+      // on first load, just collect known ids without showing notificaitons
+      if (!_bootstrapDone) {
+        _knownMessageIds = latestClientMessages.map((item) => item.id).toSet();
+        _bootstrapDone = true;
+        return;
+      }
+
+      for (final message in latestClientMessages) {
+        if (_knownMessageIds.contains(message.id)) {
+          continue;
+        }
+        _knownMessageIds.add(message.id);
+        if (!message.read) {
+          await LocalNotificationService.showMessageNotification(
+            id: message.id.hashCode,
+            title: message.title,
+            body: message.body,
+          );
+        }
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 /// gate to show dashboard or session restore based on persist stored session
 class _SessionGate extends StatefulWidget {
   const _SessionGate();
@@ -174,6 +255,9 @@ class _SessionGateState extends State<_SessionGate> {
     }
     if (session?.role == 'employee' && session?.employeeProfile != null) {
       EmployeeSession.setProfile(session!.employeeProfile!);
+    }
+    if (session?.role == 'owner') {
+      OwnerSession.setSignedIn();
     }
     // update ui once session loading completes
     if (mounted) {

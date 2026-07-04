@@ -1,16 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// represents an owner-generated code employees use to self-signup
+/// represents an owner-generated code employees use to self-signup.
+/// deleting a code is the only lifecycle action — existence in Firestore
+/// is what makes it valid, so there's no separate active/inactive state.
 class InviteCode {
   const InviteCode({
     required this.code,
-    required this.active,
     required this.label,
     required this.createdAt,
   });
 
   final String code;
-  final bool active;
   final String label;
   final DateTime createdAt;
 
@@ -23,7 +23,6 @@ class InviteCode {
 
     return InviteCode(
       code: (map['code'] as String? ?? '').trim(),
-      active: map['active'] as bool? ?? true,
       label: (map['label'] as String? ?? '').trim(),
       createdAt: createdAt,
     );
@@ -33,7 +32,6 @@ class InviteCode {
   Map<String, dynamic> toMap() {
     return {
       'code': code,
-      'active': active,
       'label': label,
       'createdAt': createdAt,
     };

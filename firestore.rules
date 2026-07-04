@@ -9,8 +9,27 @@ service cloud.firestore {
       allow read, update, delete: if request.auth != null && resource.data.email == request.auth.token.email;
       // Allow reads by anyone (for autocomplete)
       allow read: if request.auth == null;
+      // Owner-side archive/edit/delete (from the Clients page) has no real
+      // authenticated session to check either, same as the other collections below.
+      allow update, delete: if request.auth == null;
     }
-    
+
+    // Estimates and invoices previously had no rule at all here, which fell
+    // through to default-deny for every role, owner included.
+    match /estimates/{document=**} {
+      allow read, write: if true;
+    }
+
+    match /invoices/{document=**} {
+      allow read, write: if true;
+    }
+
+    // client_messages previously had no explicit rule at all here, which fell
+    // through to default-deny for every role, owner and client alike.
+    match /client_messages/{document=**} {
+      allow read, write: if true;
+    }
+
     // Employee accounts, gated the same way client_signups is: no real
     // Firebase Auth session exists in this app today (see owner/client login
     // flows), so this mirrors the client_signups trust model rather than

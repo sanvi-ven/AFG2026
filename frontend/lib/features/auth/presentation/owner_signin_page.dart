@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/services/session_persistence_service.dart';
+import '../../../core/state/owner_session.dart';
 import '../../../shared/widgets/app_logo.dart';
 
 /// signin page for owner with static password
@@ -55,6 +56,7 @@ class _OwnerSigninPageState extends State<OwnerSigninPage> {
     }
 
     await SessionPersistenceService.saveOwnerSession();
+    OwnerSession.setSignedIn();
 
     if (!mounted) {
       return;

@@ -3,11 +3,15 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../../core/router/app_router.dart';
+import '../../../core/services/client_profile_service.dart';
 import '../../../core/services/invoice_pdf_service.dart';
 import '../../../core/services/invoice_service.dart';
 import '../../../core/state/client_session.dart';
+import '../../../models/client_profile.dart';
 import '../../../models/invoice.dart';
 import '../../../shared/widgets/app_scaffold.dart';
+import '../../../shared/widgets/sort_control.dart';
 
 /// page for viewing and managing invoices with pdf download and payment tracking
 class InvoicesPage extends StatefulWidget {
@@ -23,6 +27,17 @@ class InvoicesPage extends StatefulWidget {
 class _InvoicesPageState extends State<InvoicesPage> {
   String? _downloadingInvoiceId;
   String? _markingPaidInvoiceId;
+  ListSortMode _sortMode = ListSortMode.newestFirst;
+
+  void _viewEstimate(Invoice invoice) {
+    final estimateId = invoice.sourceEstimateId;
+    if (estimateId == null || estimateId.isEmpty) return;
+    Navigator.pushNamed(
+      context,
+      AppRouter.estimates,
+      arguments: {'role': widget.role, 'authToken': widget.authToken, 'highlightId': estimateId},
+    );
+  }
 
   Future<void> _markAsPaid(Invoice invoice) async {
     setState(() => _markingPaidInvoiceId = invoice.id);
@@ -89,49 +104,81 @@ class _InvoicesPageState extends State<InvoicesPage> {
               ),
             )
           else
-            StreamBuilder<List<Invoice>>(
-              stream: InvoiceService.watchInvoices(role: widget.role, clientId: clientId),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+            StreamBuilder<List<ClientProfile>>(
+              stream: ClientProfileService.watchAllProfiles(),
+              builder: (context, clientsSnapshot) {
+                final clients = clientsSnapshot.data ?? const <ClientProfile>[];
 
-                if (snapshot.hasError) {
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text('Failed to load invoices: ${snapshot.error}'),
-                    ),
-                  );
-                }
+                return StreamBuilder<List<Invoice>>(
+                  stream: InvoiceService.watchInvoices(role: widget.role, clientId: clientId),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                final invoices = snapshot.data ?? const <Invoice>[];
-                if (invoices.isEmpty) {
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(widget.role == 'owner'
-                          ? 'No invoices yet. Convert approved estimates to invoices from the Estimates page.'
-                          : 'No invoices available for your client ID yet.'),
-                    ),
-                  );
-                }
-
-                return Column(
-                  children: [
-                    for (final invoice in invoices)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _InvoiceCard(
-                          invoice: invoice,
-                          role: widget.role,
-                          isDownloadingPdf: _downloadingInvoiceId == invoice.id,
-                          isMarkingPaid: _markingPaidInvoiceId == invoice.id,
-                          onDownloadPdf: () => _downloadInvoicePdf(invoice),
-                          onMarkPaid: () => _markAsPaid(invoice),
+                    if (snapshot.hasError) {
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text('Failed to load invoices: ${snapshot.error}'),
                         ),
-                      ),
-                  ],
+                      );
+                    }
+
+                    final invoices = snapshot.data ?? const <Invoice>[];
+                    if (invoices.isEmpty) {
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(widget.role == 'owner'
+                              ? 'No invoices yet. Convert approved estimates to invoices from the Estimates page.'
+                              : 'No invoices available for your client ID yet.'),
+                        ),
+                      );
+                    }
+
+                    final sorted = [...invoices];
+                    switch (_sortMode) {
+                      case ListSortMode.newestFirst:
+                        sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                        break;
+                      case ListSortMode.oldestFirst:
+                        sorted.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+                        break;
+                      case ListSortMode.client:
+                        sorted.sort((a, b) => ClientProfileService.displayNameFor(clients, a.clientId)
+                            .toLowerCase()
+                            .compareTo(ClientProfileService.displayNameFor(clients, b.clientId).toLowerCase()));
+                        break;
+                    }
+
+                    return Column(
+                      children: [
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: SortControl(
+                            value: _sortMode,
+                            onChanged: (mode) => setState(() => _sortMode = mode),
+                          ),
+                        ),
+                        for (final invoice in sorted)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _InvoiceCard(
+                              invoice: invoice,
+                              role: widget.role,
+                              isDownloadingPdf: _downloadingInvoiceId == invoice.id,
+                              isMarkingPaid: _markingPaidInvoiceId == invoice.id,
+                              onDownloadPdf: () => _downloadInvoicePdf(invoice),
+                              onMarkPaid: () => _markAsPaid(invoice),
+                              onViewEstimate: (invoice.sourceEstimateId == null || invoice.sourceEstimateId!.isEmpty)
+                                  ? null
+                                  : () => _viewEstimate(invoice),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 );
               },
             ),
@@ -149,6 +196,7 @@ class _InvoiceCard extends StatelessWidget {
     required this.isMarkingPaid,
     required this.onDownloadPdf,
     required this.onMarkPaid,
+    this.onViewEstimate,
   });
 
   final Invoice invoice;
@@ -157,6 +205,7 @@ class _InvoiceCard extends StatelessWidget {
   final bool isMarkingPaid;
   final VoidCallback onDownloadPdf;
   final VoidCallback onMarkPaid;
+  final VoidCallback? onViewEstimate;
 
   @override
   Widget build(BuildContext context) {
@@ -243,6 +292,12 @@ class _InvoiceCard extends StatelessWidget {
                       : const Icon(Icons.download_outlined),
                   label: const Text('Download PDF'),
                 ),
+                if (onViewEstimate != null)
+                  OutlinedButton.icon(
+                    onPressed: onViewEstimate,
+                    icon: const Icon(Icons.request_quote_outlined),
+                    label: const Text('View Source Estimate'),
+                  ),
                 if (role == 'owner' && !isPaid && InvoiceStatus.isSent(invoice.status))
                   OutlinedButton.icon(
                     onPressed: isMarkingPaid ? null : onMarkPaid,

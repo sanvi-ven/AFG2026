@@ -13,6 +13,31 @@ class EstimateService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final CollectionReference<Map<String, dynamic>> _collection =
       _firestore.collection('estimates');
+  static final DocumentReference<Map<String, dynamic>> _ownerSettingsDoc =
+      _firestore.collection('owner_settings').doc('default');
+
+  static String _formatEstimateNumber(int n) => 'EST-${n.toString().padLeft(4, '0')}';
+
+  /// preview the next estimate number without consuming it (used to prefill the create form)
+  static Future<String> peekNextEstimateNumber() async {
+    final snapshot = await _ownerSettingsDoc.get();
+    final current = (snapshot.data()?['next_estimate_number'] as num?)?.toInt() ?? 1;
+    return _formatEstimateNumber(current);
+  }
+
+  /// atomically read-and-increment the next estimate number counter
+  static Future<String> consumeNextEstimateNumber() {
+    return _firestore.runTransaction<String>((transaction) async {
+      final snapshot = await transaction.get(_ownerSettingsDoc);
+      final current = (snapshot.data()?['next_estimate_number'] as num?)?.toInt() ?? 1;
+      transaction.set(
+        _ownerSettingsDoc,
+        {'next_estimate_number': current + 1},
+        SetOptions(merge: true),
+      );
+      return _formatEstimateNumber(current);
+    });
+  }
 
   /// listen to real-time estimate updates, filtered by role and clientId
   static Stream<List<Estimate>> watchEstimates({required String role, String? clientId}) {
@@ -113,6 +138,26 @@ class EstimateService {
       },
       SetOptions(merge: true),
   /// update estimate status to pending, approved, rejected, etc
+    );
+  }
+
+  /// owner action: approve a pending estimate on the client's behalf after
+  /// getting confirmation by phone or text outside the app
+  static Future<void> approveByOwner({
+    required String estimateId,
+    required String method,
+    String note = '',
+  }) async {
+    await _collection.doc(estimateId).set(
+      {
+        'status': InvoiceStatus.approved,
+        'approvedByOwner': true,
+        'ownerApprovalMethod': method,
+        'ownerApprovalNote': note.trim(),
+        'ownerApprovedAt': DateTime.now(),
+        'updatedAt': DateTime.now(),
+      },
+      SetOptions(merge: true),
     );
   }
 

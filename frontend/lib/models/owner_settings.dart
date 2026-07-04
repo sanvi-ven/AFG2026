@@ -5,6 +5,7 @@ class OwnerSettings {
     required this.address,
     this.logoUrl,
     this.logoBase64,
+    this.nextEstimateNumber = 1,
   });
 
   final String companyName;
@@ -13,6 +14,8 @@ class OwnerSettings {
   final String? logoUrl;
   // Primary: base64-encoded logo stored directly in Firestore
   final String? logoBase64;
+  // Counter used to generate the next sequential estimate number (EST-0001, ...)
+  final int nextEstimateNumber;
 
   bool get hasLogo =>
       (logoBase64 != null && logoBase64!.isNotEmpty) ||
@@ -30,6 +33,7 @@ class OwnerSettings {
       address: (map['address'] as String? ?? '').trim(),
       logoUrl: (logo == null || logo.isEmpty) ? null : logo,
       logoBase64: (base64 == null || base64.isEmpty) ? null : base64,
+      nextEstimateNumber: (map['next_estimate_number'] as num?)?.toInt() ?? 1,
     );
   }
 
@@ -40,6 +44,7 @@ class OwnerSettings {
       'address': address.trim(),
       'logo_url': logoUrl?.trim(),
       'logo_base64': logoBase64,
+      'next_estimate_number': nextEstimateNumber,
     };
   }
 
@@ -50,12 +55,14 @@ class OwnerSettings {
     String? logoUrl,
     String? logoBase64,
     bool clearLogo = false,
+    int? nextEstimateNumber,
   }) {
     return OwnerSettings(
       companyName: companyName ?? this.companyName,
       address: address ?? this.address,
       logoUrl: clearLogo ? null : (logoUrl ?? this.logoUrl),
       logoBase64: clearLogo ? null : (logoBase64 ?? this.logoBase64),
+      nextEstimateNumber: nextEstimateNumber ?? this.nextEstimateNumber,
     );
   }
 }

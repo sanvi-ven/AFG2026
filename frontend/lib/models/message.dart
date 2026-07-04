@@ -97,3 +97,16 @@ class OwnerBroadcastSummary {
   final int recipientCount;
   final int readCount;
 }
+
+/// owner-side summary of a single client's two-way message thread
+class ClientThreadSummary {
+  const ClientThreadSummary({
+    required this.clientId,
+    required this.lastMessage,
+    required this.unreadFromClientCount,
+  });
+
+  final String clientId;
+  final MessageLog lastMessage;
+  final int unreadFromClientCount;
+}

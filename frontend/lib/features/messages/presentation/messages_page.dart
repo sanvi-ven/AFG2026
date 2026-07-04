@@ -25,22 +25,26 @@ class MessagesPage extends StatefulWidget {
   State<MessagesPage> createState() => _MessagesPageState();
 }
 
-class _MessagesPageState extends State<MessagesPage> {
+class _MessagesPageState extends State<MessagesPage> with SingleTickerProviderStateMixin {
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
   final _clientIdsController = TextEditingController();
+  final _replyController = TextEditingController();
 
   bool _isSending = false;
+  bool _isSendingReply = false;
   bool _isLoadingClientSuggestions = true;
   StreamSubscription<List<ClientProfile>>? _clientDirectorySub;
   Timer? _clientSuggestionDebounce;
   List<ClientProfile> _knownClients = const [];
   List<ClientProfile> _clientSuggestions = const [];
   final List<ClientProfile> _selectedRecipients = <ClientProfile>[];
+  late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _clientDirectorySub =
         ClientProfileService.watchAllProfiles().listen((profiles) {
       if (!mounted) {
@@ -72,6 +76,8 @@ class _MessagesPageState extends State<MessagesPage> {
     _titleController.dispose();
     _bodyController.dispose();
     _clientIdsController.dispose();
+    _replyController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -262,7 +268,53 @@ class _MessagesPageState extends State<MessagesPage> {
     );
   }
 
+  Future<void> _sendClientReply(String clientId) async {
+    final body = _replyController.text.trim();
+    if (body.isEmpty) return;
+
+    setState(() => _isSendingReply = true);
+    try {
+      await MessageService.sendReply(
+        senderRole: 'client',
+        targetClientId: clientId,
+        title: 'Reply',
+        body: body,
+      );
+      _replyController.clear();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send reply: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSendingReply = false);
+    }
+  }
+
   Widget _buildOwnerView(BuildContext context) {
+    return Column(
+      children: [
+        TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Broadcasts'),
+            Tab(text: 'Client Threads'),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildBroadcastsTab(context),
+              _buildClientThreadsTab(context),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBroadcastsTab(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
       children: [
@@ -322,6 +374,64 @@ class _MessagesPageState extends State<MessagesPage> {
     );
   }
 
+  Widget _buildClientThreadsTab(BuildContext context) {
+    return StreamBuilder<List<ClientThreadSummary>>(
+      stream: MessageService.watchClientThreads(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Failed to load threads: ${snapshot.error}'));
+        }
+
+        final threads = snapshot.data ?? const <ClientThreadSummary>[];
+        if (threads.isEmpty) {
+          return const Center(child: Text('No client messages yet.'));
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+          itemCount: threads.length,
+          itemBuilder: (context, index) {
+            final thread = threads[index];
+            final displayName = ClientProfileService.displayNameFor(_knownClients, thread.clientId);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Card(
+                child: ListTile(
+                  title: Text(displayName),
+                  subtitle: Text(
+                    thread.lastMessage.body,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: thread.unreadFromClientCount > 0
+                      ? CircleAvatar(
+                          radius: 12,
+                          child: Text(
+                            '${thread.unreadFromClientCount}',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                        )
+                      : const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => _OwnerThreadDetailPage(
+                        clientId: thread.clientId,
+                        displayName: displayName,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildClientView(BuildContext context, String? clientId) {
     if (clientId == null || clientId.trim().isEmpty) {
       return const Padding(
@@ -357,40 +467,51 @@ class _MessagesPageState extends State<MessagesPage> {
         final messages = snapshot.data ?? const <MessageLog>[];
         final unreadCount = messages.where((item) => item.isUnread).length;
 
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+        return Column(
           children: [
-            _ClientInboxBanner(unreadCount: unreadCount),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: OutlinedButton.icon(
-                onPressed:
-                    unreadCount > 0 ? () => _markAllRead(clientId) : null,
-                icon: const Icon(Icons.done_all),
-                label: const Text('Mark All Read'),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                children: [
+                  _ClientInboxBanner(unreadCount: unreadCount),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton.icon(
+                      onPressed:
+                          unreadCount > 0 ? () => _markAllRead(clientId) : null,
+                      icon: const Icon(Icons.done_all),
+                      label: const Text('Mark All Read'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (messages.isEmpty)
+                    const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('No messages yet.'),
+                      ),
+                    )
+                  else
+                    ...messages.map(
+                      (message) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _ClientMessageCard(
+                          message: message,
+                          onMarkRead: message.isUnread
+                              ? () => _markMessageRead(message.id)
+                              : null,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            if (messages.isEmpty)
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('No messages yet.'),
-                ),
-              )
-            else
-              ...messages.map(
-                (message) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _ClientMessageCard(
-                    message: message,
-                    onMarkRead: message.isUnread
-                        ? () => _markMessageRead(message.id)
-                        : null,
-                  ),
-                ),
-              ),
+            _ReplyComposer(
+              controller: _replyController,
+              isSending: _isSendingReply,
+              onSend: () => _sendClientReply(clientId),
+            ),
           ],
         );
       },
@@ -682,6 +803,167 @@ class _ClientMessageCard extends StatelessWidget {
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// shared reply text field + send button, used both in the client's inbox
+/// and in the owner's per-client thread detail view.
+class _ReplyComposer extends StatelessWidget {
+  const _ReplyComposer({
+    required this.controller,
+    required this.isSending,
+    required this.onSend,
+  });
+
+  final TextEditingController controller;
+  final bool isSending;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              minLines: 1,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                hintText: 'Type a reply...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton.filled(
+            onPressed: isSending ? null : onSend,
+            icon: isSending
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.send),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// owner-side chat-style view of a single client's two-way message thread
+class _OwnerThreadDetailPage extends StatefulWidget {
+  const _OwnerThreadDetailPage({required this.clientId, required this.displayName});
+
+  final String clientId;
+  final String displayName;
+
+  @override
+  State<_OwnerThreadDetailPage> createState() => _OwnerThreadDetailPageState();
+}
+
+class _OwnerThreadDetailPageState extends State<_OwnerThreadDetailPage> {
+  final _replyController = TextEditingController();
+  bool _isSending = false;
+
+  @override
+  void dispose() {
+    _replyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final body = _replyController.text.trim();
+    if (body.isEmpty) return;
+
+    setState(() => _isSending = true);
+    try {
+      await MessageService.sendReply(
+        senderRole: 'owner',
+        targetClientId: widget.clientId,
+        title: 'Reply',
+        body: body,
+      );
+      _replyController.clear();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send reply: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.displayName)),
+      body: Column(
+        children: [
+          Expanded(
+            child: StreamBuilder<List<MessageLog>>(
+              stream: MessageService.watchClientMessages(clientId: widget.clientId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final messages = snapshot.data ?? const <MessageLog>[];
+                if (messages.isEmpty) {
+                  return const Center(child: Text('No messages yet.'));
+                }
+                // messages come back newest-first; reverse for a chat-style
+                // oldest-to-newest reading order.
+                final chronological = messages.reversed.toList();
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: chronological.length,
+                  itemBuilder: (context, index) => _ChatBubble(message: chronological[index]),
+                );
+              },
+            ),
+          ),
+          _ReplyComposer(controller: _replyController, isSending: _isSending, onSend: _send),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatBubble extends StatelessWidget {
+  const _ChatBubble({required this.message});
+
+  final MessageLog message;
+
+  @override
+  Widget build(BuildContext context) {
+    final isOwner = message.senderRole == 'owner';
+    final colorScheme = Theme.of(context).colorScheme;
+    final dateLabel = DateFormat.MMMd().add_jm().format(message.createdAt);
+
+    return Align(
+      alignment: isOwner ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        constraints: const BoxConstraints(maxWidth: 360),
+        decoration: BoxDecoration(
+          color: isOwner ? colorScheme.primaryContainer : colorScheme.secondaryContainer,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message.body),
+            const SizedBox(height: 4),
+            Text(dateLabel, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
       ),
