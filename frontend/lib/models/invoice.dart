@@ -12,6 +12,7 @@ class Invoice {
     required this.createdAt,
     required this.updatedAt,
     this.sourceEstimateId,
+    this.isArchived = false,
   });
 
   final String id;
@@ -23,6 +24,7 @@ class Invoice {
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? sourceEstimateId;
+  final bool isArchived;
 
   bool get isPending => status == InvoiceStatus.pending;
   bool get isApproved => InvoiceStatus.isSent(status);
@@ -55,6 +57,7 @@ class Invoice {
       createdAt: readDate(map['createdAt']),
       updatedAt: readDate(map['updatedAt']),
       sourceEstimateId: (map['sourceEstimateId'] as String?)?.trim(),
+      isArchived: map['archived'] as bool? ?? false,
     );
   }
 
@@ -69,6 +72,7 @@ class Invoice {
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'sourceEstimateId': sourceEstimateId,
+      'archived': isArchived,
     };
   }
 }

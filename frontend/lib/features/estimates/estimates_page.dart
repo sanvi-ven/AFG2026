@@ -47,6 +47,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
   String? _requestingChangesEstimateId;
   String? _revisingEstimateId;
   String? _archivingEstimateId;
+  String? _deletingEstimateId;
   Timer? _clientSearchDebounce;
   StreamSubscription<List<ClientProfile>>? _clientsSub;
   List<ClientProfile> _knownClients = const [];
@@ -406,28 +407,68 @@ class _EstimatesPageState extends State<EstimatesPage> {
       pickedTime.minute,
     );
 
+    final recurrence = await showDialog<_RecurrenceChoice>(
+      context: context,
+      builder: (_) => const _RecurrenceDialog(),
+    );
+    if (recurrence == null || !mounted) return;
+
     setState(() => _schedulingEstimateId = estimate.id);
     try {
       // Denormalize the client's address/phone onto the job record so employee
       // screens never need read access to the client_signups collection.
       final client = await ClientProfileService.fetchBySignupId(estimate.clientId);
+      final address = client?.address ?? '';
+      final phoneNumber = client?.phoneNumber ?? '';
 
-      final workId = await ScheduledWorkService.createScheduledWork(
-        estimateId: estimate.id,
-        estimateNumber: estimate.estimateNumber,
-        clientId: estimate.clientId,
-        services: estimate.services,
-        total: estimate.total,
-        scheduledDate: scheduledDateTime,
-        address: client?.address ?? '',
-        phoneNumber: client?.phoneNumber ?? '',
-      );
-      await EstimateService.markScheduled(estimateId: estimate.id, scheduledWorkId: workId);
+      if (recurrence.cadence == _RecurrenceCadence.none) {
+        final workId = await ScheduledWorkService.createScheduledWork(
+          estimateId: estimate.id,
+          estimateNumber: estimate.estimateNumber,
+          clientId: estimate.clientId,
+          services: estimate.services,
+          total: estimate.total,
+          scheduledDate: scheduledDateTime,
+          address: address,
+          phoneNumber: phoneNumber,
+        );
+        await EstimateService.markScheduled(estimateId: estimate.id, scheduledWorkId: workId);
+      } else {
+        final groupId = ScheduledWorkService.newRecurringGroupId();
+        for (var n = 0; n < recurrence.occurrences; n++) {
+          final occurrenceDate = recurrence.cadence == _RecurrenceCadence.monthly
+              ? DateTime(
+                  scheduledDateTime.year,
+                  scheduledDateTime.month + n,
+                  scheduledDateTime.day,
+                  scheduledDateTime.hour,
+                  scheduledDateTime.minute,
+                )
+              : scheduledDateTime.add(Duration(days: recurrence.cadenceDays! * n));
+
+          final workId = await ScheduledWorkService.createScheduledWork(
+            estimateId: estimate.id,
+            estimateNumber: estimate.estimateNumber,
+            clientId: estimate.clientId,
+            services: estimate.services,
+            total: estimate.total,
+            scheduledDate: occurrenceDate,
+            address: address,
+            phoneNumber: phoneNumber,
+            recurringGroupId: groupId,
+          );
+          if (n == 0) {
+            await EstimateService.markScheduled(estimateId: estimate.id, scheduledWorkId: workId);
+          }
+        }
+      }
+
       if (!mounted) return;
       final formatted = DateFormat('MMM d, yyyy · h:mm a').format(scheduledDateTime);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Work scheduled for $formatted.')),
-      );
+      final message = recurrence.cadence == _RecurrenceCadence.none
+          ? 'Work scheduled for $formatted.'
+          : '${recurrence.occurrences} jobs scheduled starting $formatted.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -491,6 +532,34 @@ class _EstimatesPageState extends State<EstimatesPage> {
       );
     } finally {
       if (mounted) setState(() => _archivingEstimateId = null);
+    }
+  }
+
+  Future<void> _deleteEstimatePermanently(Estimate estimate) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Estimate Permanently'),
+        content: Text("Permanently delete ${estimate.estimateNumber}? This can't be undone."),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deletingEstimateId = estimate.id);
+    try {
+      await EstimateService.deleteEstimatePermanently(estimate.id);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _deletingEstimateId = null);
     }
   }
 
@@ -678,6 +747,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
                           isRequestingChanges: _requestingChangesEstimateId == estimate.id,
                           isRevising: _revisingEstimateId == estimate.id,
                           isArchiving: _archivingEstimateId == estimate.id,
+                          isDeleting: _deletingEstimateId == estimate.id,
                           onApprove: () => _setEstimateStatus(estimate.id, InvoiceStatus.approved),
                           onRequestChanges: () => _requestEstimateChanges(estimate),
                           onConvert: () => _convertToInvoice(estimate),
@@ -686,6 +756,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
                           onDownloadEstimatePdf: () => _downloadEstimatePdf(estimate),
                           onReviseAndResend: () => _reviseAndResendEstimate(estimate),
                           onArchive: widget.role == 'owner' ? () => _archiveEstimate(estimate) : null,
+                          onDeletePermanently:
+                              widget.role == 'owner' ? () => _deleteEstimatePermanently(estimate) : null,
                           onViewInAppointments: () => _viewInAppointments(estimate),
                           onOwnerApprove: () => _approveByOwner(estimate),
                         ),
@@ -930,7 +1002,9 @@ class _EstimateCard extends StatelessWidget {
     required this.onViewInAppointments,
     required this.onOwnerApprove,
     required this.isArchiving,
+    required this.isDeleting,
     this.onArchive,
+    this.onDeletePermanently,
   });
 
   final Estimate estimate;
@@ -943,6 +1017,7 @@ class _EstimateCard extends StatelessWidget {
   final bool isRequestingChanges;
   final bool isRevising;
   final bool isArchiving;
+  final bool isDeleting;
   final VoidCallback onApprove;
   final VoidCallback onRequestChanges;
   final VoidCallback onConvert;
@@ -953,6 +1028,7 @@ class _EstimateCard extends StatelessWidget {
   final VoidCallback onViewInAppointments;
   final VoidCallback onOwnerApprove;
   final VoidCallback? onArchive;
+  final VoidCallback? onDeletePermanently;
 
   String _displayStatus(String status) {
     final statusKey = status.trim().toLowerCase();
@@ -1056,15 +1132,26 @@ class _EstimateCard extends StatelessWidget {
                     style: TextStyle(color: statusColor, fontWeight: FontWeight.w700),
                   ),
                 ),
-                if (onArchive != null) ...[
+                if (!estimate.isArchived && onArchive != null) ...[
                   const SizedBox(width: 4),
                   isArchiving
                       ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
                       : IconButton(
                           onPressed: onArchive,
-                          icon: const Icon(Icons.delete_outline),
-                          tooltip: estimate.isArchived ? 'Archived' : 'Archive estimate',
+                          icon: const Icon(Icons.archive_outlined),
+                          tooltip: 'Archive estimate',
                           color: Theme.of(context).colorScheme.outline,
+                          iconSize: 20,
+                        ),
+                ] else if (estimate.isArchived && onDeletePermanently != null) ...[
+                  const SizedBox(width: 4),
+                  isDeleting
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                      : IconButton(
+                          onPressed: onDeletePermanently,
+                          icon: const Icon(Icons.delete_forever_outlined),
+                          tooltip: 'Delete permanently',
+                          color: Theme.of(context).colorScheme.error,
                           iconSize: 20,
                         ),
                 ],
@@ -1301,6 +1388,91 @@ class _OwnerApprovalResult {
 
   final String method;
   final String note;
+}
+
+enum _RecurrenceCadence { none, weekly, biweekly, monthly }
+
+class _RecurrenceChoice {
+  const _RecurrenceChoice({required this.cadence, required this.occurrences});
+
+  final _RecurrenceCadence cadence;
+  /// ignored when cadence == none
+  final int occurrences;
+
+  int? get cadenceDays => switch (cadence) {
+        _RecurrenceCadence.weekly => 7,
+        _RecurrenceCadence.biweekly => 14,
+        _ => null, // monthly is computed via DateTime month-add, not a fixed day count
+      };
+}
+
+class _RecurrenceDialog extends StatefulWidget {
+  const _RecurrenceDialog();
+
+  @override
+  State<_RecurrenceDialog> createState() => _RecurrenceDialogState();
+}
+
+class _RecurrenceDialogState extends State<_RecurrenceDialog> {
+  _RecurrenceCadence _cadence = _RecurrenceCadence.none;
+  int _occurrences = 4;
+
+  void _submit() {
+    Navigator.of(context).pop(
+      _RecurrenceChoice(cadence: _cadence, occurrences: _occurrences),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Repeat This Job?'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Schedule this as a one-time job, or set up a recurring cadence.'),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<_RecurrenceCadence>(
+              initialValue: _cadence,
+              decoration: const InputDecoration(labelText: 'Repeat', border: OutlineInputBorder()),
+              items: const [
+                DropdownMenuItem(value: _RecurrenceCadence.none, child: Text("Don't repeat")),
+                DropdownMenuItem(value: _RecurrenceCadence.weekly, child: Text('Weekly')),
+                DropdownMenuItem(value: _RecurrenceCadence.biweekly, child: Text('Every 2 weeks')),
+                DropdownMenuItem(value: _RecurrenceCadence.monthly, child: Text('Monthly')),
+              ],
+              onChanged: (value) => setState(() => _cadence = value ?? _RecurrenceCadence.none),
+            ),
+            if (_cadence != _RecurrenceCadence.none) ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                initialValue: _occurrences,
+                decoration: const InputDecoration(labelText: 'Number of occurrences', border: OutlineInputBorder()),
+                items: [
+                  for (final count in [2, 4, 6, 8, 12, 16, 26, 52])
+                    DropdownMenuItem(value: count, child: Text('$count')),
+                ],
+                onChanged: (value) => setState(() => _occurrences = value ?? _occurrences),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Continue'),
+        ),
+      ],
+    );
+  }
 }
 
 class _OwnerApprovalDialog extends StatefulWidget {

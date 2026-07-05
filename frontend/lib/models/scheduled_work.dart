@@ -19,6 +19,8 @@ class ScheduledWork {
     this.phoneNumber = '',
     required this.createdAt,
     required this.updatedAt,
+    this.isArchived = false,
+    this.recurringGroupId,
   });
 
   final String id;
@@ -39,6 +41,10 @@ class ScheduledWork {
   final String phoneNumber;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isArchived;
+  /// shared id stamped on every job created in one recurring-schedule batch;
+  /// null for a one-off job
+  final String? recurringGroupId;
 
   /// check if this work is scheduled
   bool get isScheduled => status == ScheduledWorkStatus.scheduled;
@@ -76,6 +82,10 @@ class ScheduledWork {
       phoneNumber: (map['phoneNumber'] as String? ?? '').trim(),
       createdAt: readDate(map['createdAt']),
       updatedAt: readDate(map['updatedAt']),
+      isArchived: map['archived'] as bool? ?? false,
+      recurringGroupId: (map['recurringGroupId'] as String?)?.trim().isEmpty ?? true
+          ? null
+          : (map['recurringGroupId'] as String).trim(),
     );
   }
 
@@ -96,6 +106,8 @@ class ScheduledWork {
       'phoneNumber': phoneNumber,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
+      'archived': isArchived,
+      'recurringGroupId': recurringGroupId,
     };
   }
 }

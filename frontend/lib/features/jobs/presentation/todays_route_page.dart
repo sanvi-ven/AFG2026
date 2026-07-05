@@ -7,8 +7,10 @@ import '../../../models/scheduled_work.dart';
 import '../../../models/team.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/get_directions_button.dart';
+import 'job_manager_tab.dart';
 
-/// owner-only cross-team view of everything scheduled for today, grouped by team
+/// owner-only page: today's cross-team route list, plus a visual drag-and-drop
+/// weekly job manager for rescheduling.
 class TodaysRoutePage extends StatelessWidget {
   const TodaysRoutePage({required this.role, this.authToken, super.key});
 
@@ -26,73 +28,102 @@ class TodaysRoutePage extends StatelessWidget {
       role: role,
       authToken: authToken,
       selectedRoute: AppRouter.todaysRoute,
-      body: StreamBuilder<List<Team>>(
-        stream: TeamService.watchAllTeams(),
-        builder: (context, teamsSnapshot) {
-          return StreamBuilder<List<ScheduledWork>>(
-            stream: ScheduledWorkService.watchJobsForDay(day: DateTime.now()),
-            builder: (context, jobsSnapshot) {
-              if (!teamsSnapshot.hasData || !jobsSnapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              final teamNameFor = {for (final team in teamsSnapshot.data!) team.id: team.name};
-              final jobs = jobsSnapshot.data!;
-              if (jobs.isEmpty) {
-                return const Center(child: Text('No jobs scheduled for today.'));
-              }
-
-              final grouped = <String, List<ScheduledWork>>{};
-              for (final job in jobs) {
-                final teamId = job.teamId?.trim() ?? '';
-                grouped.putIfAbsent(teamId, () => <ScheduledWork>[]).add(job);
-              }
-              final teamIds = grouped.keys.toList()
-                ..sort((a, b) {
-                  if (a.isEmpty) return 1;
-                  if (b.isEmpty) return -1;
-                  return (teamNameFor[a] ?? a).compareTo(teamNameFor[b] ?? b);
-                });
-
-              return ListView(
-                padding: const EdgeInsets.all(16),
+      body: const DefaultTabController(
+        length: 2,
+        child: Column(
+          children: [
+            TabBar(
+              tabs: [
+                Tab(text: "Today's Route"),
+                Tab(text: 'Job Manager'),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
                 children: [
-                  for (final teamId in teamIds) ...[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        teamId.isEmpty ? 'Unassigned' : (teamNameFor[teamId] ?? teamId),
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                      ),
+                  _TodaysRouteTab(),
+                  JobManagerTab(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TodaysRouteTab extends StatelessWidget {
+  const _TodaysRouteTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Team>>(
+      stream: TeamService.watchAllTeams(),
+      builder: (context, teamsSnapshot) {
+        return StreamBuilder<List<ScheduledWork>>(
+          stream: ScheduledWorkService.watchJobsForDay(day: DateTime.now(), role: 'owner'),
+          builder: (context, jobsSnapshot) {
+            if (!teamsSnapshot.hasData || !jobsSnapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final teamNameFor = {for (final team in teamsSnapshot.data!) team.id: team.name};
+            final jobs = jobsSnapshot.data!;
+            if (jobs.isEmpty) {
+              return const Center(child: Text('No jobs scheduled for today.'));
+            }
+
+            final grouped = <String, List<ScheduledWork>>{};
+            for (final job in jobs) {
+              final teamId = job.teamId?.trim() ?? '';
+              grouped.putIfAbsent(teamId, () => <ScheduledWork>[]).add(job);
+            }
+            final teamIds = grouped.keys.toList()
+              ..sort((a, b) {
+                if (a.isEmpty) return 1;
+                if (b.isEmpty) return -1;
+                return (teamNameFor[a] ?? a).compareTo(teamNameFor[b] ?? b);
+              });
+
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                for (final teamId in teamIds) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      teamId.isEmpty ? 'Unassigned' : (teamNameFor[teamId] ?? teamId),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                     ),
-                    for (final job in grouped[teamId]!)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Card(
-                          margin: EdgeInsets.zero,
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.all(14),
-                            title: Text(
-                              job.address.isEmpty ? 'Address unavailable' : job.address,
-                              style: const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: GetDirectionsButton(address: job.address),
-                              ),
+                  ),
+                  for (final job in grouped[teamId]!)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Card(
+                        margin: EdgeInsets.zero,
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(14),
+                          title: Text(
+                            job.address.isEmpty ? 'Address unavailable' : job.address,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: GetDirectionsButton(address: job.address),
                             ),
                           ),
                         ),
                       ),
-                  ],
+                    ),
                 ],
-              );
-            },
-          );
-        },
-      ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

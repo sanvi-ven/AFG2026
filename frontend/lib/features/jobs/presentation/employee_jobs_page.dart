@@ -104,7 +104,7 @@ class _TodaysRouteTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<ScheduledWork>>(
-      stream: ScheduledWorkService.watchJobsForDay(day: DateTime.now(), teamId: teamId),
+      stream: ScheduledWorkService.watchJobsForDay(day: DateTime.now(), role: 'employee', teamId: teamId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());

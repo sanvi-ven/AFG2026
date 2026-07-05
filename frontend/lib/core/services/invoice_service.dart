@@ -23,10 +23,36 @@ class InvoiceService {
       final invoices = snapshot.docs.map((doc) {
         final data = doc.data();
         return Invoice.fromMap({...data, 'id': doc.id});
-      }).toList();
+      }).where((invoice) => role == 'owner' || !invoice.isArchived).toList();
       invoices.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return invoices;
     });
+  }
+
+  /// owner action: hide an invoice from active use without deleting its history
+  static Future<void> archiveInvoice(String invoiceId) async {
+    await _collection.doc(invoiceId).set(
+      {'archived': true, 'updatedAt': DateTime.now()},
+      SetOptions(merge: true),
+    );
+  }
+
+  /// owner action: permanently remove an archived invoice, refusing if it's
+  /// still linked to a scheduled job
+  static Future<void> deleteInvoicePermanently(String invoiceId) async {
+    final normalizedId = invoiceId.trim();
+    final match = await FirebaseFirestore.instance
+        .collection('scheduled_work')
+        .where('invoiceId', isEqualTo: normalizedId)
+        .limit(1)
+        .get();
+    if (match.docs.isNotEmpty) {
+      throw Exception(
+        "This invoice is still linked to a scheduled job and can't be permanently deleted.",
+      );
+    }
+
+    await _collection.doc(normalizedId).delete();
   }
 
   /// create a new invoice with services and auto-calculated total

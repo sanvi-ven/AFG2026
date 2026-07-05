@@ -27,6 +27,8 @@ class InvoicesPage extends StatefulWidget {
 class _InvoicesPageState extends State<InvoicesPage> {
   String? _downloadingInvoiceId;
   String? _markingPaidInvoiceId;
+  String? _archivingInvoiceId;
+  String? _deletingInvoiceId;
   ListSortMode _sortMode = ListSortMode.newestFirst;
 
   void _viewEstimate(Invoice invoice) {
@@ -54,6 +56,64 @@ class _InvoicesPageState extends State<InvoicesPage> {
       );
     } finally {
       if (mounted) setState(() => _markingPaidInvoiceId = null);
+    }
+  }
+
+  Future<void> _archiveInvoice(Invoice invoice) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Archive Invoice'),
+        content: Text(
+          'Archive ${invoice.invoiceNumber}? It will be moved to your archived section.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Archive')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _archivingInvoiceId = invoice.id);
+    try {
+      await InvoiceService.archiveInvoice(invoice.id);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to archive invoice: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _archivingInvoiceId = null);
+    }
+  }
+
+  Future<void> _deleteInvoicePermanently(Invoice invoice) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Invoice Permanently'),
+        content: Text("Permanently delete ${invoice.invoiceNumber}? This can't be undone."),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deletingInvoiceId = invoice.id);
+    try {
+      await InvoiceService.deleteInvoicePermanently(invoice.id);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _deletingInvoiceId = null);
     }
   }
 
@@ -137,20 +197,46 @@ class _InvoicesPageState extends State<InvoicesPage> {
                       );
                     }
 
-                    final sorted = [...invoices];
-                    switch (_sortMode) {
-                      case ListSortMode.newestFirst:
-                        sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-                        break;
-                      case ListSortMode.oldestFirst:
-                        sorted.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-                        break;
-                      case ListSortMode.client:
-                        sorted.sort((a, b) => ClientProfileService.displayNameFor(clients, a.clientId)
-                            .toLowerCase()
-                            .compareTo(ClientProfileService.displayNameFor(clients, b.clientId).toLowerCase()));
-                        break;
+                    void applySort(List<Invoice> list) {
+                      switch (_sortMode) {
+                        case ListSortMode.newestFirst:
+                          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                          break;
+                        case ListSortMode.oldestFirst:
+                          list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+                          break;
+                        case ListSortMode.client:
+                          list.sort((a, b) => ClientProfileService.displayNameFor(clients, a.clientId)
+                              .toLowerCase()
+                              .compareTo(ClientProfileService.displayNameFor(clients, b.clientId).toLowerCase()));
+                          break;
+                      }
                     }
+
+                    final active = invoices.where((i) => !i.isArchived).toList();
+                    final archived = invoices.where((i) => i.isArchived).toList();
+                    applySort(active);
+                    applySort(archived);
+
+                    Widget invoiceCard(Invoice invoice) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _InvoiceCard(
+                            invoice: invoice,
+                            role: widget.role,
+                            isDownloadingPdf: _downloadingInvoiceId == invoice.id,
+                            isMarkingPaid: _markingPaidInvoiceId == invoice.id,
+                            isArchiving: _archivingInvoiceId == invoice.id,
+                            isDeleting: _deletingInvoiceId == invoice.id,
+                            onDownloadPdf: () => _downloadInvoicePdf(invoice),
+                            onMarkPaid: () => _markAsPaid(invoice),
+                            onArchive: widget.role == 'owner' ? () => _archiveInvoice(invoice) : null,
+                            onDeletePermanently:
+                                widget.role == 'owner' ? () => _deleteInvoicePermanently(invoice) : null,
+                            onViewEstimate: (invoice.sourceEstimateId == null || invoice.sourceEstimateId!.isEmpty)
+                                ? null
+                                : () => _viewEstimate(invoice),
+                          ),
+                        );
 
                     return Column(
                       children: [
@@ -161,21 +247,24 @@ class _InvoicesPageState extends State<InvoicesPage> {
                             onChanged: (mode) => setState(() => _sortMode = mode),
                           ),
                         ),
-                        for (final invoice in sorted)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _InvoiceCard(
-                              invoice: invoice,
-                              role: widget.role,
-                              isDownloadingPdf: _downloadingInvoiceId == invoice.id,
-                              isMarkingPaid: _markingPaidInvoiceId == invoice.id,
-                              onDownloadPdf: () => _downloadInvoicePdf(invoice),
-                              onMarkPaid: () => _markAsPaid(invoice),
-                              onViewEstimate: (invoice.sourceEstimateId == null || invoice.sourceEstimateId!.isEmpty)
-                                  ? null
-                                  : () => _viewEstimate(invoice),
+                        for (final invoice in active) invoiceCard(invoice),
+                        if (widget.role == 'owner' && archived.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          ExpansionTile(
+                            title: Text(
+                              'Archived (${archived.length})',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleSmall
+                                  ?.copyWith(color: Theme.of(context).colorScheme.outline),
                             ),
+                            tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+                            childrenPadding: EdgeInsets.zero,
+                            children: [
+                              for (final invoice in archived) invoiceCard(invoice),
+                            ],
                           ),
+                        ],
                       ],
                     );
                   },
@@ -194,18 +283,26 @@ class _InvoiceCard extends StatelessWidget {
     required this.role,
     required this.isDownloadingPdf,
     required this.isMarkingPaid,
+    required this.isArchiving,
+    required this.isDeleting,
     required this.onDownloadPdf,
     required this.onMarkPaid,
     this.onViewEstimate,
+    this.onArchive,
+    this.onDeletePermanently,
   });
 
   final Invoice invoice;
   final String role;
   final bool isDownloadingPdf;
   final bool isMarkingPaid;
+  final bool isArchiving;
+  final bool isDeleting;
   final VoidCallback onDownloadPdf;
   final VoidCallback onMarkPaid;
   final VoidCallback? onViewEstimate;
+  final VoidCallback? onArchive;
+  final VoidCallback? onDeletePermanently;
 
   @override
   Widget build(BuildContext context) {
@@ -256,6 +353,29 @@ class _InvoiceCard extends StatelessWidget {
                     style: TextStyle(color: statusColor, fontWeight: FontWeight.w700),
                   ),
                 ),
+                if (!invoice.isArchived && onArchive != null) ...[
+                  const SizedBox(width: 4),
+                  isArchiving
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                      : IconButton(
+                          onPressed: onArchive,
+                          icon: const Icon(Icons.archive_outlined),
+                          tooltip: 'Archive invoice',
+                          color: Theme.of(context).colorScheme.outline,
+                          iconSize: 20,
+                        ),
+                ] else if (invoice.isArchived && onDeletePermanently != null) ...[
+                  const SizedBox(width: 4),
+                  isDeleting
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                      : IconButton(
+                          onPressed: onDeletePermanently,
+                          icon: const Icon(Icons.delete_forever_outlined),
+                          tooltip: 'Delete permanently',
+                          color: Theme.of(context).colorScheme.error,
+                          iconSize: 20,
+                        ),
+                ],
               ],
             ),
             const SizedBox(height: 4),

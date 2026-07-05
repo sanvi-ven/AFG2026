@@ -63,6 +63,32 @@ class EstimateService {
       SetOptions(merge: true),
     );
   }
+
+  /// owner action: permanently remove an archived estimate, refusing if it
+  /// still has an invoice or scheduled job on file
+  static Future<void> deleteEstimatePermanently(String estimateId) async {
+    final normalizedId = estimateId.trim();
+    final firestore = FirebaseFirestore.instance;
+
+    final guards = {
+      'invoices': const MapEntry('sourceEstimateId', 'an invoice'),
+      'scheduled_work': const MapEntry('estimateId', 'a scheduled job'),
+    };
+    for (final entry in guards.entries) {
+      final match = await firestore
+          .collection(entry.key)
+          .where(entry.value.key, isEqualTo: normalizedId)
+          .limit(1)
+          .get();
+      if (match.docs.isNotEmpty) {
+        throw Exception(
+          "This estimate still has ${entry.value.value} on file and can't be permanently deleted.",
+        );
+      }
+    }
+
+    await _collection.doc(normalizedId).delete();
+  }
 /// create a new estimate with services and auto-calculated total
   
   static Future<void> createEstimate({

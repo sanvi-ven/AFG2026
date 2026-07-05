@@ -46,6 +46,9 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   String? _convertingWorkId;
   String? _downloadingEstimatePdfWorkId;
   String? _markingPaidWorkId;
+  String? _archivingWorkId;
+  String? _deletingWorkId;
+  String? _reschedulingWorkId;
   ListSortMode _sortMode = ListSortMode.newestFirst;
   late final ListHighlightController _highlight = ListHighlightController(widget.highlightId);
 
@@ -118,6 +121,100 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       );
     } finally {
       if (mounted) setState(() => _markingPaidWorkId = null);
+    }
+  }
+
+  Future<void> _archiveWork(ScheduledWork work) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Archive Appointment'),
+        content: Text(
+          'Archive this job (${work.estimateNumber})? It will be moved to your archived section.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Archive')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _archivingWorkId = work.id);
+    try {
+      await ScheduledWorkService.archiveWork(work.id);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to archive job: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _archivingWorkId = null);
+    }
+  }
+
+  Future<void> _deleteWorkPermanently(ScheduledWork work) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Job Permanently'),
+        content: const Text("Permanently delete this job? This can't be undone."),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deletingWorkId = work.id);
+    try {
+      await ScheduledWorkService.deleteWorkPermanently(work.id);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _deletingWorkId = null);
+    }
+  }
+
+  Future<void> _rescheduleWork(ScheduledWork work) async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: work.scheduledDate.isAfter(DateTime.now())
+          ? work.scheduledDate
+          : DateTime.now().add(const Duration(days: 1)),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+    );
+    if (pickedDate == null || !mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(work.scheduledDate),
+    );
+    if (pickedTime == null || !mounted) return;
+
+    final newDate = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
+
+    setState(() => _reschedulingWorkId = work.id);
+    try {
+      await ScheduledWorkService.rescheduleWork(workId: work.id, newDate: newDate);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Rescheduled to ${DateFormat('MMM d, yyyy · h:mm a').format(newDate)}.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to reschedule: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _reschedulingWorkId = null);
     }
   }
 
@@ -242,6 +339,38 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                           },
                         );
 
+                        final active = sorted.where((item) => !item.isArchived).toList();
+                        final archived = sorted.where((item) => item.isArchived).toList();
+
+                        Widget workCard(ScheduledWork item) => KeyedSubtree(
+                              key: _highlight.keyFor(item.id),
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _ScheduledWorkCard(
+                                  work: item,
+                                  role: widget.role,
+                                  teams: teams,
+                                  isHighlighted: _highlight.isHighlighted(item.id),
+                                  isCompleting: _completingWorkId == item.id,
+                                  isConverting: _convertingWorkId == item.id,
+                                  isDownloadingPdf: _downloadingEstimatePdfWorkId == item.id,
+                                  isMarkingPaid: _markingPaidWorkId == item.id,
+                                  isArchiving: _archivingWorkId == item.id,
+                                  isDeleting: _deletingWorkId == item.id,
+                                  isRescheduling: _reschedulingWorkId == item.id,
+                                  onMarkComplete: () => _markComplete(item),
+                                  onConvertToInvoice: () => _convertToInvoice(item),
+                                  onDownloadEstimatePdf: () => _downloadEstimatePdf(item),
+                                  onMarkPaid: () => _markInvoicePaid(item),
+                                  onViewEstimate: () => _viewEstimate(item),
+                                  onArchive: widget.role == 'owner' ? () => _archiveWork(item) : null,
+                                  onDeletePermanently:
+                                      widget.role == 'owner' ? () => _deleteWorkPermanently(item) : null,
+                                  onReschedule: widget.role == 'owner' ? () => _rescheduleWork(item) : null,
+                                ),
+                              ),
+                            );
+
                         return Column(
                           children: [
                             Align(
@@ -251,28 +380,24 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                                 onChanged: (mode) => setState(() => _sortMode = mode),
                               ),
                             ),
-                            for (final item in sorted)
-                              KeyedSubtree(
-                                key: _highlight.keyFor(item.id),
-                                child: Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
-                                  child: _ScheduledWorkCard(
-                                    work: item,
-                                    role: widget.role,
-                                    teams: teams,
-                                    isHighlighted: _highlight.isHighlighted(item.id),
-                                    isCompleting: _completingWorkId == item.id,
-                                    isConverting: _convertingWorkId == item.id,
-                                    isDownloadingPdf: _downloadingEstimatePdfWorkId == item.id,
-                                    isMarkingPaid: _markingPaidWorkId == item.id,
-                                    onMarkComplete: () => _markComplete(item),
-                                    onConvertToInvoice: () => _convertToInvoice(item),
-                                    onDownloadEstimatePdf: () => _downloadEstimatePdf(item),
-                                    onMarkPaid: () => _markInvoicePaid(item),
-                                    onViewEstimate: () => _viewEstimate(item),
-                                  ),
+                            for (final item in active) workCard(item),
+                            if (widget.role == 'owner' && archived.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              ExpansionTile(
+                                title: Text(
+                                  'Archived (${archived.length})',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleSmall
+                                      ?.copyWith(color: Theme.of(context).colorScheme.outline),
                                 ),
+                                tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+                                childrenPadding: EdgeInsets.zero,
+                                children: [
+                                  for (final item in archived) workCard(item),
+                                ],
                               ),
+                            ],
                           ],
                         );
                       },
@@ -322,11 +447,17 @@ class _ScheduledWorkCard extends StatefulWidget {
     required this.isConverting,
     required this.isDownloadingPdf,
     required this.isMarkingPaid,
+    required this.isArchiving,
+    required this.isDeleting,
+    required this.isRescheduling,
     required this.onMarkComplete,
     required this.onConvertToInvoice,
     required this.onDownloadEstimatePdf,
     required this.onMarkPaid,
     required this.onViewEstimate,
+    this.onArchive,
+    this.onDeletePermanently,
+    this.onReschedule,
   });
 
   final ScheduledWork work;
@@ -337,11 +468,17 @@ class _ScheduledWorkCard extends StatefulWidget {
   final bool isConverting;
   final bool isDownloadingPdf;
   final bool isMarkingPaid;
+  final bool isArchiving;
+  final bool isDeleting;
+  final bool isRescheduling;
   final VoidCallback onMarkComplete;
   final VoidCallback onConvertToInvoice;
   final VoidCallback onDownloadEstimatePdf;
   final VoidCallback onMarkPaid;
   final VoidCallback onViewEstimate;
+  final VoidCallback? onArchive;
+  final VoidCallback? onDeletePermanently;
+  final VoidCallback? onReschedule;
 
   @override
   State<_ScheduledWorkCard> createState() => _ScheduledWorkCardState();
@@ -435,6 +572,40 @@ class _ScheduledWorkCardState extends State<_ScheduledWorkCard> {
                     style: TextStyle(color: statusColor, fontWeight: FontWeight.w700),
                   ),
                 ),
+                if (work.recurringGroupId != null) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text('Recurring', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                  ),
+                ],
+                if (!work.isArchived && widget.onArchive != null) ...[
+                  const SizedBox(width: 4),
+                  widget.isArchiving
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                      : IconButton(
+                          onPressed: widget.onArchive,
+                          icon: const Icon(Icons.archive_outlined),
+                          tooltip: 'Archive job',
+                          color: Theme.of(context).colorScheme.outline,
+                          iconSize: 20,
+                        ),
+                ] else if (work.isArchived && widget.onDeletePermanently != null) ...[
+                  const SizedBox(width: 4),
+                  widget.isDeleting
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                      : IconButton(
+                          onPressed: widget.onDeletePermanently,
+                          icon: const Icon(Icons.delete_forever_outlined),
+                          tooltip: 'Delete permanently',
+                          color: Theme.of(context).colorScheme.error,
+                          iconSize: 20,
+                        ),
+                ],
               ],
             ),
             const SizedBox(height: 6),
@@ -551,12 +722,207 @@ class _ScheduledWorkCardState extends State<_ScheduledWorkCard> {
                           : const Icon(Icons.payments_outlined),
                       label: const Text('Mark as Paid'),
                     ),
+                  if (widget.onReschedule != null)
+                    OutlinedButton.icon(
+                      onPressed: widget.isRescheduling ? null : widget.onReschedule,
+                      icon: widget.isRescheduling
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.edit_calendar_outlined),
+                      label: const Text('Reschedule'),
+                    ),
+                  if (work.recurringGroupId != null)
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => _SeriesDetailPage(
+                            recurringGroupId: work.recurringGroupId!,
+                            estimateNumber: work.estimateNumber,
+                          ),
+                        ),
+                      ),
+                      icon: const Icon(Icons.event_repeat_outlined),
+                      label: const Text('Manage Series'),
+                    ),
                 ],
               ],
             ),
           ],
         ),
       ),
+      ),
+    );
+  }
+}
+
+/// owner-only view of every job in one recurring series, with a bulk
+/// "cancel remaining occurrences" action and per-job archive
+class _SeriesDetailPage extends StatefulWidget {
+  const _SeriesDetailPage({required this.recurringGroupId, required this.estimateNumber});
+
+  final String recurringGroupId;
+  final String estimateNumber;
+
+  @override
+  State<_SeriesDetailPage> createState() => _SeriesDetailPageState();
+}
+
+class _SeriesDetailPageState extends State<_SeriesDetailPage> {
+  bool _isCancelling = false;
+  String? _archivingWorkId;
+
+  Future<void> _cancelRemaining() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Cancel Remaining Occurrences'),
+        content: const Text(
+          "Cancel all upcoming, not-yet-completed jobs in this series? This can't be undone.",
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Back')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Confirm')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isCancelling = true);
+    try {
+      final count = await ScheduledWorkService.cancelRemainingInSeries(widget.recurringGroupId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$count upcoming job(s) cancelled.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to cancel remaining occurrences: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isCancelling = false);
+    }
+  }
+
+  Future<void> _archiveJob(ScheduledWork work) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Archive Job'),
+        content: Text('Archive the job on ${DateFormat('MMM d, yyyy · h:mm a').format(work.scheduledDate)}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Archive')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _archivingWorkId = work.id);
+    try {
+      await ScheduledWorkService.archiveWork(work.id);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to archive job: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _archivingWorkId = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('${widget.estimateNumber} — Recurring Series')),
+      body: StreamBuilder<List<ScheduledWork>>(
+        stream: ScheduledWorkService.watchSeries(widget.recurringGroupId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final jobs = snapshot.data ?? const <ScheduledWork>[];
+          if (jobs.isEmpty) {
+            return const Center(child: Text('No jobs found for this series.'));
+          }
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              FilledButton.icon(
+                onPressed: _isCancelling ? null : _cancelRemaining,
+                icon: _isCancelling
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.event_busy_outlined),
+                label: const Text('Cancel Remaining Occurrences'),
+              ),
+              const SizedBox(height: 16),
+              for (final work in jobs)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _SeriesJobRow(
+                    work: work,
+                    isArchiving: _archivingWorkId == work.id,
+                    onArchive: work.isArchived ? null : () => _archiveJob(work),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SeriesJobRow extends StatelessWidget {
+  const _SeriesJobRow({required this.work, required this.isArchiving, this.onArchive});
+
+  final ScheduledWork work;
+  final bool isArchiving;
+  final VoidCallback? onArchive;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = switch (work.status) {
+      ScheduledWorkStatus.completed => Colors.blue,
+      ScheduledWorkStatus.invoiced => Colors.green,
+      _ => Theme.of(context).colorScheme.primary,
+    };
+    final statusText = switch (work.status) {
+      ScheduledWorkStatus.completed => 'Completed',
+      ScheduledWorkStatus.invoiced => 'Invoiced',
+      _ => 'Scheduled',
+    };
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        title: Text(DateFormat('MMM d, yyyy · h:mm a').format(work.scheduledDate)),
+        subtitle: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(statusText, style: TextStyle(color: statusColor, fontWeight: FontWeight.w700)),
+            ),
+            if (work.isArchived) ...[
+              const SizedBox(width: 8),
+              Text('Archived', style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ],
+        ),
+        trailing: onArchive == null
+            ? null
+            : isArchiving
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : IconButton(
+                    onPressed: onArchive,
+                    icon: const Icon(Icons.archive_outlined),
+                    tooltip: 'Archive job',
+                  ),
       ),
     );
   }
