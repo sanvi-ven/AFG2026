@@ -6,15 +6,21 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/client_profile_service.dart';
 import '../../../core/services/employee_profile_service.dart';
 import '../../../core/services/estimate_service.dart';
+import '../../../core/services/expense_service.dart';
 import '../../../core/services/invoice_service.dart';
+import '../../../core/services/job_completion_service.dart';
 import '../../../core/services/reporting_service.dart';
 import '../../../core/services/scheduled_work_service.dart';
+import '../../../core/services/team_service.dart';
 import '../../../core/services/time_entry_service.dart';
 import '../../../models/client_profile.dart';
 import '../../../models/employee_profile.dart';
 import '../../../models/estimate.dart';
+import '../../../models/expense.dart';
 import '../../../models/invoice.dart';
+import '../../../models/job_completion_form.dart';
 import '../../../models/scheduled_work.dart';
+import '../../../models/team.dart';
 import '../../../models/time_entry.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
@@ -37,21 +43,16 @@ class _OwnerReportsPageState extends State<OwnerReportsPage> {
   _ReportRange _range = _ReportRange.thisMonth;
   static final DateFormat _isoDate = DateFormat('yyyy-MM-dd');
 
-  (String, String) _rangeBounds() {
+  DateTime _rangeStart() {
     final now = DateTime.now();
-    late final DateTime start;
     switch (_range) {
       case _ReportRange.thisWeek:
-        start = now.subtract(Duration(days: now.weekday - 1));
-        break;
+        return now.subtract(Duration(days: now.weekday - 1));
       case _ReportRange.thisMonth:
-        start = DateTime(now.year, now.month, 1);
-        break;
+        return DateTime(now.year, now.month, 1);
       case _ReportRange.allTime:
-        start = DateTime(2000, 1, 1);
-        break;
+        return DateTime(2000, 1, 1);
     }
-    return (_isoDate.format(start), _isoDate.format(now));
   }
 
   @override
@@ -60,7 +61,10 @@ class _OwnerReportsPageState extends State<OwnerReportsPage> {
       return const SizedBox.shrink();
     }
 
-    final (startDate, endDate) = _rangeBounds();
+    final rangeStart = _rangeStart();
+    final rangeEnd = DateTime.now();
+    final startDate = _isoDate.format(rangeStart);
+    final endDate = _isoDate.format(rangeEnd);
 
     return AppScaffold(
       title: 'Reports',
@@ -82,28 +86,51 @@ class _OwnerReportsPageState extends State<OwnerReportsPage> {
                       return StreamBuilder<List<EmployeeProfile>>(
                         stream: EmployeeProfileService.watchAllProfiles(),
                         builder: (context, employeesSnapshot) {
-                          return StreamBuilder<List<TimeEntry>>(
-                            stream: TimeEntryService.watchEntriesInRange(startDate, endDate),
-                            builder: (context, entriesSnapshot) {
-                              final loading = !invoiceSnapshot.hasData ||
-                                  !estimateSnapshot.hasData ||
-                                  !jobsSnapshot.hasData ||
-                                  !clientsSnapshot.hasData ||
-                                  !employeesSnapshot.hasData ||
-                                  !entriesSnapshot.hasData;
-                              if (loading) {
-                                return const Center(child: CircularProgressIndicator());
-                              }
+                          return StreamBuilder<List<Team>>(
+                            stream: TeamService.watchAllTeams(),
+                            builder: (context, teamsSnapshot) {
+                              return StreamBuilder<List<TimeEntry>>(
+                                stream: TimeEntryService.watchEntriesInRange(startDate, endDate),
+                                builder: (context, entriesSnapshot) {
+                                  return StreamBuilder<List<JobCompletionForm>>(
+                                    stream: JobCompletionService.watchAllForms(),
+                                    builder: (context, formsSnapshot) {
+                                      return StreamBuilder<List<Expense>>(
+                                        stream: ExpenseService.watchAllExpenses(),
+                                        builder: (context, expensesSnapshot) {
+                                          final loading = !invoiceSnapshot.hasData ||
+                                              !estimateSnapshot.hasData ||
+                                              !jobsSnapshot.hasData ||
+                                              !clientsSnapshot.hasData ||
+                                              !employeesSnapshot.hasData ||
+                                              !teamsSnapshot.hasData ||
+                                              !entriesSnapshot.hasData ||
+                                              !formsSnapshot.hasData ||
+                                              !expensesSnapshot.hasData;
+                                          if (loading) {
+                                            return const Center(child: CircularProgressIndicator());
+                                          }
 
-                              return _ReportsBody(
-                                range: _range,
-                                onRangeChanged: (value) => setState(() => _range = value),
-                                invoices: invoiceSnapshot.data!,
-                                estimates: estimateSnapshot.data!,
-                                jobs: jobsSnapshot.data!,
-                                clients: clientsSnapshot.data!,
-                                employees: employeesSnapshot.data!,
-                                entries: entriesSnapshot.data!,
+                                          return _ReportsTabs(
+                                            range: _range,
+                                            onRangeChanged: (value) => setState(() => _range = value),
+                                            invoices: invoiceSnapshot.data!,
+                                            estimates: estimateSnapshot.data!,
+                                            jobs: jobsSnapshot.data!,
+                                            clients: clientsSnapshot.data!,
+                                            employees: employeesSnapshot.data!,
+                                            teams: teamsSnapshot.data!,
+                                            entries: entriesSnapshot.data!,
+                                            forms: formsSnapshot.data!,
+                                            expenses: expensesSnapshot.data!,
+                                            rangeStart: rangeStart,
+                                            rangeEnd: rangeEnd,
+                                          );
+                                        },
+                                      );
+                                    },
+                                  );
+                                },
                               );
                             },
                           );
@@ -121,8 +148,107 @@ class _OwnerReportsPageState extends State<OwnerReportsPage> {
   }
 }
 
-class _ReportsBody extends StatelessWidget {
-  const _ReportsBody({
+class _ReportsTabs extends StatelessWidget {
+  const _ReportsTabs({
+    required this.range,
+    required this.onRangeChanged,
+    required this.invoices,
+    required this.estimates,
+    required this.jobs,
+    required this.clients,
+    required this.employees,
+    required this.teams,
+    required this.entries,
+    required this.forms,
+    required this.expenses,
+    required this.rangeStart,
+    required this.rangeEnd,
+  });
+
+  final _ReportRange range;
+  final ValueChanged<_ReportRange> onRangeChanged;
+  final List<Invoice> invoices;
+  final List<Estimate> estimates;
+  final List<ScheduledWork> jobs;
+  final List<ClientProfile> clients;
+  final List<EmployeeProfile> employees;
+  final List<Team> teams;
+  final List<TimeEntry> entries;
+  final List<JobCompletionForm> forms;
+  final List<Expense> expenses;
+  final DateTime rangeStart;
+  final DateTime rangeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    // range-scoped copies used only for the Net Profit figure — the
+    // dashboard's own revenue chart/stat tiles stay all-time as before.
+    final rangeInvoices = invoices
+        .where((invoice) => !invoice.createdAt.isBefore(rangeStart) && !invoice.createdAt.isAfter(rangeEnd))
+        .toList();
+    final rangeExpenses =
+        expenses.where((expense) => !expense.date.isBefore(rangeStart) && !expense.date.isAfter(rangeEnd)).toList();
+
+    final payoutRows = ReportingService.employeePayoutReport(entries: entries, employees: employees);
+    final totalPayout = payoutRows.fold<double>(0, (sum, row) => sum + row.payout);
+    final netProfit = ReportingService.netProfit(
+      paidRevenue: ReportingService.totalPaidRevenue(rangeInvoices),
+      totalPayout: totalPayout,
+      totalExpenses: ReportingService.totalExpenses(rangeExpenses),
+    );
+
+    return DefaultTabController(
+      length: 4,
+      child: Column(
+        children: [
+          const Material(
+            color: Colors.transparent,
+            child: TabBar(
+              isScrollable: true,
+              tabs: [
+                Tab(text: 'Dashboard'),
+                Tab(text: 'Completed Jobs'),
+                Tab(text: 'Employee Payout'),
+                Tab(text: 'Expenses'),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _DashboardTab(
+                  range: range,
+                  onRangeChanged: onRangeChanged,
+                  invoices: invoices,
+                  estimates: estimates,
+                  jobs: jobs,
+                  clients: clients,
+                  employees: employees,
+                  entries: entries,
+                  netProfit: netProfit,
+                ),
+                _CompletedJobsTab(
+                  rows: ReportingService.completedJobsReport(
+                    jobs: jobs,
+                    forms: forms,
+                    invoices: invoices,
+                    clients: clients,
+                  ),
+                  teamNameFor: {for (final team in teams) team.id: team.name},
+                ),
+                _EmployeePayoutTab(rows: payoutRows),
+                _ExpensesTab(expenses: expenses),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardTab extends StatelessWidget {
+  const _DashboardTab({
     required this.range,
     required this.onRangeChanged,
     required this.invoices,
@@ -131,6 +257,7 @@ class _ReportsBody extends StatelessWidget {
     required this.clients,
     required this.employees,
     required this.entries,
+    required this.netProfit,
   });
 
   final _ReportRange range;
@@ -141,6 +268,7 @@ class _ReportsBody extends StatelessWidget {
   final List<ClientProfile> clients;
   final List<EmployeeProfile> employees;
   final List<TimeEntry> entries;
+  final double netProfit;
 
   static final NumberFormat _currency = NumberFormat.simpleCurrency();
 
@@ -231,6 +359,11 @@ class _ReportsBody extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        _StatTile(
+          label: 'Net Profit (selected range: revenue − payroll − expenses)',
+          value: _currency.format(netProfit),
+        ),
         const SizedBox(height: 24),
         Text('Busiest Clients', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 8),
@@ -311,6 +444,289 @@ class _StatTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CompletedJobsTab extends StatelessWidget {
+  const _CompletedJobsTab({required this.rows, required this.teamNameFor});
+
+  final List<CompletedJobRow> rows;
+  final Map<String, String> teamNameFor;
+
+  static final NumberFormat _currency = NumberFormat.simpleCurrency();
+  static final DateFormat _dateFormat = DateFormat('MMM d, yyyy');
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows.isEmpty) {
+      return const Center(
+        child: Padding(padding: EdgeInsets.all(16), child: Text('No completed jobs yet.')),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columns: const [
+          DataColumn(label: Text('Job')),
+          DataColumn(label: Text('Client')),
+          DataColumn(label: Text('Date')),
+          DataColumn(label: Text('Duration')),
+          DataColumn(label: Text('Team')),
+          DataColumn(label: Text('Income')),
+        ],
+        rows: [
+          for (final row in rows)
+            DataRow(cells: [
+              DataCell(Text(row.estimateNumber)),
+              DataCell(Text(row.clientName)),
+              DataCell(Text(_dateFormat.format(row.date))),
+              DataCell(Text(row.duration == null
+                  ? '—'
+                  : '${row.duration!.inHours}h ${row.duration!.inMinutes.remainder(60)}m')),
+              DataCell(Text(row.teamId == null ? 'Unassigned' : (teamNameFor[row.teamId] ?? row.teamId!))),
+              DataCell(Text(_currency.format(row.income))),
+            ]),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmployeePayoutTab extends StatelessWidget {
+  const _EmployeePayoutTab({required this.rows});
+
+  final List<EmployeePayoutRow> rows;
+
+  static final NumberFormat _currency = NumberFormat.simpleCurrency();
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows.isEmpty) {
+      return const Center(
+        child: Padding(padding: EdgeInsets.all(16), child: Text('No employees yet.')),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columns: const [
+          DataColumn(label: Text('Employee')),
+          DataColumn(label: Text('Hours')),
+          DataColumn(label: Text('Rate')),
+          DataColumn(label: Text('Payout')),
+        ],
+        rows: [
+          for (final row in rows)
+            DataRow(cells: [
+              DataCell(Text(row.name)),
+              DataCell(Text(row.hours.toStringAsFixed(1))),
+              DataCell(Text(row.rate == 0 ? '—' : '${_currency.format(row.rate)}/hr')),
+              DataCell(Text(_currency.format(row.payout))),
+            ]),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExpensesTab extends StatefulWidget {
+  const _ExpensesTab({required this.expenses});
+
+  final List<Expense> expenses;
+
+  @override
+  State<_ExpensesTab> createState() => _ExpensesTabState();
+}
+
+class _ExpensesTabState extends State<_ExpensesTab> {
+  static final NumberFormat _currency = NumberFormat.simpleCurrency();
+  static final DateFormat _dateFormat = DateFormat('MMM d, yyyy');
+
+  Future<void> _addExpense() async {
+    await showDialog<void>(context: context, builder: (_) => const _AddExpenseDialog());
+  }
+
+  Future<void> _confirmDelete(Expense expense) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Expense'),
+        content: Text("Delete '${expense.description}'? This can't be undone."),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ExpenseService.deleteExpense(expense.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = ReportingService.totalExpenses(widget.expenses);
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Total: ${_currency.format(total)}', style: Theme.of(context).textTheme.titleMedium),
+            FilledButton.icon(
+              onPressed: _addExpense,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Expense'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (widget.expenses.isEmpty)
+          const Text('No expenses logged yet.')
+        else
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columns: const [
+                DataColumn(label: Text('Date')),
+                DataColumn(label: Text('Description')),
+                DataColumn(label: Text('Category')),
+                DataColumn(label: Text('Amount')),
+                DataColumn(label: Text('')),
+              ],
+              rows: [
+                for (final expense in widget.expenses)
+                  DataRow(cells: [
+                    DataCell(Text(_dateFormat.format(expense.date))),
+                    DataCell(Text(expense.description)),
+                    DataCell(Text(ExpenseCategory.displayLabel(expense.category))),
+                    DataCell(Text(_currency.format(expense.amount))),
+                    DataCell(IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      tooltip: 'Delete',
+                      onPressed: () => _confirmDelete(expense),
+                    )),
+                  ]),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _AddExpenseDialog extends StatefulWidget {
+  const _AddExpenseDialog();
+
+  @override
+  State<_AddExpenseDialog> createState() => _AddExpenseDialogState();
+}
+
+class _AddExpenseDialogState extends State<_AddExpenseDialog> {
+  final _descriptionController = TextEditingController();
+  final _amountController = TextEditingController();
+  String _category = ExpenseCategory.material;
+  DateTime _date = DateTime.now();
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _descriptionController.dispose();
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+    if (picked != null) setState(() => _date = picked);
+  }
+
+  Future<void> _save() async {
+    final description = _descriptionController.text.trim();
+    final amount = double.tryParse(_amountController.text.trim());
+    if (description.isEmpty || amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('A description and amount greater than 0 are required.')),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      await ExpenseService.createExpense(
+        description: description,
+        category: _category,
+        amount: amount,
+        date: _date,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save expense: $error')));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add Expense'),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _descriptionController,
+              decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: _category,
+              decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
+              items: [
+                for (final category in ExpenseCategory.all)
+                  DropdownMenuItem(value: category, child: Text(ExpenseCategory.displayLabel(category))),
+              ],
+              onChanged: (value) => setState(() => _category = value ?? _category),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _amountController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Amount (\$)', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _pickDate,
+              icon: const Icon(Icons.calendar_today_outlined),
+              label: Text(DateFormat('MMM d, yyyy').format(_date)),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: _isSaving ? null : () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: _isSaving ? null : _save,
+          child: _isSaving
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Save'),
+        ),
+      ],
     );
   }
 }

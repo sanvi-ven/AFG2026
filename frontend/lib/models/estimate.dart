@@ -28,6 +28,8 @@ class Estimate {
     this.ownerApprovalMethod,
     this.ownerApprovalNote,
     this.ownerApprovedAt,
+    this.notes = '',
+    this.terms = '',
   });
 
   final String id;
@@ -55,6 +57,8 @@ class Estimate {
   final String? ownerApprovalMethod;
   final String? ownerApprovalNote;
   final DateTime? ownerApprovedAt;
+  final String notes;
+  final String terms;
 
   bool get isPending => status == InvoiceStatus.pending;
   bool get isApproved => status == InvoiceStatus.approved;
@@ -122,6 +126,8 @@ class Estimate {
       ownerApprovalMethod: (map['ownerApprovalMethod'] as String?)?.trim(),
       ownerApprovalNote: (map['ownerApprovalNote'] as String?)?.trim(),
       ownerApprovedAt: readOptionalDate(map['ownerApprovedAt']),
+      notes: (map['notes'] as String? ?? '').trim(),
+      terms: (map['terms'] as String? ?? '').trim(),
     );
   }
 
@@ -150,6 +156,8 @@ class Estimate {
       'ownerApprovalMethod': ownerApprovalMethod,
       'ownerApprovalNote': ownerApprovalNote,
       'ownerApprovedAt': ownerApprovedAt,
+      'notes': notes,
+      'terms': terms,
     };
   }
 }

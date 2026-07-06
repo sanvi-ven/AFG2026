@@ -88,6 +88,8 @@ class InvoiceService {
     required String clientId,
     required List<InvoiceServiceItem> services,
     required String sourceEstimateId,
+    String notes = '',
+    String terms = '',
   }) async {
     final now = DateTime.now();
     final total = services.fold<double>(0, (runningTotal, item) => runningTotal + item.price);
@@ -103,6 +105,8 @@ class InvoiceService {
       createdAt: now,
       updatedAt: now,
       sourceEstimateId: sourceEstimateId.trim(),
+      notes: notes.trim(),
+      terms: terms.trim(),
     );
 
     await doc.set(invoice.toMap());

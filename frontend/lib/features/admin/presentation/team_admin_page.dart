@@ -120,6 +120,17 @@ class _EmployeesTab extends StatelessWidget {
                           ],
                           onChanged: (value) => EmployeeProfileService.assignTeam(employee.employeeId, value),
                         ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          key: ValueKey('rate-${employee.employeeId}'),
+                          initialValue: employee.hourlyRate?.toStringAsFixed(2) ?? '',
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(labelText: 'Hourly rate (\$)', border: OutlineInputBorder()),
+                          onFieldSubmitted: (value) => EmployeeProfileService.setHourlyRate(
+                            employee.employeeId,
+                            double.tryParse(value.trim()),
+                          ),
+                        ),
                       ],
                     ),
                   ),

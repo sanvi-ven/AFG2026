@@ -1,8 +1,11 @@
 import 'package:intl/intl.dart';
 
 import '../../models/client_profile.dart';
+import '../../models/employee_profile.dart';
 import '../../models/estimate.dart';
+import '../../models/expense.dart';
 import '../../models/invoice.dart';
+import '../../models/job_completion_form.dart';
 import '../../models/scheduled_work.dart';
 import '../../models/time_entry.dart';
 import 'client_profile_service.dart';
@@ -98,6 +101,70 @@ class ReportingService {
     }
     return hours;
   }
+
+  /// per-completed-job income + duration, joining scheduled work with
+  /// completion forms (by workId, for duration) and invoices (by invoiceId,
+  /// for actual billed income — falls back to the job's own total if it
+  /// hasn't been invoiced yet).
+  static List<CompletedJobRow> completedJobsReport({
+    required List<ScheduledWork> jobs,
+    required List<JobCompletionForm> forms,
+    required List<Invoice> invoices,
+    required List<ClientProfile> clients,
+  }) {
+    final formsByWorkId = {for (final form in forms) form.workId: form};
+    final invoicesById = {for (final invoice in invoices) invoice.id: invoice};
+
+    final rows = <CompletedJobRow>[];
+    for (final job in jobs.where((j) => j.isCompleted || j.isInvoiced)) {
+      final form = formsByWorkId[job.id];
+      final invoice = job.invoiceId != null ? invoicesById[job.invoiceId] : null;
+      rows.add(CompletedJobRow(
+        jobId: job.id,
+        estimateNumber: job.estimateNumber,
+        clientName: ClientProfileService.displayNameFor(clients, job.clientId),
+        date: job.scheduledDate,
+        duration: form?.endTime.difference(form.startTime),
+        income: invoice?.total ?? job.total,
+        teamId: job.teamId,
+      ));
+    }
+    rows.sort((a, b) => b.date.compareTo(a.date));
+    return rows;
+  }
+
+  /// per-employee hours worked and calculated payout (hours × hourlyRate;
+  /// rate is 0 for employees with no rate set yet).
+  static List<EmployeePayoutRow> employeePayoutReport({
+    required List<TimeEntry> entries,
+    required List<EmployeeProfile> employees,
+  }) {
+    final hoursByEmployee = employeeHoursByEmployee(entries);
+    return employees.map((employee) {
+      final duration = hoursByEmployee[employee.employeeId] ?? Duration.zero;
+      final rate = employee.hourlyRate ?? 0;
+      final hours = duration.inMinutes / 60.0;
+      return EmployeePayoutRow(
+        employeeId: employee.employeeId,
+        name: employee.fullName,
+        hours: hours,
+        rate: rate,
+        payout: hours * rate,
+      );
+    }).toList();
+  }
+
+  static double totalExpenses(List<Expense> expenses) =>
+      expenses.fold<double>(0, (sum, expense) => sum + expense.amount);
+
+  /// paidRevenue − totalPayout − totalExpenses, all pre-filtered to the same
+  /// date range by the caller.
+  static double netProfit({
+    required double paidRevenue,
+    required double totalPayout,
+    required double totalExpenses,
+  }) =>
+      paidRevenue - totalPayout - totalExpenses;
 }
 
 class ClientTotal {
@@ -112,4 +179,40 @@ class ClientTotal {
   final String displayName;
   final double total;
   final int count;
+}
+
+class CompletedJobRow {
+  const CompletedJobRow({
+    required this.jobId,
+    required this.estimateNumber,
+    required this.clientName,
+    required this.date,
+    required this.duration,
+    required this.income,
+    required this.teamId,
+  });
+
+  final String jobId;
+  final String estimateNumber;
+  final String clientName;
+  final DateTime date;
+  final Duration? duration;
+  final double income;
+  final String? teamId;
+}
+
+class EmployeePayoutRow {
+  const EmployeePayoutRow({
+    required this.employeeId,
+    required this.name,
+    required this.hours,
+    required this.rate,
+    required this.payout,
+  });
+
+  final String employeeId;
+  final String name;
+  final double hours;
+  final double rate;
+  final double payout;
 }

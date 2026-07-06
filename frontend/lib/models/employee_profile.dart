@@ -8,6 +8,7 @@ class EmployeeProfile {
     required this.phoneNumber,
     required this.teamId,
     required this.active,
+    this.hourlyRate,
   });
 
   final String employeeId;
@@ -17,6 +18,7 @@ class EmployeeProfile {
   final String phoneNumber;
   final String? teamId;
   final bool active;
+  final double? hourlyRate;
 
   String get greetingName {
     if (firstName.trim().isNotEmpty) {
@@ -60,6 +62,7 @@ class EmployeeProfile {
       phoneNumber: (map['phone_number'] as String? ?? '').trim(),
       teamId: rawTeamId.isEmpty ? null : rawTeamId,
       active: map['active'] as bool? ?? true,
+      hourlyRate: (map['hourly_rate'] as num?)?.toDouble(),
     );
   }
 
@@ -73,6 +76,7 @@ class EmployeeProfile {
       'phone_number': phoneNumber.trim(),
       'teamId': teamId,
       'active': active,
+      'hourly_rate': hourlyRate,
     };
   }
 
@@ -86,6 +90,8 @@ class EmployeeProfile {
     String? teamId,
     bool clearTeamId = false,
     bool? active,
+    double? hourlyRate,
+    bool clearHourlyRate = false,
   }) {
     return EmployeeProfile(
       employeeId: employeeId ?? this.employeeId,
@@ -95,6 +101,7 @@ class EmployeeProfile {
       phoneNumber: phoneNumber ?? this.phoneNumber,
       teamId: clearTeamId ? null : (teamId ?? this.teamId),
       active: active ?? this.active,
+      hourlyRate: clearHourlyRate ? null : (hourlyRate ?? this.hourlyRate),
     );
   }
 }

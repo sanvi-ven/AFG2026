@@ -385,14 +385,38 @@ class _InvoiceCard extends StatelessWidget {
             const SizedBox(height: 6),
             for (final item in invoice.services)
               Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: Text(item.name)),
-                    Text('\$${item.price.toStringAsFixed(2)}'),
+                    Row(
+                      children: [
+                        Expanded(child: Text(item.name)),
+                        Text('\$${item.price.toStringAsFixed(2)}'),
+                      ],
+                    ),
+                    if (item.description.isNotEmpty)
+                      Text(item.description, style: Theme.of(context).textTheme.bodySmall),
+                    if (item.isPerUnit)
+                      Text(
+                        '${item.quantity} ${item.unit?.isEmpty ?? true ? 'unit(s)' : item.unit} × \$${item.unitPrice!.toStringAsFixed(2)}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                   ],
                 ),
               ),
+            if (invoice.notes.isNotEmpty) ...[
+              Text('Notes', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(invoice.notes),
+              const SizedBox(height: 10),
+            ],
+            if (invoice.terms.isNotEmpty) ...[
+              Text('Terms', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(invoice.terms),
+              const SizedBox(height: 10),
+            ],
             const Divider(height: 16),
             Row(
               children: [

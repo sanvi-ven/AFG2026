@@ -81,12 +81,15 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     setState(() => _convertingWorkId = work.id);
     try {
       final invoiceNumber = work.estimateNumber;
+      final sourceEstimate = await EstimateService.fetchById(work.estimateId);
 
       final invoiceId = await InvoiceService.createInvoiceFromEstimate(
         invoiceNumber: invoiceNumber,
         clientId: work.clientId,
         services: work.services,
         sourceEstimateId: work.estimateId,
+        notes: sourceEstimate?.notes ?? '',
+        terms: sourceEstimate?.terms ?? '',
       );
       await ScheduledWorkService.markInvoiced(workId: work.id, invoiceId: invoiceId);
       await EstimateService.markConverted(estimateId: work.estimateId, invoiceId: invoiceId);

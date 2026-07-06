@@ -62,6 +62,14 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    match /expenses/{document=**} {
+      allow read, write: if true;
+    }
+
+    match /service_catalog/{document=**} {
+      allow read, write: if true;
+    }
+
     // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;

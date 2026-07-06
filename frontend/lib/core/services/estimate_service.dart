@@ -95,6 +95,8 @@ class EstimateService {
     required String estimateNumber,
     required String clientId,
     required List<InvoiceServiceItem> services,
+    String notes = '',
+    String terms = '',
   }) async {
     final now = DateTime.now();
     final total = services.fold<double>(0, (runningTotal, item) => runningTotal + item.price);
@@ -111,6 +113,8 @@ class EstimateService {
       updatedAt: now,
       convertedToInvoice: false,
       revisionNumber: 1,
+      notes: notes.trim(),
+      terms: terms.trim(),
     );
 
     await doc.set(estimate.toMap());
@@ -136,6 +140,8 @@ class EstimateService {
   static Future<void> reviseAndResendEstimate({
     required Estimate estimate,
     required List<InvoiceServiceItem> services,
+    String? notes,
+    String? terms,
   }) async {
     final now = DateTime.now();
     final total = services.fold<double>(0, (runningTotal, item) => runningTotal + item.price);
@@ -161,9 +167,25 @@ class EstimateService {
         'changeRequestMessage': null,
         'changeRequestedAt': null,
         'originalVersion': originalVersionPayload,
+        'notes': (notes ?? estimate.notes).trim(),
+        'terms': (terms ?? estimate.terms).trim(),
       },
       SetOptions(merge: true),
   /// update estimate status to pending, approved, rejected, etc
+    );
+  }
+
+  /// owner action: edit notes/terms without triggering a revision or
+  /// resetting approval state — these fields are supplementary, not part of
+  /// the economic terms tracked by revisionNumber/approvedByOwner.
+  static Future<void> updateNotesAndTerms({
+    required String estimateId,
+    required String notes,
+    required String terms,
+  }) async {
+    await _collection.doc(estimateId).set(
+      {'notes': notes.trim(), 'terms': terms.trim(), 'updatedAt': DateTime.now()},
+      SetOptions(merge: true),
     );
   }
 

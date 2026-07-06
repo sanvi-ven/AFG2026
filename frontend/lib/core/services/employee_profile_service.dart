@@ -120,4 +120,9 @@ class EmployeeProfileService {
   static Future<void> assignTeam(String employeeId, String? teamId) async {
     await _collection.doc(employeeId.trim()).set({'teamId': teamId}, SetOptions(merge: true));
   }
+
+  /// owner action: set (or clear) an employee's hourly pay rate
+  static Future<void> setHourlyRate(String employeeId, double? rate) async {
+    await _collection.doc(employeeId.trim()).set({'hourly_rate': rate}, SetOptions(merge: true));
+  }
 }

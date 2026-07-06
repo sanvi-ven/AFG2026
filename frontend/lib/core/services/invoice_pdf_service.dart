@@ -90,9 +90,14 @@ class InvoicePdfService {
           pw.SizedBox(height: 16),
           pw.TableHelper.fromTextArray(
             headers: const <String>['Line Item', 'Amount'],
-            data: invoice.services
-                .map((item) => <String>[item.name, currency.format(item.price)])
-                .toList(),
+            data: invoice.services.map((item) {
+              final lines = <String>[item.name];
+              if (item.description.isNotEmpty) lines.add(item.description);
+              if (item.isPerUnit) {
+                lines.add('${item.quantity} ${item.unit ?? 'unit'} x ${currency.format(item.unitPrice!)}');
+              }
+              return <String>[lines.join('\n'), currency.format(item.price)];
+            }).toList(),
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFEAEAEA)),
             cellAlignments: {
@@ -108,6 +113,16 @@ class InvoicePdfService {
               style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
             ),
           ),
+          if (invoice.notes.trim().isNotEmpty) ...[
+            pw.SizedBox(height: 16),
+            pw.Text('Notes', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.Text(invoice.notes.trim()),
+          ],
+          if (invoice.terms.trim().isNotEmpty) ...[
+            pw.SizedBox(height: 12),
+            pw.Text('Terms', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.Text(invoice.terms.trim()),
+          ],
         ],
       ),
     );

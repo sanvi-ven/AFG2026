@@ -107,6 +107,44 @@ class _MyHoursPageState extends State<MyHoursPage> {
                       },
                     ),
                     const SizedBox(height: 20),
+                    StreamBuilder<List<TimeEntry>>(
+                      stream: TimeEntryService.watchEntriesForEmployee(employeeId),
+                      builder: (context, snapshot) {
+                        final entries = snapshot.data ?? const <TimeEntry>[];
+                        final totalDuration = entries.fold<Duration>(Duration.zero, (sum, e) {
+                          if (e.clockInAt == null || e.clockOutAt == null) return sum;
+                          return sum + e.clockOutAt!.difference(e.clockInAt!);
+                        });
+                        final rate = profile?.hourlyRate;
+                        final hours = totalDuration.inMinutes / 60.0;
+                        final payout = rate != null ? hours * rate : null;
+
+                        return Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Your Pay', style: Theme.of(context).textTheme.titleMedium),
+                                const SizedBox(height: 8),
+                                Text('Total hours: ${hours.toStringAsFixed(1)}h'),
+                                Text(rate == null
+                                    ? 'Hourly rate not set yet.'
+                                    : 'Rate: \$${rate.toStringAsFixed(2)}/hr'),
+                                if (payout != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Total payout: \$${payout.toStringAsFixed(2)}',
+                                    style: const TextStyle(fontWeight: FontWeight.w700),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 20),
                     Text('Recent history', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
                     StreamBuilder<List<TimeEntry>>(

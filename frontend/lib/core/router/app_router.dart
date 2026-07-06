@@ -13,6 +13,7 @@ import '../../features/availability/presentation/availability_page.dart';
 import '../../features/clients/presentation/clients_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
 import '../../features/estimates/estimates_page.dart';
+import '../../features/estimates/presentation/service_catalog_page.dart';
 import '../../features/invoices/presentation/invoices_page.dart';
 import '../../features/jobs/presentation/employee_jobs_page.dart';
 import '../../features/jobs/presentation/job_detail_page.dart';
@@ -78,6 +79,7 @@ class AppRouter {
   static const claimAccount = '/claim';
   static const reports = '/reports';
   static const todaysRoute = '/jobs/today';
+  static const serviceCatalog = '/estimates/catalog';
 /// generates appropriate page route based on settings and passes role/auth context
   
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
@@ -179,6 +181,11 @@ class AppRouter {
       case todaysRoute:
         return _NoAnimationPageRoute(
           builder: (_) => TodaysRoutePage(role: role, authToken: authToken),
+          settings: settings,
+        );
+      case serviceCatalog:
+        return _NoAnimationPageRoute(
+          builder: (_) => ServiceCatalogPage(role: role, authToken: authToken),
           settings: settings,
         );
       default:

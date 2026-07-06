@@ -13,6 +13,8 @@ class Invoice {
     required this.updatedAt,
     this.sourceEstimateId,
     this.isArchived = false,
+    this.notes = '',
+    this.terms = '',
   });
 
   final String id;
@@ -25,6 +27,8 @@ class Invoice {
   final DateTime updatedAt;
   final String? sourceEstimateId;
   final bool isArchived;
+  final String notes;
+  final String terms;
 
   bool get isPending => status == InvoiceStatus.pending;
   bool get isApproved => InvoiceStatus.isSent(status);
@@ -58,6 +62,8 @@ class Invoice {
       updatedAt: readDate(map['updatedAt']),
       sourceEstimateId: (map['sourceEstimateId'] as String?)?.trim(),
       isArchived: map['archived'] as bool? ?? false,
+      notes: (map['notes'] as String? ?? '').trim(),
+      terms: (map['terms'] as String? ?? '').trim(),
     );
   }
 
@@ -73,6 +79,8 @@ class Invoice {
       'updatedAt': updatedAt,
       'sourceEstimateId': sourceEstimateId,
       'archived': isArchived,
+      'notes': notes,
+      'terms': terms,
     };
   }
 }
@@ -81,16 +89,31 @@ class InvoiceServiceItem {
   const InvoiceServiceItem({
     required this.name,
     required this.price,
+    this.description = '',
+    this.unitPrice,
+    this.quantity,
+    this.unit,
   });
 
   final String name;
   final double price;
+  final String description;
+  /// price per [unit] (e.g. $1 per foot); null means [price] is a flat fee
+  final double? unitPrice;
+  final double? quantity;
+  final String? unit;
+
+  bool get isPerUnit => unitPrice != null && quantity != null;
 
   /// create service item from firestore map
   factory InvoiceServiceItem.fromMap(Map<String, dynamic> map) {
     return InvoiceServiceItem(
       name: (map['name'] as String? ?? '').trim(),
       price: (map['price'] as num? ?? 0).toDouble(),
+      description: (map['description'] as String? ?? '').trim(),
+      unitPrice: (map['unitPrice'] as num?)?.toDouble(),
+      quantity: (map['quantity'] as num?)?.toDouble(),
+      unit: (map['unit'] as String?)?.trim(),
     );
   }
 
@@ -98,6 +121,10 @@ class InvoiceServiceItem {
     return {
       'name': name,
       'price': price,
+      'description': description,
+      'unitPrice': unitPrice,
+      'quantity': quantity,
+      'unit': unit,
     };
   }
 }

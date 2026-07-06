@@ -12,8 +12,10 @@ import '../../core/services/estimate_service.dart';
 import '../../core/services/invoice_pdf_service.dart';
 import '../../core/services/invoice_service.dart';
 import '../../core/services/scheduled_work_service.dart';
+import '../../core/services/service_catalog_service.dart';
 import '../../core/state/client_session.dart';
 import '../../models/client_profile.dart';
+import '../../models/common_service.dart';
 import '../../models/estimate.dart';
 import '../../models/invoice.dart';
 import '../../shared/utils/list_highlight_controller.dart';
@@ -36,9 +38,11 @@ class EstimatesPage extends StatefulWidget {
 class _EstimatesPageState extends State<EstimatesPage> {
   final _estimateNumberController = TextEditingController();
   final _clientIdController = TextEditingController();
-  final List<_ServiceRow> _serviceRows = [
-    _ServiceRow(nameController: TextEditingController(), priceController: TextEditingController()),
-  ];
+  final _notesController = TextEditingController();
+  final _termsController = TextEditingController();
+  final List<_ServiceRowController> _serviceRows = [_ServiceRowController()];
+  StreamSubscription<List<CommonService>>? _catalogSub;
+  List<CommonService> _knownCatalog = const [];
   bool _isSubmitting = false;
   String? _convertingEstimateId;
   String? _downloadingEstimateId;
@@ -67,6 +71,10 @@ class _EstimatesPageState extends State<EstimatesPage> {
         }
       });
     }
+    _catalogSub = ServiceCatalogService.watchAllServices().listen((services) {
+      if (!mounted) return;
+      setState(() => _knownCatalog = services);
+    });
     _clientsSub = ClientProfileService.watchAllProfiles().listen((profiles) {
       if (!mounted) {
         return;
@@ -96,11 +104,13 @@ class _EstimatesPageState extends State<EstimatesPage> {
   void dispose() {
     _clientSearchDebounce?.cancel();
     _clientsSub?.cancel();
+    _catalogSub?.cancel();
     _estimateNumberController.dispose();
     _clientIdController.dispose();
+    _notesController.dispose();
+    _termsController.dispose();
     for (final row in _serviceRows) {
-      row.nameController.dispose();
-      row.priceController.dispose();
+      row.dispose();
     }
     super.dispose();
   }
@@ -108,9 +118,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
 ///https://api.flutter.dev/flutter/widgets/TextEditingController-class.html
   void _addServiceRow() {
     setState(() {
-      _serviceRows.add(
-        _ServiceRow(nameController: TextEditingController(), priceController: TextEditingController()),
-      );
+      _serviceRows.add(_ServiceRowController());
     });
   }
 
@@ -120,8 +128,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
     }
     setState(() {
       final row = _serviceRows.removeAt(index);
-      row.nameController.dispose();
-      row.priceController.dispose();
+      row.dispose();
     });
   }
 
@@ -221,15 +228,14 @@ class _EstimatesPageState extends State<EstimatesPage> {
 
     final services = <InvoiceServiceItem>[];
     for (final row in _serviceRows) {
-      final name = row.nameController.text.trim();
-      final price = double.tryParse(row.priceController.text.trim());
-      if (name.isEmpty || price == null || price <= 0) {
+      final item = row.toServiceItem();
+      if (item == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Each service needs a name and price greater than 0.')),
         );
         return;
       }
-      services.add(InvoiceServiceItem(name: name, price: price));
+      services.add(item);
     }
 
     setState(() => _isSubmitting = true);
@@ -255,6 +261,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
         estimateNumber: estimateNumber,
         clientId: clientId,
         services: services,
+        notes: _notesController.text.trim(),
+        terms: _termsController.text.trim(),
       );
       if (!mounted) {
         return;
@@ -262,10 +270,14 @@ class _EstimatesPageState extends State<EstimatesPage> {
 
       final nextPreview = await EstimateService.peekNextEstimateNumber();
       _clientIdController.clear();
+      _notesController.clear();
+      _termsController.clear();
       for (final row in _serviceRows) {
-        row.nameController.clear();
-        row.priceController.clear();
+        row.dispose();
       }
+      _serviceRows
+        ..clear()
+        ..add(_ServiceRowController());
       if (!mounted) {
         return;
       }
@@ -575,6 +587,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
         clientId: estimate.clientId,
         services: estimate.services,
         sourceEstimateId: estimate.id,
+        notes: estimate.notes,
+        terms: estimate.terms,
       );
       await EstimateService.markConverted(estimateId: estimate.id, invoiceId: invoiceId);
       if (!mounted) {
@@ -650,6 +664,18 @@ class _EstimatesPageState extends State<EstimatesPage> {
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
         children: [
           if (widget.role == 'owner') ...[
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => Navigator.pushNamed(
+                  context,
+                  AppRouter.serviceCatalog,
+                  arguments: {'role': widget.role, 'authToken': widget.authToken},
+                ),
+                icon: const Icon(Icons.list_alt_outlined),
+                label: const Text('Manage Common Services'),
+              ),
+            ),
             _OwnerEstimateForm(
               estimateNumberController: _estimateNumberController,
               clientIdController: _clientIdController,
@@ -660,6 +686,9 @@ class _EstimatesPageState extends State<EstimatesPage> {
               onClientSuggestionSelected: _pickClientSuggestion,
               onCreateClient: _openQuickAddClient,
               serviceRows: _serviceRows,
+              catalog: _knownCatalog,
+              notesController: _notesController,
+              termsController: _termsController,
               isSubmitting: _isSubmitting,
               onAddService: _addServiceRow,
               onRemoveService: _removeServiceRow,
@@ -809,6 +838,9 @@ class _OwnerEstimateForm extends StatelessWidget {
     required this.onClientSuggestionSelected,
     required this.onCreateClient,
     required this.serviceRows,
+    required this.catalog,
+    required this.notesController,
+    required this.termsController,
     required this.isSubmitting,
     required this.onAddService,
     required this.onRemoveService,
@@ -823,7 +855,10 @@ class _OwnerEstimateForm extends StatelessWidget {
   final ValueChanged<String> onClientIdChanged;
   final ValueChanged<ClientProfile> onClientSuggestionSelected;
   final VoidCallback onCreateClient;
-  final List<_ServiceRow> serviceRows;
+  final List<_ServiceRowController> serviceRows;
+  final List<CommonService> catalog;
+  final TextEditingController notesController;
+  final TextEditingController termsController;
   final bool isSubmitting;
   final VoidCallback onAddService;
   final void Function(int index) onRemoveService;
@@ -922,57 +957,48 @@ class _OwnerEstimateForm extends StatelessWidget {
             const SizedBox(height: 12),
             Text('Services', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
-            for (var i = 0; i < serviceRows.length; i++) ...[
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: TextField(
-                      controller: serviceRows[i].nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Service name',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: serviceRows[i].priceController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Price',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => onRemoveService(i),
-                    icon: const Icon(Icons.remove_circle_outline),
-                  ),
-                ],
+            for (var i = 0; i < serviceRows.length; i++)
+              _ServiceRowEditor(
+                key: ObjectKey(serviceRows[i]),
+                row: serviceRows[i],
+                onRemove: () => onRemoveService(i),
+                catalog: catalog,
               ),
-              const SizedBox(height: 8),
-            ],
-            Row(
-              children: [
-                TextButton.icon(
-                  onPressed: onAddService,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add service'),
-                ),
-                const Spacer(),
-                FilledButton(
-                  onPressed: isSubmitting ? null : onSubmit,
-                  child: isSubmitting
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Send Estimate'),
-                ),
-              ],
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: onAddService,
+                icon: const Icon(Icons.add),
+                label: const Text('Add service'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: notesController,
+              maxLines: 3,
+              minLines: 2,
+              decoration: const InputDecoration(labelText: 'Notes (optional)', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: termsController,
+              maxLines: 3,
+              minLines: 2,
+              decoration: const InputDecoration(labelText: 'Terms (optional)', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                onPressed: isSubmitting ? null : onSubmit,
+                child: isSubmitting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Send Estimate'),
+              ),
             ),
           ],
         ),
@@ -1199,11 +1225,23 @@ class _EstimateCard extends StatelessWidget {
             const SizedBox(height: 6),
             for (final item in estimate.services)
               Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: Text(item.name)),
-                    Text('\$${item.price.toStringAsFixed(2)}'),
+                    Row(
+                      children: [
+                        Expanded(child: Text(item.name)),
+                        Text('\$${item.price.toStringAsFixed(2)}'),
+                      ],
+                    ),
+                    if (item.description.isNotEmpty)
+                      Text(item.description, style: Theme.of(context).textTheme.bodySmall),
+                    if (item.isPerUnit)
+                      Text(
+                        '${item.quantity} ${item.unit?.isEmpty ?? true ? 'unit(s)' : item.unit} × \$${item.unitPrice!.toStringAsFixed(2)}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                   ],
                 ),
               ),
@@ -1214,6 +1252,18 @@ class _EstimateCard extends StatelessWidget {
                 Text('\$${estimate.total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700)),
               ],
             ),
+            if (estimate.notes.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text('Notes', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(estimate.notes),
+            ],
+            if (estimate.terms.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text('Terms', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(estimate.terms),
+            ],
             if (estimate.originalVersion != null && estimate.revisionNumber > 1) ...[
               const SizedBox(height: 12),
               Text('Compare revisions', style: Theme.of(context).textTheme.titleSmall),
@@ -1628,24 +1678,19 @@ class _ReviseEstimateDialog extends StatefulWidget {
 }
 
 class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
-  final List<_RevisionServiceRow> _rows = [];
+  final List<_ServiceRowController> _rows = [];
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
     if (widget.initialServices.isEmpty) {
-      _rows.add(_RevisionServiceRow.empty());
+      _rows.add(_ServiceRowController());
       return;
     }
 
     for (final item in widget.initialServices) {
-      _rows.add(
-        _RevisionServiceRow(
-          nameController: TextEditingController(text: item.name),
-          priceController: TextEditingController(text: item.price.toStringAsFixed(2)),
-        ),
-      );
+      _rows.add(_ServiceRowController.fromItem(item));
     }
   }
 
@@ -1658,7 +1703,7 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
   }
 
   void _addRow() {
-    setState(() => _rows.add(_RevisionServiceRow.empty()));
+    setState(() => _rows.add(_ServiceRowController()));
   }
 
   void _removeRow(int index) {
@@ -1674,15 +1719,14 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
   void _submit() {
     final parsed = <InvoiceServiceItem>[];
     for (final row in _rows) {
-      final name = row.nameController.text.trim();
-      final price = double.tryParse(row.priceController.text.trim());
-      if (name.isEmpty || price == null || price <= 0) {
+      final item = row.toServiceItem();
+      if (item == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Each revised service must have a name and price > 0.')),
         );
         return;
       }
-      parsed.add(InvoiceServiceItem(name: name, price: price));
+      parsed.add(item);
     }
 
     setState(() => _isSaving = true);
@@ -1697,50 +1741,31 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
       content: SizedBox(
         width: 560,
         child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < _rows.length; i++) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: TextField(
-                        controller: _rows[i].nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Service name',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
+          child: StreamBuilder<List<CommonService>>(
+            stream: ServiceCatalogService.watchAllServices(),
+            builder: (context, snapshot) {
+              final catalog = snapshot.data ?? const <CommonService>[];
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < _rows.length; i++)
+                    _ServiceRowEditor(
+                      key: ObjectKey(_rows[i]),
+                      row: _rows[i],
+                      onRemove: () => _removeRow(i),
+                      catalog: catalog,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _rows[i].priceController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(
-                          labelText: 'Price',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _isSaving ? null : _addRow,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add service'),
                     ),
-                    IconButton(
-                      onPressed: _isSaving ? null : () => _removeRow(i),
-                      icon: const Icon(Icons.remove_circle_outline),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-              ],
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: _isSaving ? null : _addRow,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add service'),
-                ),
-              ),
-            ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -1760,31 +1785,297 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
   }
 }
 
-class _RevisionServiceRow {
-  _RevisionServiceRow({
-    required this.nameController,
-    required this.priceController,
-  });
+class _ServiceRowController {
+  _ServiceRowController({
+    String name = '',
+    String description = '',
+    String price = '',
+    String quantity = '',
+    String unit = '',
+    this.isPerUnit = false,
+  })  : nameController = TextEditingController(text: name),
+        descriptionController = TextEditingController(text: description),
+        priceController = TextEditingController(text: price),
+        quantityController = TextEditingController(text: quantity),
+        unitController = TextEditingController(text: unit);
 
-  factory _RevisionServiceRow.empty() {
-    return _RevisionServiceRow(
-      nameController: TextEditingController(),
-      priceController: TextEditingController(),
+  /// reconstruct a row from an existing service item (used by the revise dialog)
+  factory _ServiceRowController.fromItem(InvoiceServiceItem item) {
+    return _ServiceRowController(
+      name: item.name,
+      description: item.description,
+      price: item.isPerUnit ? item.unitPrice!.toStringAsFixed(2) : item.price.toStringAsFixed(2),
+      quantity: item.quantity?.toString() ?? '',
+      unit: item.unit ?? '',
+      isPerUnit: item.isPerUnit,
     );
   }
 
   final TextEditingController nameController;
+  final TextEditingController descriptionController;
+  /// flat price, or price-per-unit when [isPerUnit] is true
   final TextEditingController priceController;
+  final TextEditingController quantityController;
+  final TextEditingController unitController;
+  bool isPerUnit;
+
+  double? get computedPrice {
+    if (isPerUnit) {
+      final unitPrice = double.tryParse(priceController.text.trim());
+      final qty = double.tryParse(quantityController.text.trim());
+      if (unitPrice == null || qty == null) return null;
+      return unitPrice * qty;
+    }
+    return double.tryParse(priceController.text.trim());
+  }
+
+  /// populate this row's fields from a saved catalog entry
+  void applyCatalogEntry(CommonService entry) {
+    nameController.text = entry.name;
+    descriptionController.text = entry.description;
+    if (entry.isPerUnit) {
+      isPerUnit = true;
+      priceController.text = entry.unitPrice!.toStringAsFixed(2);
+      unitController.text = entry.unit ?? '';
+      quantityController.clear();
+    } else {
+      isPerUnit = false;
+      priceController.text = (entry.flatPrice ?? 0).toStringAsFixed(2);
+      unitController.clear();
+      quantityController.clear();
+    }
+  }
+
+  InvoiceServiceItem? toServiceItem() {
+    final name = nameController.text.trim();
+    final total = computedPrice;
+    if (name.isEmpty || total == null || total <= 0) return null;
+    return InvoiceServiceItem(
+      name: name,
+      description: descriptionController.text.trim(),
+      price: total,
+      unitPrice: isPerUnit ? double.tryParse(priceController.text.trim()) : null,
+      quantity: isPerUnit ? double.tryParse(quantityController.text.trim()) : null,
+      unit: isPerUnit ? unitController.text.trim() : null,
+    );
+  }
 
   void dispose() {
     nameController.dispose();
+    descriptionController.dispose();
     priceController.dispose();
+    quantityController.dispose();
+    unitController.dispose();
   }
 }
 
-class _ServiceRow {
-  _ServiceRow({required this.nameController, required this.priceController});
+/// shared per-row editor used by both the create-estimate form and the
+/// revise dialog: name (with catalog-search autocomplete), description,
+/// flat-vs-per-unit toggle, and a "save to catalog" shortcut.
+class _ServiceRowEditor extends StatefulWidget {
+  const _ServiceRowEditor({
+    super.key,
+    required this.row,
+    required this.onRemove,
+    required this.catalog,
+  });
 
-  final TextEditingController nameController;
-  final TextEditingController priceController;
+  final _ServiceRowController row;
+  final VoidCallback onRemove;
+  final List<CommonService> catalog;
+
+  @override
+  State<_ServiceRowEditor> createState() => _ServiceRowEditorState();
+}
+
+class _ServiceRowEditorState extends State<_ServiceRowEditor> {
+  Timer? _debounce;
+  List<CommonService> _suggestions = const [];
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _onNameChanged(String value) {
+    _debounce?.cancel();
+    final query = value.trim();
+    if (query.isEmpty) {
+      setState(() => _suggestions = const []);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      setState(() {
+        _suggestions = ServiceCatalogService.searchServices(
+          services: widget.catalog,
+          query: query,
+          limit: 8,
+        );
+      });
+    });
+  }
+
+  void _pickSuggestion(CommonService entry) {
+    setState(() {
+      widget.row.applyCatalogEntry(entry);
+      _suggestions = const [];
+    });
+  }
+
+  Future<void> _saveToCatalog() async {
+    final name = widget.row.nameController.text.trim();
+    final price = double.tryParse(widget.row.priceController.text.trim());
+    if (name.isEmpty || price == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add a name and price before saving to common services.')),
+      );
+      return;
+    }
+    try {
+      await ServiceCatalogService.saveService(
+        name: name,
+        description: widget.row.descriptionController.text.trim(),
+        unit: widget.row.isPerUnit ? widget.row.unitController.text.trim() : null,
+        unitPrice: widget.row.isPerUnit ? price : null,
+        flatPrice: widget.row.isPerUnit ? null : price,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Saved "$name" to common services.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save: $error')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final row = widget.row;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: row.nameController,
+                  decoration: const InputDecoration(labelText: 'Service name', border: OutlineInputBorder()),
+                  onChanged: _onNameChanged,
+                ),
+              ),
+              IconButton(
+                onPressed: _saveToCatalog,
+                icon: const Icon(Icons.bookmark_add_outlined),
+                tooltip: 'Save to common services',
+              ),
+              IconButton(
+                onPressed: widget.onRemove,
+                icon: const Icon(Icons.remove_circle_outline),
+                tooltip: 'Remove service',
+              ),
+            ],
+          ),
+          if (_suggestions.isNotEmpty)
+            Card(
+              margin: EdgeInsets.zero,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 220),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _suggestions.length,
+                  itemBuilder: (context, index) {
+                    final entry = _suggestions[index];
+                    return ListTile(
+                      dense: true,
+                      title: Text(entry.name),
+                      subtitle: Text(
+                        entry.isPerUnit
+                            ? '\$${entry.unitPrice!.toStringAsFixed(2)} / ${entry.unit?.isEmpty ?? true ? 'unit' : entry.unit}'
+                            : '\$${(entry.flatPrice ?? 0).toStringAsFixed(2)} flat',
+                      ),
+                      onTap: () => _pickSuggestion(entry),
+                    );
+                  },
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: row.descriptionController,
+            maxLines: 2,
+            minLines: 1,
+            decoration: const InputDecoration(labelText: 'Description (optional)', border: OutlineInputBorder()),
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: false, label: Text('Flat price')),
+              ButtonSegment(value: true, label: Text('Price per unit')),
+            ],
+            selected: {row.isPerUnit},
+            onSelectionChanged: (selection) => setState(() => row.isPerUnit = selection.first),
+          ),
+          const SizedBox(height: 8),
+          if (row.isPerUnit)
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: row.priceController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Price per unit', border: OutlineInputBorder()),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: row.quantityController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Quantity', border: OutlineInputBorder()),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: row.unitController,
+                    decoration: const InputDecoration(labelText: 'Unit (e.g. ft)', border: OutlineInputBorder()),
+                  ),
+                ),
+              ],
+            )
+          else
+            TextField(
+              controller: row.priceController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Price', border: OutlineInputBorder()),
+            ),
+          if (row.isPerUnit) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                row.computedPrice == null ? 'Total: —' : 'Total: \$${row.computedPrice!.toStringAsFixed(2)}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }

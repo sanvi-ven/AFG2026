@@ -96,6 +96,10 @@ class _DashboardPageState extends State<DashboardPage> {
               route: AppRouter.myHours,
             ),
           ] else ...[
+            _linkCard(context,
+                title: 'Estimates',
+                subtitle: 'Create and review quotes for clients',
+                route: AppRouter.estimates),
             _linkCard(
               context,
               title:
@@ -106,21 +110,18 @@ class _DashboardPageState extends State<DashboardPage> {
               route: AppRouter.appointments,
             ),
             _linkCard(context,
-                title: 'Unpaid Invoices',
-                subtitle: 'Pending and overdue invoice balances',
+                title: 'Invoices',
+                subtitle: 'View, download, and manage all invoices',
                 route: AppRouter.invoices),
             _linkCard(context,
-                title: 'Estimates',
-                subtitle: 'Review requests and quotes',
-                route: AppRouter.estimates),
-            _linkCard(context,
                 title: 'Announcements',
-                subtitle: 'Latest updates from the business owner',
+                subtitle: 'Messages between you and the business owner',
                 route: AppRouter.messages),
             if (widget.role == 'owner') ...[
               _linkCard(context,
                   title: 'Reports',
-                  subtitle: 'Revenue, pipeline, busiest clients, and hours',
+                  subtitle:
+                      'Revenue, payroll, expenses, and job profitability',
                   route: AppRouter.reports),
               _linkCard(context,
                   title: "Today's Route",
