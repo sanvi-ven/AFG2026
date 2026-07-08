@@ -151,6 +151,7 @@ class _JobDetailPageState extends State<JobDetailPage> {
             stream: ScheduledWorkService.watchScheduledWork(
               role: 'employee',
               teamId: EmployeeSession.profile.value?.teamId,
+              employeeId: EmployeeSession.profile.value?.employeeId,
             ),
             builder: (context, jobsSnapshot) {
               final job = (jobsSnapshot.data ?? const <ScheduledWork>[])

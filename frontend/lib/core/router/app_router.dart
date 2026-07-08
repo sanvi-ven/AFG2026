@@ -121,7 +121,7 @@ class AppRouter {
         );
       case invoices:
         return _NoAnimationPageRoute(
-          builder: (_) => InvoicesPage(role: role, authToken: authToken),
+          builder: (_) => InvoicesPage(role: role, authToken: authToken, highlightId: highlightId),
           settings: settings,
         );
       case estimates:

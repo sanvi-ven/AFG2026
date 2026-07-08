@@ -15,6 +15,7 @@ class ScheduledWork {
     required this.status,
     this.invoiceId,
     this.teamId,
+    this.employeeIds = const [],
     this.address = '',
     this.phoneNumber = '',
     required this.createdAt,
@@ -34,6 +35,9 @@ class ScheduledWork {
   final String? invoiceId;
   /// crew assigned to work this job; null means unassigned
   final String? teamId;
+  /// individual employees assigned to this job; mutually exclusive with
+  /// [teamId] — assigning one clears the other
+  final List<String> employeeIds;
   /// job-site address, denormalized from the client's profile at creation time
   /// so employee screens never need to read the client_signups collection
   final String address;
@@ -78,6 +82,9 @@ class ScheduledWork {
       status: (map['status'] as String? ?? ScheduledWorkStatus.scheduled).trim(),
       invoiceId: (map['invoiceId'] as String?)?.trim(),
       teamId: (map['teamId'] as String?)?.trim().isEmpty ?? true ? null : (map['teamId'] as String).trim(),
+      employeeIds: (map['employeeIds'] as List<dynamic>? ?? const <dynamic>[])
+          .whereType<String>()
+          .toList(),
       address: (map['address'] as String? ?? '').trim(),
       phoneNumber: (map['phoneNumber'] as String? ?? '').trim(),
       createdAt: readDate(map['createdAt']),
@@ -102,6 +109,7 @@ class ScheduledWork {
       'status': status,
       'invoiceId': invoiceId,
       'teamId': teamId,
+      'employeeIds': employeeIds,
       'address': address,
       'phoneNumber': phoneNumber,
       'createdAt': createdAt,

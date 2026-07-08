@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/services/client_profile_service.dart';
+import '../../../core/services/employee_profile_service.dart';
 import '../../../core/services/estimate_pdf_service.dart';
 import '../../../core/services/estimate_service.dart';
 import '../../../core/services/invoice_service.dart';
@@ -14,6 +15,7 @@ import '../../../core/services/scheduled_work_service.dart';
 import '../../../core/services/team_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../models/client_profile.dart';
+import '../../../models/employee_profile.dart';
 import '../../../models/invoice.dart';
 import '../../../models/scheduled_work.dart';
 import '../../../models/team.dart';
@@ -25,7 +27,8 @@ import '../../../shared/widgets/sort_control.dart';
 
 /// page for managing appointments, scheduled work, and calendar bookings
 class AppointmentsPage extends StatefulWidget {
-  const AppointmentsPage({required this.role, this.authToken, this.highlightId, super.key});
+  const AppointmentsPage(
+      {required this.role, this.authToken, this.highlightId, super.key});
 
   final String role;
   final String? authToken;
@@ -50,7 +53,8 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   String? _deletingWorkId;
   String? _reschedulingWorkId;
   ListSortMode _sortMode = ListSortMode.newestFirst;
-  late final ListHighlightController _highlight = ListHighlightController(widget.highlightId);
+  late final ListHighlightController _highlight =
+      ListHighlightController(widget.highlightId);
 
   Future<void> _openGoogleCalendar() async {
     const url = 'https://calendar.google.com/calendar/u/0/r/week';
@@ -91,11 +95,15 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
         notes: sourceEstimate?.notes ?? '',
         terms: sourceEstimate?.terms ?? '',
       );
-      await ScheduledWorkService.markInvoiced(workId: work.id, invoiceId: invoiceId);
-      await EstimateService.markConverted(estimateId: work.estimateId, invoiceId: invoiceId);
+      await ScheduledWorkService.markInvoiced(
+          workId: work.id, invoiceId: invoiceId);
+      await EstimateService.markConverted(
+          estimateId: work.estimateId, invoiceId: invoiceId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Invoice $invoiceNumber created and sent to client.')),
+        SnackBar(
+            content:
+                Text('Invoice $invoiceNumber created and sent to client.')),
       );
     } catch (error) {
       if (!mounted) return;
@@ -112,7 +120,8 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     if (invoiceId == null || invoiceId.isEmpty) return;
     setState(() => _markingPaidWorkId = work.id);
     try {
-      await InvoiceService.updateStatus(invoiceId: invoiceId, status: InvoiceStatus.paid);
+      await InvoiceService.updateStatus(
+          invoiceId: invoiceId, status: InvoiceStatus.paid);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Invoice marked as paid.')),
@@ -136,8 +145,12 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
           'Archive this job (${work.estimateNumber})? It will be moved to your archived section.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Archive')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Archive')),
         ],
       ),
     );
@@ -162,10 +175,15 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Delete Job Permanently'),
-        content: const Text("Permanently delete this job? This can't be undone."),
+        content:
+            const Text("Permanently delete this job? This can't be undone."),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete')),
         ],
       ),
     );
@@ -177,7 +195,8 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+          SnackBar(
+              content: Text(error.toString().replaceFirst('Exception: ', ''))),
         );
       }
     } finally {
@@ -202,14 +221,18 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     );
     if (pickedTime == null || !mounted) return;
 
-    final newDate = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
+    final newDate = DateTime(pickedDate.year, pickedDate.month, pickedDate.day,
+        pickedTime.hour, pickedTime.minute);
 
     setState(() => _reschedulingWorkId = work.id);
     try {
-      await ScheduledWorkService.rescheduleWork(workId: work.id, newDate: newDate);
+      await ScheduledWorkService.rescheduleWork(
+          workId: work.id, newDate: newDate);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Rescheduled to ${DateFormat('MMM d, yyyy · h:mm a').format(newDate)}.')),
+        SnackBar(
+            content: Text(
+                'Rescheduled to ${DateFormat('MMM d, yyyy · h:mm a').format(newDate)}.')),
       );
     } catch (error) {
       if (!mounted) return;
@@ -233,10 +256,14 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
         );
         return;
       }
-      final savedPath = await EstimatePdfService.generateAndDownloadEstimatePdf(estimate: estimateDoc);
+      final savedPath = await EstimatePdfService.generateAndDownloadEstimatePdf(
+          estimate: estimateDoc);
       if (!mounted) return;
-      final message = savedPath == null ? 'Estimate PDF downloaded.' : 'Estimate PDF saved: $savedPath';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      final message = savedPath == null
+          ? 'Estimate PDF downloaded.'
+          : 'Estimate PDF saved: $savedPath';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -251,7 +278,11 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     Navigator.pushNamed(
       context,
       AppRouter.estimates,
-      arguments: {'role': widget.role, 'authToken': widget.authToken, 'highlightId': work.estimateId},
+      arguments: {
+        'role': widget.role,
+        'authToken': widget.authToken,
+        'highlightId': work.estimateId
+      },
     );
   }
 
@@ -268,140 +299,194 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
         children: [
-          Text('Upcoming & Past Work', style: Theme.of(context).textTheme.titleMedium),
+          Text('Upcoming & Past Work',
+              style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
-          if (widget.role == 'client' && (clientId == null || clientId.trim().isEmpty))
+          if (widget.role == 'client' &&
+              (clientId == null || clientId.trim().isEmpty))
             const Card(
               child: Padding(
                 padding: EdgeInsets.all(16),
-                child: Text('Client ID not found. Please log in from the client email flow first.'),
+                child: Text(
+                    'Client ID not found. Please log in from the client email flow first.'),
               ),
             )
           else
             StreamBuilder<List<Team>>(
-              stream: widget.role == 'owner' ? TeamService.watchAllTeams() : const Stream.empty(),
+              stream: widget.role == 'owner'
+                  ? TeamService.watchAllTeams()
+                  : const Stream.empty(),
               builder: (context, teamsSnapshot) {
                 final teams = teamsSnapshot.data ?? const <Team>[];
 
-                return StreamBuilder<List<ClientProfile>>(
-                  stream: ClientProfileService.watchAllProfiles(),
-                  builder: (context, clientsSnapshot) {
-                    final clients = clientsSnapshot.data ?? const <ClientProfile>[];
+                return StreamBuilder<List<EmployeeProfile>>(
+                  stream: widget.role == 'owner'
+                      ? EmployeeProfileService.watchAllProfiles()
+                      : const Stream.empty(),
+                  builder: (context, employeesSnapshot) {
+                    final employees =
+                        employeesSnapshot.data ?? const <EmployeeProfile>[];
 
-                    return StreamBuilder<List<ScheduledWork>>(
-                      stream: ScheduledWorkService.watchScheduledWork(
-                        role: widget.role,
-                        clientId: clientId,
-                      ),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        if (snapshot.hasError) {
-                          return Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Text('Failed to load scheduled work: ${snapshot.error}'),
-                            ),
-                          );
-                        }
+                    return StreamBuilder<List<ClientProfile>>(
+                      stream: ClientProfileService.watchAllProfiles(),
+                      builder: (context, clientsSnapshot) {
+                        final clients =
+                            clientsSnapshot.data ?? const <ClientProfile>[];
 
-                        final items = snapshot.data ?? const <ScheduledWork>[];
-                        if (items.isEmpty) {
-                          return Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Text(
-                                widget.role == 'owner'
-                                    ? 'No work scheduled yet. Approve an estimate and click "Schedule Work" to get started.'
-                                    : 'No upcoming work scheduled for you yet.',
-                              ),
-                            ),
-                          );
-                        }
-
-                        final sorted = [...items];
-                        switch (_sortMode) {
-                          case ListSortMode.newestFirst:
-                            sorted.sort((a, b) => b.scheduledDate.compareTo(a.scheduledDate));
-                            break;
-                          case ListSortMode.oldestFirst:
-                            sorted.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
-                            break;
-                          case ListSortMode.client:
-                            sorted.sort((a, b) => ClientProfileService.displayNameFor(clients, a.clientId)
-                                .toLowerCase()
-                                .compareTo(ClientProfileService.displayNameFor(clients, b.clientId).toLowerCase()));
-                            break;
-                        }
-
-                        _highlight.maybeScrollTo(
-                          sorted.map((e) => e.id).toList(),
-                          () {
-                            if (mounted) setState(() {});
-                          },
-                        );
-
-                        final active = sorted.where((item) => !item.isArchived).toList();
-                        final archived = sorted.where((item) => item.isArchived).toList();
-
-                        Widget workCard(ScheduledWork item) => KeyedSubtree(
-                              key: _highlight.keyFor(item.id),
-                              child: Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: _ScheduledWorkCard(
-                                  work: item,
-                                  role: widget.role,
-                                  teams: teams,
-                                  isHighlighted: _highlight.isHighlighted(item.id),
-                                  isCompleting: _completingWorkId == item.id,
-                                  isConverting: _convertingWorkId == item.id,
-                                  isDownloadingPdf: _downloadingEstimatePdfWorkId == item.id,
-                                  isMarkingPaid: _markingPaidWorkId == item.id,
-                                  isArchiving: _archivingWorkId == item.id,
-                                  isDeleting: _deletingWorkId == item.id,
-                                  isRescheduling: _reschedulingWorkId == item.id,
-                                  onMarkComplete: () => _markComplete(item),
-                                  onConvertToInvoice: () => _convertToInvoice(item),
-                                  onDownloadEstimatePdf: () => _downloadEstimatePdf(item),
-                                  onMarkPaid: () => _markInvoicePaid(item),
-                                  onViewEstimate: () => _viewEstimate(item),
-                                  onArchive: widget.role == 'owner' ? () => _archiveWork(item) : null,
-                                  onDeletePermanently:
-                                      widget.role == 'owner' ? () => _deleteWorkPermanently(item) : null,
-                                  onReschedule: widget.role == 'owner' ? () => _rescheduleWork(item) : null,
+                        return StreamBuilder<List<ScheduledWork>>(
+                          stream: ScheduledWorkService.watchScheduledWork(
+                            role: widget.role,
+                            clientId: clientId,
+                          ),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Center(
+                                  child: CircularProgressIndicator());
+                            }
+                            if (snapshot.hasError) {
+                              return Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Text(
+                                      'Failed to load scheduled work: ${snapshot.error}'),
                                 ),
-                              ),
+                              );
+                            }
+
+                            final items =
+                                snapshot.data ?? const <ScheduledWork>[];
+                            if (items.isEmpty) {
+                              return Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Text(
+                                    widget.role == 'owner'
+                                        ? 'No work scheduled yet. Approve an estimate and click "Schedule Work" to get started.'
+                                        : 'No upcoming work scheduled for you yet.',
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final sorted = [...items];
+                            switch (_sortMode) {
+                              case ListSortMode.newestFirst:
+                                sorted.sort((a, b) =>
+                                    b.scheduledDate.compareTo(a.scheduledDate));
+                                break;
+                              case ListSortMode.oldestFirst:
+                                sorted.sort((a, b) =>
+                                    a.scheduledDate.compareTo(b.scheduledDate));
+                                break;
+                              case ListSortMode.client:
+                                sorted.sort((a, b) =>
+                                    ClientProfileService.displayNameFor(
+                                            clients, a.clientId)
+                                        .toLowerCase()
+                                        .compareTo(
+                                            ClientProfileService.displayNameFor(
+                                                    clients, b.clientId)
+                                                .toLowerCase()));
+                                break;
+                            }
+
+                            _highlight.maybeScrollTo(
+                              sorted.map((e) => e.id).toList(),
+                              () {
+                                if (mounted) setState(() {});
+                              },
                             );
 
-                        return Column(
-                          children: [
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: SortControl(
-                                value: _sortMode,
-                                onChanged: (mode) => setState(() => _sortMode = mode),
-                              ),
-                            ),
-                            for (final item in active) workCard(item),
-                            if (widget.role == 'owner' && archived.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              ExpansionTile(
-                                title: Text(
-                                  'Archived (${archived.length})',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleSmall
-                                      ?.copyWith(color: Theme.of(context).colorScheme.outline),
+                            final active = sorted
+                                .where((item) => !item.isArchived)
+                                .toList();
+                            final archived = sorted
+                                .where((item) => item.isArchived)
+                                .toList();
+
+                            Widget workCard(ScheduledWork item) => KeyedSubtree(
+                                  key: _highlight.keyFor(item.id),
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: _ScheduledWorkCard(
+                                      work: item,
+                                      role: widget.role,
+                                      teams: teams,
+                                      employees: employees,
+                                      isHighlighted:
+                                          _highlight.isHighlighted(item.id),
+                                      isCompleting:
+                                          _completingWorkId == item.id,
+                                      isConverting:
+                                          _convertingWorkId == item.id,
+                                      isDownloadingPdf:
+                                          _downloadingEstimatePdfWorkId ==
+                                              item.id,
+                                      isMarkingPaid:
+                                          _markingPaidWorkId == item.id,
+                                      isArchiving: _archivingWorkId == item.id,
+                                      isDeleting: _deletingWorkId == item.id,
+                                      isRescheduling:
+                                          _reschedulingWorkId == item.id,
+                                      onMarkComplete: () => _markComplete(item),
+                                      onConvertToInvoice: () =>
+                                          _convertToInvoice(item),
+                                      onDownloadEstimatePdf: () =>
+                                          _downloadEstimatePdf(item),
+                                      onMarkPaid: () => _markInvoicePaid(item),
+                                      onViewEstimate: () => _viewEstimate(item),
+                                      onArchive: widget.role == 'owner'
+                                          ? () => _archiveWork(item)
+                                          : null,
+                                      onDeletePermanently: widget.role ==
+                                              'owner'
+                                          ? () => _deleteWorkPermanently(item)
+                                          : null,
+                                      onReschedule: widget.role == 'owner'
+                                          ? () => _rescheduleWork(item)
+                                          : null,
+                                    ),
+                                  ),
+                                );
+
+                            return Column(
+                              children: [
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: SortControl(
+                                    value: _sortMode,
+                                    onChanged: (mode) =>
+                                        setState(() => _sortMode = mode),
+                                  ),
                                 ),
-                                tilePadding: const EdgeInsets.symmetric(horizontal: 4),
-                                childrenPadding: EdgeInsets.zero,
-                                children: [
-                                  for (final item in archived) workCard(item),
+                                for (final item in active) workCard(item),
+                                if (widget.role == 'owner' &&
+                                    archived.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  ExpansionTile(
+                                    title: Text(
+                                      'Archived (${archived.length})',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .outline),
+                                    ),
+                                    tilePadding: const EdgeInsets.symmetric(
+                                        horizontal: 4),
+                                    childrenPadding: EdgeInsets.zero,
+                                    children: [
+                                      for (final item in archived)
+                                        workCard(item),
+                                    ],
+                                  ),
                                 ],
-                              ),
-                            ],
-                          ],
+                              ],
+                            );
+                          },
                         );
                       },
                     );
@@ -418,7 +503,9 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                widget.role == 'client' ? 'Your Calendar' : 'Appointments Calendar',
+                widget.role == 'client'
+                    ? 'Your Calendar'
+                    : 'Appointments Calendar',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               if (widget.role == 'owner')
@@ -445,6 +532,7 @@ class _ScheduledWorkCard extends StatefulWidget {
     required this.work,
     required this.role,
     required this.teams,
+    required this.employees,
     required this.isHighlighted,
     required this.isCompleting,
     required this.isConverting,
@@ -466,6 +554,7 @@ class _ScheduledWorkCard extends StatefulWidget {
   final ScheduledWork work;
   final String role;
   final List<Team> teams;
+  final List<EmployeeProfile> employees;
   final bool isHighlighted;
   final bool isCompleting;
   final bool isConverting;
@@ -491,6 +580,7 @@ class _ScheduledWorkCardState extends State<_ScheduledWorkCard> {
   // We stream the invoice status to show paid/unpaid in real time.
   Invoice? _invoice;
   bool _loadingInvoice = false;
+  late bool _assignToEmployees = widget.work.employeeIds.isNotEmpty;
 
   @override
   void initState() {
@@ -550,208 +640,303 @@ class _ScheduledWorkCardState extends State<_ScheduledWorkCard> {
             : null,
       ),
       child: Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    work.estimateNumber,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      work.estimateNumber,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    statusText,
-                    style: TextStyle(color: statusColor, fontWeight: FontWeight.w700),
-                  ),
-                ),
-                if (work.recurringGroupId != null) ...[
-                  const SizedBox(width: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      color: statusColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(999),
                     ),
-                    child: const Text('Recurring', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-                  ),
-                ],
-                if (!work.isArchived && widget.onArchive != null) ...[
-                  const SizedBox(width: 4),
-                  widget.isArchiving
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                      : IconButton(
-                          onPressed: widget.onArchive,
-                          icon: const Icon(Icons.archive_outlined),
-                          tooltip: 'Archive job',
-                          color: Theme.of(context).colorScheme.outline,
-                          iconSize: 20,
-                        ),
-                ] else if (work.isArchived && widget.onDeletePermanently != null) ...[
-                  const SizedBox(width: 4),
-                  widget.isDeleting
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                      : IconButton(
-                          onPressed: widget.onDeletePermanently,
-                          icon: const Icon(Icons.delete_forever_outlined),
-                          tooltip: 'Delete permanently',
-                          color: Theme.of(context).colorScheme.error,
-                          iconSize: 20,
-                        ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const Icon(Icons.calendar_today_outlined, size: 14),
-                const SizedBox(width: 6),
-                Text(dateFormatter.format(work.scheduledDate)),
-                const SizedBox(width: 12),
-                const Icon(Icons.access_time_outlined, size: 14),
-                const SizedBox(width: 6),
-                Text(timeFormatter.format(work.scheduledDate)),
-              ],
-            ),
-            if (widget.role == 'owner') ...[
-              const SizedBox(height: 4),
-              Text('Client ID: ${work.clientId}'),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                initialValue: work.teamId,
-                decoration: const InputDecoration(labelText: 'Assigned team', border: OutlineInputBorder()),
-                items: [
-                  const DropdownMenuItem<String>(value: null, child: Text('Unassigned')),
-                  for (final team in widget.teams) DropdownMenuItem<String>(value: team.id, child: Text(team.name)),
-                ],
-                onChanged: (value) => ScheduledWorkService.assignTeam(workId: work.id, teamId: value),
-              ),
-            ],
-            const SizedBox(height: 10),
-            Text('Services', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 6),
-            for (final item in work.services)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  children: [
-                    Expanded(child: Text(item.name)),
-                    Text('\$${item.price.toStringAsFixed(2)}'),
-                  ],
-                ),
-              ),
-            const Divider(height: 16),
-            Row(
-              children: [
-                const Expanded(child: Text('Total', style: TextStyle(fontWeight: FontWeight.w700))),
-                Text('\$${work.total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700)),
-              ],
-            ),
-            // Invoice paid status (visible to both roles when invoiced)
-            if (work.isInvoiced) ...[
-              const SizedBox(height: 8),
-              if (_loadingInvoice)
-                const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-              else
-                Row(
-                  children: [
-                    Icon(
-                      invoicePaid ? Icons.check_circle : Icons.radio_button_unchecked,
-                      size: 16,
-                      color: invoicePaid ? Colors.green : Colors.orange,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      invoicePaid ? 'Invoice paid' : 'Invoice not yet paid',
+                    child: Text(
+                      statusText,
                       style: TextStyle(
-                        color: invoicePaid ? Colors.green : Colors.orange,
-                        fontWeight: FontWeight.w600,
+                          color: statusColor, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  if (work.recurringGroupId != null) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(999),
                       ),
+                      child: const Text('Recurring',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 12)),
                     ),
                   ],
+                  if (!work.isArchived && widget.onArchive != null) ...[
+                    const SizedBox(width: 4),
+                    widget.isArchiving
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : IconButton(
+                            onPressed: widget.onArchive,
+                            icon: const Icon(Icons.archive_outlined),
+                            tooltip: 'Archive job',
+                            color: Theme.of(context).colorScheme.outline,
+                            iconSize: 20,
+                          ),
+                  ] else if (work.isArchived &&
+                      widget.onDeletePermanently != null) ...[
+                    const SizedBox(width: 4),
+                    widget.isDeleting
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : IconButton(
+                            onPressed: widget.onDeletePermanently,
+                            icon: const Icon(Icons.delete_forever_outlined),
+                            tooltip: 'Delete permanently',
+                            color: Theme.of(context).colorScheme.error,
+                            iconSize: 20,
+                          ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.calendar_today_outlined, size: 14),
+                  const SizedBox(width: 6),
+                  Text(dateFormatter.format(work.scheduledDate)),
+                  const SizedBox(width: 12),
+                  const Icon(Icons.access_time_outlined, size: 14),
+                  const SizedBox(width: 6),
+                  Text(timeFormatter.format(work.scheduledDate)),
+                ],
+              ),
+              if (widget.role == 'owner') ...[
+                const SizedBox(height: 4),
+                Text('Client ID: ${work.clientId}'),
+                const SizedBox(height: 8),
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(
+                        value: false,
+                        label: Text('Team'),
+                        icon: Icon(Icons.groups_outlined)),
+                    ButtonSegment(
+                        value: true,
+                        label: Text('Employees'),
+                        icon: Icon(Icons.person_outlined)),
+                  ],
+                  selected: {_assignToEmployees},
+                  onSelectionChanged: (selection) =>
+                      setState(() => _assignToEmployees = selection.first),
                 ),
-            ],
-            const SizedBox(height: 12),
-            // Download estimate PDF (both roles)
-            Wrap(
-              spacing: 10,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: widget.isDownloadingPdf ? null : widget.onDownloadEstimatePdf,
-                  icon: widget.isDownloadingPdf
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.download_outlined),
-                  label: const Text('Download Estimate'),
+                const SizedBox(height: 8),
+                if (_assignToEmployees)
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final employee in widget.employees)
+                        FilterChip(
+                          label: Text(employee.fullName),
+                          selected:
+                              work.employeeIds.contains(employee.employeeId),
+                          onSelected: (selected) {
+                            final updated = [...work.employeeIds];
+                            if (selected) {
+                              updated.add(employee.employeeId);
+                            } else {
+                              updated.remove(employee.employeeId);
+                            }
+                            ScheduledWorkService.assignEmployees(
+                                workId: work.id, employeeIds: updated);
+                          },
+                        ),
+                    ],
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    initialValue: work.teamId,
+                    decoration: const InputDecoration(
+                        labelText: 'Assigned team',
+                        border: OutlineInputBorder()),
+                    items: [
+                      const DropdownMenuItem<String>(
+                          value: null, child: Text('Unassigned')),
+                      for (final team in widget.teams)
+                        DropdownMenuItem<String>(
+                            value: team.id, child: Text(team.name)),
+                    ],
+                    onChanged: (value) => ScheduledWorkService.assignTeam(
+                        workId: work.id, teamId: value),
+                  ),
+              ],
+              const SizedBox(height: 10),
+              Text('Services', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 6),
+              for (final item in work.services)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(item.name)),
+                      Text('\$${item.price.toStringAsFixed(2)}'),
+                    ],
+                  ),
                 ),
-                OutlinedButton.icon(
-                  onPressed: widget.onViewEstimate,
-                  icon: const Icon(Icons.request_quote_outlined),
-                  label: const Text('View Original Estimate'),
-                ),
-                // Owner-only actions
-                if (widget.role == 'owner') ...[
-                  if (work.isScheduled)
-                    FilledButton.icon(
-                      onPressed: widget.isCompleting ? null : widget.onMarkComplete,
-                      icon: widget.isCompleting
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.check_circle_outline),
-                      label: const Text('Mark Complete'),
-                    ),
-                  if (work.isCompleted)
-                    FilledButton.icon(
-                      onPressed: widget.isConverting ? null : widget.onConvertToInvoice,
-                      icon: widget.isConverting
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.swap_horiz),
-                      label: const Text('Convert to Invoice'),
-                    ),
-                  if (work.isInvoiced && !invoicePaid)
-                    OutlinedButton.icon(
-                      onPressed: widget.isMarkingPaid ? null : widget.onMarkPaid,
-                      icon: widget.isMarkingPaid
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.payments_outlined),
-                      label: const Text('Mark as Paid'),
-                    ),
-                  if (widget.onReschedule != null)
-                    OutlinedButton.icon(
-                      onPressed: widget.isRescheduling ? null : widget.onReschedule,
-                      icon: widget.isRescheduling
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.edit_calendar_outlined),
-                      label: const Text('Reschedule'),
-                    ),
-                  if (work.recurringGroupId != null)
-                    OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => _SeriesDetailPage(
-                            recurringGroupId: work.recurringGroupId!,
-                            estimateNumber: work.estimateNumber,
+              const Divider(height: 16),
+              Row(
+                children: [
+                  const Expanded(
+                      child: Text('Total',
+                          style: TextStyle(fontWeight: FontWeight.w700))),
+                  Text('\$${work.total.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                ],
+              ),
+              // Invoice paid status (visible to both roles when invoiced)
+              if (work.isInvoiced) ...[
+                const SizedBox(height: 8),
+                if (_loadingInvoice)
+                  const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                else
+                  Row(
+                    children: [
+                      Icon(
+                        invoicePaid
+                            ? Icons.check_circle
+                            : Icons.radio_button_unchecked,
+                        size: 16,
+                        color: invoicePaid ? Colors.green : Colors.orange,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        invoicePaid ? 'Invoice paid' : 'Invoice not yet paid',
+                        style: TextStyle(
+                          color: invoicePaid ? Colors.green : Colors.orange,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+              const SizedBox(height: 12),
+              // Download estimate PDF (both roles)
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: widget.isDownloadingPdf
+                        ? null
+                        : widget.onDownloadEstimatePdf,
+                    icon: widget.isDownloadingPdf
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.download_outlined),
+                    label: const Text('Download Estimate'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: widget.onViewEstimate,
+                    icon: const Icon(Icons.request_quote_outlined),
+                    label: const Text('View Original Estimate'),
+                  ),
+                  // Owner-only actions
+                  if (widget.role == 'owner') ...[
+                    if (work.isScheduled)
+                      FilledButton.icon(
+                        onPressed:
+                            widget.isCompleting ? null : widget.onMarkComplete,
+                        icon: widget.isCompleting
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.check_circle_outline),
+                        label: const Text('Mark Complete'),
+                      ),
+                    if (work.isCompleted)
+                      FilledButton.icon(
+                        onPressed: widget.isConverting
+                            ? null
+                            : widget.onConvertToInvoice,
+                        icon: widget.isConverting
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.swap_horiz),
+                        label: const Text('Convert to Invoice'),
+                      ),
+                    if (work.isInvoiced && !invoicePaid)
+                      OutlinedButton.icon(
+                        onPressed:
+                            widget.isMarkingPaid ? null : widget.onMarkPaid,
+                        icon: widget.isMarkingPaid
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.payments_outlined),
+                        label: const Text('Mark as Paid'),
+                      ),
+                    if (widget.onReschedule != null)
+                      OutlinedButton.icon(
+                        onPressed:
+                            widget.isRescheduling ? null : widget.onReschedule,
+                        icon: widget.isRescheduling
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.edit_calendar_outlined),
+                        label: const Text('Reschedule'),
+                      ),
+                    if (work.recurringGroupId != null)
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => _SeriesDetailPage(
+                              recurringGroupId: work.recurringGroupId!,
+                              estimateNumber: work.estimateNumber,
+                            ),
                           ),
                         ),
+                        icon: const Icon(Icons.event_repeat_outlined),
+                        label: const Text('Manage Series'),
                       ),
-                      icon: const Icon(Icons.event_repeat_outlined),
-                      label: const Text('Manage Series'),
-                    ),
+                  ],
                 ],
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -760,7 +945,8 @@ class _ScheduledWorkCardState extends State<_ScheduledWorkCard> {
 /// owner-only view of every job in one recurring series, with a bulk
 /// "cancel remaining occurrences" action and per-job archive
 class _SeriesDetailPage extends StatefulWidget {
-  const _SeriesDetailPage({required this.recurringGroupId, required this.estimateNumber});
+  const _SeriesDetailPage(
+      {required this.recurringGroupId, required this.estimateNumber});
 
   final String recurringGroupId;
   final String estimateNumber;
@@ -782,8 +968,12 @@ class _SeriesDetailPageState extends State<_SeriesDetailPage> {
           "Cancel all upcoming, not-yet-completed jobs in this series? This can't be undone.",
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Back')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Confirm')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Back')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Confirm')),
         ],
       ),
     );
@@ -791,7 +981,8 @@ class _SeriesDetailPageState extends State<_SeriesDetailPage> {
 
     setState(() => _isCancelling = true);
     try {
-      final count = await ScheduledWorkService.cancelRemainingInSeries(widget.recurringGroupId);
+      final count = await ScheduledWorkService.cancelRemainingInSeries(
+          widget.recurringGroupId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('$count upcoming job(s) cancelled.')),
@@ -799,7 +990,8 @@ class _SeriesDetailPageState extends State<_SeriesDetailPage> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to cancel remaining occurrences: $error')),
+        SnackBar(
+            content: Text('Failed to cancel remaining occurrences: $error')),
       );
     } finally {
       if (mounted) setState(() => _isCancelling = false);
@@ -811,10 +1003,15 @@ class _SeriesDetailPageState extends State<_SeriesDetailPage> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Archive Job'),
-        content: Text('Archive the job on ${DateFormat('MMM d, yyyy · h:mm a').format(work.scheduledDate)}?'),
+        content: Text(
+            'Archive the job on ${DateFormat('MMM d, yyyy · h:mm a').format(work.scheduledDate)}?'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Archive')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Archive')),
         ],
       ),
     );
@@ -837,7 +1034,8 @@ class _SeriesDetailPageState extends State<_SeriesDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('${widget.estimateNumber} — Recurring Series')),
+      appBar:
+          AppBar(title: Text('${widget.estimateNumber} — Recurring Series')),
       body: StreamBuilder<List<ScheduledWork>>(
         stream: ScheduledWorkService.watchSeries(widget.recurringGroupId),
         builder: (context, snapshot) {
@@ -855,7 +1053,10 @@ class _SeriesDetailPageState extends State<_SeriesDetailPage> {
               FilledButton.icon(
                 onPressed: _isCancelling ? null : _cancelRemaining,
                 icon: _isCancelling
-                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.event_busy_outlined),
                 label: const Text('Cancel Remaining Occurrences'),
               ),
@@ -878,7 +1079,8 @@ class _SeriesDetailPageState extends State<_SeriesDetailPage> {
 }
 
 class _SeriesJobRow extends StatelessWidget {
-  const _SeriesJobRow({required this.work, required this.isArchiving, this.onArchive});
+  const _SeriesJobRow(
+      {required this.work, required this.isArchiving, this.onArchive});
 
   final ScheduledWork work;
   final bool isArchiving;
@@ -900,7 +1102,8 @@ class _SeriesJobRow extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: ListTile(
-        title: Text(DateFormat('MMM d, yyyy · h:mm a').format(work.scheduledDate)),
+        title:
+            Text(DateFormat('MMM d, yyyy · h:mm a').format(work.scheduledDate)),
         subtitle: Row(
           children: [
             Container(
@@ -909,7 +1112,9 @@ class _SeriesJobRow extends StatelessWidget {
                 color: statusColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(999),
               ),
-              child: Text(statusText, style: TextStyle(color: statusColor, fontWeight: FontWeight.w700)),
+              child: Text(statusText,
+                  style: TextStyle(
+                      color: statusColor, fontWeight: FontWeight.w700)),
             ),
             if (work.isArchived) ...[
               const SizedBox(width: 8),
@@ -920,7 +1125,10 @@ class _SeriesJobRow extends StatelessWidget {
         trailing: onArchive == null
             ? null
             : isArchiving
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))
                 : IconButton(
                     onPressed: onArchive,
                     icon: const Icon(Icons.archive_outlined),

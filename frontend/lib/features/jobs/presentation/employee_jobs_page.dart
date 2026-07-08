@@ -21,15 +21,16 @@ class EmployeeJobsPage extends StatelessWidget {
       valueListenable: EmployeeSession.profile,
       builder: (context, profile, _) {
         final teamId = profile?.teamId;
+        final employeeId = profile?.employeeId;
 
         return AppScaffold(
           title: 'My Jobs',
           role: role,
           authToken: authToken,
           selectedRoute: AppRouter.myJobs,
-          body: (teamId == null || teamId.isEmpty)
+          body: (employeeId == null || employeeId.isEmpty)
               ? const _EmptyState(
-                  message: "You haven't been assigned to a team yet. Check with your employer.",
+                  message: 'Log in to see your jobs.',
                 )
               : DefaultTabController(
                   length: 2,
@@ -38,14 +39,14 @@ class EmployeeJobsPage extends StatelessWidget {
                       const TabBar(
                         tabs: [
                           Tab(text: 'All Jobs'),
-                          Tab(text: "Today's Route"),
+                          Tab(text: 'Route'),
                         ],
                       ),
                       Expanded(
                         child: TabBarView(
                           children: [
-                            _AllJobsTab(teamId: teamId),
-                            _TodaysRouteTab(teamId: teamId),
+                            _AllJobsTab(teamId: teamId, employeeId: employeeId),
+                            _TodaysRouteTab(teamId: teamId, employeeId: employeeId),
                           ],
                         ),
                       ),
@@ -59,14 +60,15 @@ class EmployeeJobsPage extends StatelessWidget {
 }
 
 class _AllJobsTab extends StatelessWidget {
-  const _AllJobsTab({required this.teamId});
+  const _AllJobsTab({required this.teamId, required this.employeeId});
 
-  final String teamId;
+  final String? teamId;
+  final String employeeId;
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<ScheduledWork>>(
-      stream: ScheduledWorkService.watchScheduledWork(role: 'employee', teamId: teamId),
+      stream: ScheduledWorkService.watchScheduledWork(role: 'employee', teamId: teamId, employeeId: employeeId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -77,7 +79,7 @@ class _AllJobsTab extends StatelessWidget {
 
         final jobs = snapshot.data ?? const <ScheduledWork>[];
         if (jobs.isEmpty) {
-          return const _EmptyState(message: 'No jobs scheduled for your team today or upcoming.');
+          return const _EmptyState(message: 'No jobs scheduled for you today or upcoming.');
         }
 
         return ListView.builder(
@@ -96,57 +98,105 @@ class _AllJobsTab extends StatelessWidget {
   }
 }
 
-class _TodaysRouteTab extends StatelessWidget {
-  const _TodaysRouteTab({required this.teamId});
+class _TodaysRouteTab extends StatefulWidget {
+  const _TodaysRouteTab({required this.teamId, required this.employeeId});
 
-  final String teamId;
+  final String? teamId;
+  final String employeeId;
+
+  @override
+  State<_TodaysRouteTab> createState() => _TodaysRouteTabState();
+}
+
+class _TodaysRouteTabState extends State<_TodaysRouteTab> {
+  late DateTime _selectedDay = _startOfDay(DateTime.now());
+
+  static DateTime _startOfDay(DateTime date) => DateTime(date.year, date.month, date.day);
+
+  void _shiftDay(int days) {
+    setState(() => _selectedDay = _selectedDay.add(Duration(days: days)));
+  }
+
+  String _dayLabel() {
+    final today = _startOfDay(DateTime.now());
+    final diff = _selectedDay.difference(today).inDays;
+    if (diff == 0) return 'Today · ${DateFormat('MMM d').format(_selectedDay)}';
+    if (diff == 1) return 'Tomorrow · ${DateFormat('MMM d').format(_selectedDay)}';
+    if (diff == -1) return 'Yesterday · ${DateFormat('MMM d').format(_selectedDay)}';
+    return DateFormat('EEEE, MMM d').format(_selectedDay);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<ScheduledWork>>(
-      stream: ScheduledWorkService.watchJobsForDay(day: DateTime.now(), role: 'employee', teamId: teamId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return _EmptyState(message: "Failed to load today's route: ${snapshot.error}");
-        }
-
-        final jobs = snapshot.data ?? const <ScheduledWork>[];
-        if (jobs.isEmpty) {
-          return const _EmptyState(message: 'No jobs scheduled for your team today.');
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: jobs.length,
-          itemBuilder: (context, index) {
-            final job = jobs[index];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Card(
-                margin: EdgeInsets.zero,
-                child: ListTile(
-                  contentPadding: const EdgeInsets.all(14),
-                  leading: CircleAvatar(child: Text('${index + 1}')),
-                  title: Text(
-                    job.address.isEmpty ? 'Address unavailable' : job.address,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: GetDirectionsButton(address: job.address),
-                    ),
-                  ),
-                ),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(onPressed: () => _shiftDay(-1), icon: const Icon(Icons.chevron_left)),
+              Text(
+                _dayLabel(),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
-            );
-          },
-        );
-      },
+              IconButton(onPressed: () => _shiftDay(1), icon: const Icon(Icons.chevron_right)),
+            ],
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<List<ScheduledWork>>(
+            stream: ScheduledWorkService.watchJobsForDay(
+              day: _selectedDay,
+              role: 'employee',
+              teamId: widget.teamId,
+              employeeId: widget.employeeId,
+            ),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return _EmptyState(message: "Failed to load this day's route: ${snapshot.error}");
+              }
+
+              final jobs = snapshot.data ?? const <ScheduledWork>[];
+              if (jobs.isEmpty) {
+                return const _EmptyState(message: 'No jobs scheduled for you on this day.');
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: jobs.length,
+                itemBuilder: (context, index) {
+                  final job = jobs[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(14),
+                        leading: CircleAvatar(child: Text('${index + 1}')),
+                        title: Text(
+                          job.address.isEmpty ? 'Address unavailable' : job.address,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: GetDirectionsButton(address: job.address),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

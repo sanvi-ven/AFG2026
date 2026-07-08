@@ -11,18 +11,27 @@ class ScheduledWorkService {
   static final CollectionReference<Map<String, dynamic>> _collection =
       _firestore.collection('scheduled_work');
 
-  /// listen to real-time scheduled work updates, filtered by role and clientId/teamId
+  /// true if [item] is visible to an employee on [teamId] and/or [employeeId]
+  /// — a job matches if it's assigned to that team OR that employee individually.
+  static bool _matchesEmployee(ScheduledWork item, String? teamId, String? employeeId) {
+    final matchesTeam = teamId != null && teamId.trim().isNotEmpty && item.teamId == teamId.trim();
+    final matchesEmployee =
+        employeeId != null && employeeId.trim().isNotEmpty && item.employeeIds.contains(employeeId.trim());
+    return matchesTeam || matchesEmployee;
+  }
+
+  /// listen to real-time scheduled work updates, filtered by role and clientId/teamId/employeeId.
+  /// team-or-employee matching can't be expressed as a single Firestore query, so for the
+  /// employee role this fetches the full collection and filters client-side.
   static Stream<List<ScheduledWork>> watchScheduledWork({
     required String role,
     String? clientId,
     String? teamId,
+    String? employeeId,
   }) {
     Query<Map<String, dynamic>> query = _collection;
     if (role == 'client' && clientId != null && clientId.trim().isNotEmpty) {
       query = query.where('clientId', isEqualTo: clientId.trim());
-    }
-    if (role == 'employee' && teamId != null && teamId.trim().isNotEmpty) {
-      query = query.where('teamId', isEqualTo: teamId.trim());
     }
 
     return query.snapshots().map((snapshot) {
@@ -34,7 +43,10 @@ class ScheduledWorkService {
       if (role == 'employee') {
         final now = DateTime.now();
         final startOfToday = DateTime(now.year, now.month, now.day);
-        items = items.where((item) => !item.scheduledDate.isBefore(startOfToday)).toList();
+        items = items
+            .where((item) =>
+                !item.scheduledDate.isBefore(startOfToday) && _matchesEmployee(item, teamId, employeeId))
+            .toList();
       }
 
       items.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
@@ -43,21 +55,18 @@ class ScheduledWorkService {
   }
 
   /// jobs scheduled for exactly [day] (calendar-day match on scheduledDate),
-  /// optionally restricted to one team; omit [teamId] for a cross-team view.
+  /// optionally restricted to one team and/or employee; omit both for a
+  /// cross-team, cross-employee view (used by the owner).
   static Stream<List<ScheduledWork>> watchJobsForDay({
     required DateTime day,
     required String role,
     String? teamId,
+    String? employeeId,
   }) {
-    Query<Map<String, dynamic>> query = _collection;
-    if (teamId != null && teamId.trim().isNotEmpty) {
-      query = query.where('teamId', isEqualTo: teamId.trim());
-    }
-
     final startOfDay = DateTime(day.year, day.month, day.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
-    return query.snapshots().map((snapshot) {
+    return _collection.snapshots().map((snapshot) {
       var items = snapshot.docs.map((doc) {
         final data = doc.data();
         return ScheduledWork.fromMap({...data, 'id': doc.id});
@@ -67,6 +76,11 @@ class ScheduledWorkService {
           .where((item) =>
               !item.scheduledDate.isBefore(startOfDay) && item.scheduledDate.isBefore(endOfDay))
           .toList();
+
+      if (role == 'employee') {
+        items = items.where((item) => _matchesEmployee(item, teamId, employeeId)).toList();
+      }
+
       items.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
       return items;
     });
@@ -213,11 +227,28 @@ class ScheduledWorkService {
     await doc.delete();
   }
 
-  /// owner action: assign (or clear) the crew responsible for a job
+  /// owner action: assign (or clear) the crew responsible for a job.
+  /// mutually exclusive with individual employee assignment — this clears
+  /// any previously assigned employees.
   static Future<void> assignTeam({required String workId, String? teamId}) async {
     await _collection.doc(workId).set(
       {
         'teamId': teamId,
+        'employeeIds': <String>[],
+        'updatedAt': DateTime.now(),
+      },
+      SetOptions(merge: true),
+    );
+  }
+
+  /// owner action: assign (or clear) the specific employees responsible for
+  /// a job. mutually exclusive with team assignment — this clears any
+  /// previously assigned team.
+  static Future<void> assignEmployees({required String workId, required List<String> employeeIds}) async {
+    await _collection.doc(workId).set(
+      {
+        'teamId': null,
+        'employeeIds': employeeIds,
         'updatedAt': DateTime.now(),
       },
       SetOptions(merge: true),

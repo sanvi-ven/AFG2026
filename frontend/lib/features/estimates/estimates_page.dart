@@ -1357,6 +1357,14 @@ class _EstimateCard extends StatelessWidget {
             ],
             if (role == 'owner') ...[
               const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: isDownloadingEstimatePdf ? null : onDownloadEstimatePdf,
+                icon: isDownloadingEstimatePdf
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.download_outlined),
+                label: const Text('Download Estimate PDF'),
+              ),
+              const SizedBox(height: 10),
               if (estimate.convertedToInvoice)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1392,24 +1400,12 @@ class _EstimateCard extends StatelessWidget {
                       label: const Text('View in Appointments'),
                     )
                   else
-                    Row(
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: isDownloadingEstimatePdf ? null : onDownloadEstimatePdf,
-                          icon: isDownloadingEstimatePdf
-                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                              : const Icon(Icons.download_outlined),
-                          label: const Text('Download'),
-                        ),
-                        const SizedBox(width: 10),
-                        FilledButton.icon(
-                          onPressed: isScheduling ? null : onScheduleWork,
-                          icon: isScheduling
-                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                              : const Icon(Icons.event_outlined),
-                          label: const Text('Schedule Work'),
-                        ),
-                      ],
+                    FilledButton.icon(
+                      onPressed: isScheduling ? null : onScheduleWork,
+                      icon: isScheduling
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.event_outlined),
+                      label: const Text('Schedule Work'),
                     ),
                 ] else if (estimate.isPending) ...[
                   FilledButton.icon(

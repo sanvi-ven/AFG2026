@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/router/app_router.dart';
+import '../../../core/services/client_profile_service.dart';
 import '../../../core/services/employee_profile_service.dart';
 import '../../../core/services/invite_code_service.dart';
 import '../../../core/services/job_completion_service.dart';
+import '../../../core/services/scheduled_work_service.dart';
 import '../../../core/services/team_service.dart';
 import '../../../core/services/time_entry_service.dart';
+import '../../../models/client_profile.dart';
 import '../../../models/employee_profile.dart';
 import '../../../models/invite_code.dart';
 import '../../../models/job_completion_form.dart';
+import '../../../models/scheduled_work.dart';
 import '../../../models/team.dart';
 import '../../../models/time_entry.dart';
 import '../../../shared/widgets/app_scaffold.dart';
@@ -46,14 +50,14 @@ class TeamAdminPage extends StatelessWidget {
                 ],
               ),
             ),
-            const Expanded(
+            Expanded(
               child: TabBarView(
                 children: [
-                  _EmployeesTab(),
-                  _TeamsTab(),
-                  _InviteCodesTab(),
-                  _JobCompletionsTab(),
-                  _TimeEntriesTab(),
+                  const _EmployeesTab(),
+                  const _TeamsTab(),
+                  const _InviteCodesTab(),
+                  _JobCompletionsTab(role: role, authToken: authToken),
+                  const _TimeEntriesTab(),
                 ],
               ),
             ),
@@ -372,55 +376,118 @@ class _InviteCodesTabState extends State<_InviteCodesTab> {
 }
 
 class _JobCompletionsTab extends StatelessWidget {
-  const _JobCompletionsTab();
+  const _JobCompletionsTab({required this.role, this.authToken});
+
+  final String role;
+  final String? authToken;
+
+  void _viewInAppointments(BuildContext context, String workId) {
+    Navigator.pushNamed(
+      context,
+      AppRouter.appointments,
+      arguments: {'role': role, 'authToken': authToken, 'highlightId': workId},
+    );
+  }
+
+  void _viewInvoice(BuildContext context, String invoiceId) {
+    Navigator.pushNamed(
+      context,
+      AppRouter.invoices,
+      arguments: {'role': role, 'authToken': authToken, 'highlightId': invoiceId},
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<JobCompletionForm>>(
       stream: JobCompletionService.watchAllForms(),
-      builder: (context, snapshot) {
-        final forms = snapshot.data ?? const <JobCompletionForm>[];
+      builder: (context, formsSnapshot) {
+        final forms = formsSnapshot.data ?? const <JobCompletionForm>[];
         if (forms.isEmpty) {
           return const Padding(
             padding: EdgeInsets.all(16),
             child: Text('No job completion reports submitted yet.'),
           );
         }
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            for (final form in forms)
-              Card(
-                margin: const EdgeInsets.only(bottom: 10),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Job ${form.workId}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 4),
-                      Text('Submitted by: ${form.submittedByName}'),
-                      Text('${DateFormat('MMM d, h:mm a').format(form.startTime)} – ${DateFormat('h:mm a').format(form.endTime)}'),
-                      if (form.notes.isNotEmpty) Text('Notes: ${form.notes}'),
-                      if (form.beforePhotoUrls.isNotEmpty || form.afterPhotoUrls.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [
-                            for (final url in [...form.beforePhotoUrls, ...form.afterPhotoUrls])
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: Image.network(url, width: 56, height: 56, fit: BoxFit.cover),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-          ],
+
+        return StreamBuilder<List<ScheduledWork>>(
+          stream: ScheduledWorkService.watchScheduledWork(role: 'owner'),
+          builder: (context, jobsSnapshot) {
+            final jobsById = {
+              for (final job in jobsSnapshot.data ?? const <ScheduledWork>[]) job.id: job,
+            };
+
+            return StreamBuilder<List<ClientProfile>>(
+              stream: ClientProfileService.watchAllProfiles(),
+              builder: (context, clientsSnapshot) {
+                final clients = clientsSnapshot.data ?? const <ClientProfile>[];
+
+                return ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    for (final form in forms)
+                      Builder(builder: (context) {
+                        final job = jobsById[form.workId];
+                        final descriptor = job == null
+                            ? 'Job ${form.workId}'
+                            : '${ClientProfileService.displayNameFor(clients, job.clientId)} — Est #${job.estimateNumber}';
+
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(descriptor, style: const TextStyle(fontWeight: FontWeight.w700)),
+                                const SizedBox(height: 4),
+                                if (job != null)
+                                  Text('Scheduled: ${DateFormat('MMM d, yyyy').format(job.scheduledDate)}'),
+                                Text('Submitted by: ${form.submittedByName}'),
+                                Text('${DateFormat('MMM d, h:mm a').format(form.startTime)} – ${DateFormat('h:mm a').format(form.endTime)}'),
+                                if (form.notes.isNotEmpty) Text('Notes: ${form.notes}'),
+                                if (form.beforePhotoUrls.isNotEmpty || form.afterPhotoUrls.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: [
+                                      for (final url in [...form.beforePhotoUrls, ...form.afterPhotoUrls])
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(6),
+                                          child: Image.network(url, width: 56, height: 56, fit: BoxFit.cover),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: () => _viewInAppointments(context, form.workId),
+                                      icon: const Icon(Icons.event_outlined, size: 16),
+                                      label: const Text('View in Appointments'),
+                                    ),
+                                    if (job?.invoiceId != null)
+                                      OutlinedButton.icon(
+                                        onPressed: () => _viewInvoice(context, job!.invoiceId!),
+                                        icon: const Icon(Icons.receipt_long_outlined, size: 16),
+                                        label: const Text('View Invoice'),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                  ],
+                );
+              },
+            );
+          },
         );
       },
     );
