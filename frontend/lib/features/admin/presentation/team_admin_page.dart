@@ -508,7 +508,7 @@ class _TimeEntriesTab extends StatelessWidget {
       builder: (context, employeeSnapshot) {
         final employees = {
           for (final employee in employeeSnapshot.data ?? const <EmployeeProfile>[])
-            employee.employeeId: employee.fullName,
+            employee.employeeId: employee,
         };
 
         return StreamBuilder<List<TimeEntry>>(
@@ -523,14 +523,31 @@ class _TimeEntriesTab extends StatelessWidget {
               itemCount: entries.length,
               itemBuilder: (context, index) {
                 final entry = entries[index];
+                final employee = employees[entry.employeeId];
+                final subtitleLines = [
+                  '${entry.date} · ${entry.clockInAt == null ? '—' : DateFormat('h:mm a').format(entry.clockInAt!)}'
+                      ' – ${entry.clockOutAt == null ? 'in progress' : DateFormat('h:mm a').format(entry.clockOutAt!)}',
+                  if (entry.wageOverride != null) '\$${entry.wageOverride!.toStringAsFixed(2)}/hr (override)',
+                  if (entry.notes.isNotEmpty) entry.notes,
+                ];
+
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
-                    title: Text(employees[entry.employeeId] ?? entry.employeeId),
-                    subtitle: Text(
-                      '${entry.date} · ${entry.clockInAt == null ? '—' : DateFormat('h:mm a').format(entry.clockInAt!)}'
-                      ' – ${entry.clockOutAt == null ? 'in progress' : DateFormat('h:mm a').format(entry.clockOutAt!)}',
+                    onTap: () => showDialog<void>(
+                      context: context,
+                      builder: (_) => _EditTimeEntryDialog(entry: entry, employee: employee),
                     ),
+                    title: Text(employee?.fullName ?? entry.employeeId),
+                    subtitle: Text(subtitleLines.join('\n')),
+                    isThreeLine: subtitleLines.length > 1,
+                    trailing: entry.isPaid
+                        ? const Chip(
+                            avatar: Icon(Icons.check_circle, size: 16, color: Colors.green),
+                            label: Text('Paid'),
+                            visualDensity: VisualDensity.compact,
+                          )
+                        : null,
                   ),
                 );
               },
@@ -538,6 +555,143 @@ class _TimeEntriesTab extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _EditTimeEntryDialog extends StatefulWidget {
+  const _EditTimeEntryDialog({required this.entry, required this.employee});
+
+  final TimeEntry entry;
+  final EmployeeProfile? employee;
+
+  @override
+  State<_EditTimeEntryDialog> createState() => _EditTimeEntryDialogState();
+}
+
+class _EditTimeEntryDialogState extends State<_EditTimeEntryDialog> {
+  late TimeOfDay? _clockIn =
+      widget.entry.clockInAt == null ? null : TimeOfDay.fromDateTime(widget.entry.clockInAt!);
+  late TimeOfDay? _clockOut =
+      widget.entry.clockOutAt == null ? null : TimeOfDay.fromDateTime(widget.entry.clockOutAt!);
+  late final _wageController =
+      TextEditingController(text: widget.entry.wageOverride?.toStringAsFixed(2) ?? '');
+  late final _notesController = TextEditingController(text: widget.entry.notes);
+  late bool _isPaid = widget.entry.isPaid;
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _wageController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  DateTime? _dateTimeFor(TimeOfDay? time) {
+    if (time == null) return null;
+    final date = DateTime.tryParse(widget.entry.date) ?? DateTime.now();
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
+  Future<void> _pickTime({required bool isClockIn}) async {
+    final initial = (isClockIn ? _clockIn : _clockOut) ?? TimeOfDay.now();
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked == null) return;
+    setState(() {
+      if (isClockIn) {
+        _clockIn = picked;
+      } else {
+        _clockOut = picked;
+      }
+    });
+  }
+
+  Future<void> _save() async {
+    setState(() => _isSaving = true);
+    try {
+      await TimeEntryService.updateEntry(
+        id: widget.entry.id,
+        clockInAt: _dateTimeFor(_clockIn),
+        clockOutAt: _dateTimeFor(_clockOut),
+        wageOverride: double.tryParse(_wageController.text.trim()),
+        notes: _notesController.text,
+        isPaid: _isPaid,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Shift updated.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update shift: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final defaultRate = widget.employee?.hourlyRate;
+    return AlertDialog(
+      title: Text('Edit Shift — ${widget.employee?.fullName ?? widget.entry.employeeId}, ${widget.entry.date}'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Clock in'),
+              subtitle: Text(_clockIn?.format(context) ?? '—'),
+              trailing: TextButton(onPressed: () => _pickTime(isClockIn: true), child: const Text('Edit')),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Clock out'),
+              subtitle: Text(_clockOut?.format(context) ?? '—'),
+              trailing: TextButton(onPressed: () => _pickTime(isClockIn: false), child: const Text('Edit')),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _wageController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'Hourly wage override',
+                border: const OutlineInputBorder(),
+                hintText: defaultRate == null
+                    ? 'Leave blank — no default rate set'
+                    : 'Leave blank to use \$${defaultRate.toStringAsFixed(2)}/hr',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _notesController,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(labelText: 'Notes', border: OutlineInputBorder()),
+            ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _isPaid,
+              onChanged: (value) => setState(() => _isPaid = value ?? false),
+              title: const Text('Paid'),
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: _isSaving ? null : () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: _isSaving ? null : _save,
+          child: _isSaving
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Save'),
+        ),
+      ],
     );
   }
 }

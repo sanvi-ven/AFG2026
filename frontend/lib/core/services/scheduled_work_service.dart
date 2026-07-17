@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../models/checklist_template.dart';
 import '../../models/invoice.dart';
 import '../../models/scheduled_work.dart';
 
@@ -158,6 +159,7 @@ class ScheduledWorkService {
     String address = '',
     String phoneNumber = '',
     String? recurringGroupId,
+    List<ChecklistItem> checklistItems = const [],
   }) async {
     final now = DateTime.now();
     final doc = _collection.doc();
@@ -177,10 +179,36 @@ class ScheduledWorkService {
       createdAt: now,
       updatedAt: now,
       recurringGroupId: recurringGroupId,
+      checklistItems: checklistItems,
     );
 
     await doc.set(work.toMap());
     return doc.id;
+  }
+
+  /// employee action: toggle one checklist item's done state on a job.
+  /// [index] is the item's position in checklistItems, since items don't
+  /// have their own ids — the whole (small) list is snapshotted and rewritten.
+  static Future<void> updateChecklistItem({
+    required String workId,
+    required int index,
+    required bool done,
+  }) async {
+    final doc = _collection.doc(workId);
+    final snapshot = await doc.get();
+    final data = snapshot.data();
+    if (data == null) return;
+
+    final work = ScheduledWork.fromMap({...data, 'id': workId});
+    if (index < 0 || index >= work.checklistItems.length) return;
+
+    final updatedItems = [...work.checklistItems];
+    updatedItems[index] = updatedItems[index].copyWith(done: done);
+
+    await doc.set(
+      {'checklistItems': updatedItems.map((item) => item.toMap()).toList(), 'updatedAt': DateTime.now()},
+      SetOptions(merge: true),
+    );
   }
 
   /// owner action: move a job's scheduled date/time, regardless of status
@@ -251,6 +279,15 @@ class ScheduledWorkService {
         'employeeIds': employeeIds,
         'updatedAt': DateTime.now(),
       },
+      SetOptions(merge: true),
+    );
+  }
+
+  /// stamp that an upcoming-appointment reminder notification has been
+  /// created for this job, so [ReminderCheckService] doesn't create a duplicate
+  static Future<void> markReminderSent(String workId) async {
+    await _collection.doc(workId).set(
+      {'reminderSentAt': DateTime.now()},
       SetOptions(merge: true),
     );
   }

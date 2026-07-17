@@ -13,13 +13,17 @@ import '../../features/availability/presentation/availability_page.dart';
 import '../../features/clients/presentation/clients_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
 import '../../features/estimates/estimates_page.dart';
+import '../../features/estimates/presentation/checklist_templates_page.dart';
 import '../../features/estimates/presentation/service_catalog_page.dart';
 import '../../features/invoices/presentation/invoices_page.dart';
 import '../../features/jobs/presentation/employee_jobs_page.dart';
 import '../../features/jobs/presentation/job_detail_page.dart';
 import '../../features/jobs/presentation/todays_route_page.dart';
 import '../../features/messages/presentation/messages_page.dart';
+import '../../features/notifications/presentation/notifications_page.dart';
 import '../../features/reports/presentation/owner_reports_page.dart';
+import '../../features/requests/presentation/request_form_page.dart';
+import '../../features/requests/presentation/requests_page.dart';
 import '../../features/time/presentation/my_hours_page.dart';
 
 /// custom page route that disables transtion animations for instant navigation.
@@ -80,6 +84,10 @@ class AppRouter {
   static const reports = '/reports';
   static const todaysRoute = '/jobs/today';
   static const serviceCatalog = '/estimates/catalog';
+  static const notifications = '/notifications';
+  static const requests = '/requests';
+  static const requestWork = '/requests/new';
+  static const checklistTemplates = '/estimates/checklists';
 /// generates appropriate page route based on settings and passes role/auth context
   
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
@@ -126,7 +134,14 @@ class AppRouter {
         );
       case estimates:
         return _NoAnimationPageRoute(
-          builder: (_) => EstimatesPage(role: role, authToken: authToken, highlightId: highlightId),
+          builder: (_) => EstimatesPage(
+            role: role,
+            authToken: authToken,
+            highlightId: highlightId,
+            initialClientId: args['initialClientId'] as String?,
+            initialNotes: args['initialNotes'] as String?,
+            convertRequestId: args['convertRequestId'] as String?,
+          ),
           settings: settings,
         );
       case messages:
@@ -186,6 +201,32 @@ class AppRouter {
       case serviceCatalog:
         return _NoAnimationPageRoute(
           builder: (_) => ServiceCatalogPage(role: role, authToken: authToken),
+          settings: settings,
+        );
+      case notifications:
+        return _NoAnimationPageRoute(
+          builder: (_) => NotificationsPage(role: role, authToken: authToken),
+          settings: settings,
+        );
+      case requestWork:
+        return _NoAnimationPageRoute(
+          builder: (_) => RequestFormPage(
+            clientId: args['clientId'] as String?,
+            initialName: (args['initialName'] as String?) ?? '',
+            initialEmail: (args['initialEmail'] as String?) ?? '',
+            initialPhone: (args['initialPhone'] as String?) ?? '',
+            initialAddress: (args['initialAddress'] as String?) ?? '',
+          ),
+          settings: settings,
+        );
+      case requests:
+        return _NoAnimationPageRoute(
+          builder: (_) => RequestsPage(role: role, authToken: authToken),
+          settings: settings,
+        );
+      case checklistTemplates:
+        return _NoAnimationPageRoute(
+          builder: (_) => ChecklistTemplatesPage(role: role, authToken: authToken),
           settings: settings,
         );
       default:

@@ -36,4 +36,23 @@ class JobPhotoUploadService {
     final task = await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
     return task.ref.getDownloadURL();
   }
+
+  /// prompt the user to pick an image from their gallery, then upload it
+  /// under request_photos/{requestId}/ — gallery (not camera) since this is
+  /// used from the public/client-facing "request work" form, not a field crew.
+  /// returns the download url, or null if the user cancelled the picker
+  static Future<String?> pickAndUploadRequestPhoto({required String requestId}) async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 80,
+    );
+    if (picked == null) return null;
+
+    final bytes = await picked.readAsBytes();
+    final ref = _storage.ref('request_photos/$requestId/${_uniqueFileName()}');
+    final task = await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+    return task.ref.getDownloadURL();
+  }
 }

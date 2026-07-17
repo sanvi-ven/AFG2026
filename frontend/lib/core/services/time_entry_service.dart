@@ -62,6 +62,29 @@ class TimeEntryService {
     }, SetOptions(merge: true));
   }
 
+  /// owner action: correct a shift's clock times, set a one-off wage
+  /// override for that day, leave a comment, and/or mark it paid.
+  /// only the time-of-day changes here — [id] (and the date it's keyed to)
+  /// never changes, so callers must combine the entry's existing date with
+  /// a newly picked time before passing clockInAt/clockOutAt in.
+  static Future<void> updateEntry({
+    required String id,
+    DateTime? clockInAt,
+    DateTime? clockOutAt,
+    double? wageOverride,
+    String notes = '',
+    required bool isPaid,
+  }) async {
+    await _collection.doc(id).set({
+      'clockInAt': clockInAt,
+      'clockOutAt': clockOutAt,
+      'wageOverride': wageOverride,
+      'notes': notes.trim(),
+      'isPaid': isPaid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   /// owner review: entries for a specific employee, most recent first
   static Stream<List<TimeEntry>> watchEntriesForEmployee(String employeeId) {
     return _collection

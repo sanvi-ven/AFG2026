@@ -13,11 +13,14 @@ import '../../core/services/client_auth_service.dart';
 import '../../core/services/client_profile_service.dart';
 import '../../core/services/employee_auth_service.dart';
 import '../../core/services/employee_profile_service.dart';
+import '../../core/services/notification_service.dart';
 import '../../core/services/owner_settings_service.dart';
 import '../../core/services/session_persistence_service.dart';
 import '../../core/state/client_session.dart';
 import '../../core/state/employee_session.dart';
 import '../../core/state/owner_session.dart';
+import '../../features/notifications/presentation/notifications_page.dart';
+import '../../models/app_notification.dart';
 import '../../models/client_profile.dart';
 import '../../models/employee_profile.dart';
 import '../../models/owner_settings.dart';
@@ -43,7 +46,8 @@ class AppScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = _navItems(role);
-    final selectedIndex = items.indexWhere((item) => item.route == selectedRoute);
+    final selectedIndex =
+        items.indexWhere((item) => item.route == selectedRoute);
 
     void onDestinationSelected(int index) {
       final destination = items[index].route;
@@ -62,7 +66,8 @@ class AppScaffold extends StatelessWidget {
         final showClientSettings = role == 'client';
         final showOwnerSettings = role == 'owner';
         final showEmployeeSettings = role == 'employee';
-        final showSettings = showClientSettings || showOwnerSettings || showEmployeeSettings;
+        final showSettings =
+            showClientSettings || showOwnerSettings || showEmployeeSettings;
 
         if (isWide) {
           return Scaffold(
@@ -75,6 +80,7 @@ class AppScaffold extends StatelessWidget {
                   Text(title),
                 ],
               ),
+              actions: [_NotificationBell(role: role, authToken: authToken)],
             ),
             body: Row(
               children: [
@@ -91,10 +97,12 @@ class AppScaffold extends StatelessWidget {
                             for (final item in items)
                               NavigationRailDestination(
                                 icon: item.route == AppRouter.dashboard
-                                    ? const AppLogo(size: 20, fallbackIcon: Icons.dashboard)
+                                    ? const AppLogo(
+                                        size: 20, fallbackIcon: Icons.dashboard)
                                     : Icon(item.icon),
                                 selectedIcon: item.route == AppRouter.dashboard
-                                    ? const AppLogo(size: 22, fallbackIcon: Icons.dashboard)
+                                    ? const AppLogo(
+                                        size: 22, fallbackIcon: Icons.dashboard)
                                     : Icon(item.icon),
                                 label: Text(item.label),
                               ),
@@ -110,14 +118,16 @@ class AppScaffold extends StatelessWidget {
                               ? ValueListenableBuilder<ClientProfile?>(
                                   valueListenable: ClientSession.profile,
                                   builder: (context, profile, _) {
-                                    return Text(profile?.email ?? 'Update your profile');
+                                    return Text(profile?.email ??
+                                        'Update your profile');
                                   },
                                 )
                               : showEmployeeSettings
                                   ? ValueListenableBuilder<EmployeeProfile?>(
                                       valueListenable: EmployeeSession.profile,
                                       builder: (context, profile, _) {
-                                        return Text(profile?.email ?? 'Update your profile');
+                                        return Text(profile?.email ??
+                                            'Update your profile');
                                       },
                                     )
                                   : const Text('Update business details'),
@@ -134,8 +144,9 @@ class AppScaffold extends StatelessWidget {
           );
         }
 
-        final textScaleFactor = _getResponsiveTextScaleFactor(constraints.maxWidth, items.length);
-        
+        final textScaleFactor =
+            _getResponsiveTextScaleFactor(constraints.maxWidth, items.length);
+
         return Scaffold(
           appBar: AppBar(
             title: Row(
@@ -146,15 +157,15 @@ class AppScaffold extends StatelessWidget {
                 Text(title),
               ],
             ),
-            actions: showSettings
-                ? [
-                    IconButton(
-                      tooltip: 'Settings',
-                      icon: const Icon(Icons.settings_outlined),
-                      onPressed: () => _openSettingsDialog(context),
-                    ),
-                  ]
-                : null,
+            actions: [
+              _NotificationBell(role: role, authToken: authToken),
+              if (showSettings)
+                IconButton(
+                  tooltip: 'Settings',
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: () => _openSettingsDialog(context),
+                ),
+            ],
           ),
           body: body,
           bottomNavigationBar: Theme(
@@ -223,7 +234,8 @@ class AppScaffold extends StatelessWidget {
     final currentProfile = ClientSession.profile.value;
     if (currentProfile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Log in with your email before editing settings.')),
+        const SnackBar(
+            content: Text('Log in with your email before editing settings.')),
       );
       return;
     }
@@ -255,40 +267,92 @@ class AppScaffold extends StatelessWidget {
       );
 
       if (saved != null && context.mounted) {
-        messenger.showSnackBar(const SnackBar(content: Text('Business settings updated.')));
+        messenger.showSnackBar(
+            const SnackBar(content: Text('Business settings updated.')));
       }
     } catch (error) {
       if (!context.mounted) {
         return;
       }
-      messenger.showSnackBar(SnackBar(content: Text('Failed to load owner settings: $error')));
+      messenger.showSnackBar(
+          SnackBar(content: Text('Failed to load owner settings: $error')));
     }
   }
 
   List<_NavItem> _navItems(String role) {
     if (role == 'employee') {
       return const <_NavItem>[
-        _NavItem(label: 'Anchor', route: AppRouter.dashboard, icon: Icons.dashboard),
-        _NavItem(label: 'My Jobs', route: AppRouter.myJobs, icon: Icons.work_outline),
-        _NavItem(label: 'My Hours', route: AppRouter.myHours, icon: Icons.access_time),
+        _NavItem(
+            label: 'Anchor', route: AppRouter.dashboard, icon: Icons.dashboard),
+        _NavItem(
+            label: 'My Jobs',
+            route: AppRouter.myJobs,
+            icon: Icons.work_outline),
+        _NavItem(
+            label: 'My Hours',
+            route: AppRouter.myHours,
+            icon: Icons.access_time),
       ];
     }
 
     final common = <_NavItem>[
-      const _NavItem(label: 'Anchor', route: AppRouter.dashboard, icon: Icons.dashboard),
-      const _NavItem(label: 'Estimates', route: AppRouter.estimates, icon: Icons.request_quote_outlined),
-      const _NavItem(label: 'Appointments', route: AppRouter.appointments, icon: Icons.calendar_month),
-      const _NavItem(label: 'Invoices', route: AppRouter.invoices, icon: Icons.receipt_long),
-      const _NavItem(label: 'Announcements', route: AppRouter.messages, icon: Icons.chat_bubble_outline),
+      const _NavItem(
+          label: 'Anchor', route: AppRouter.dashboard, icon: Icons.dashboard),
+      const _NavItem(
+          label: 'Estimates',
+          route: AppRouter.estimates,
+          icon: Icons.request_quote_outlined),
+      const _NavItem(
+          label: 'Appointments',
+          route: AppRouter.appointments,
+          icon: Icons.calendar_month),
+      const _NavItem(
+          label: 'Invoices',
+          route: AppRouter.invoices,
+          icon: Icons.receipt_long),
+      const _NavItem(
+          label: 'Messages',
+          route: AppRouter.messages,
+          icon: Icons.chat_bubble_outline),
     ];
 
     if (role == 'owner') {
-      return [
-        ...common,
-        const _NavItem(label: 'Clients', route: AppRouter.clients, icon: Icons.people_outline),
-        const _NavItem(label: 'Team', route: AppRouter.teamAdmin, icon: Icons.groups_outlined),
-        const _NavItem(label: 'Reports', route: AppRouter.reports, icon: Icons.bar_chart_outlined),
-        const _NavItem(
+      return const [
+        _NavItem(
+            label: 'Anchor', route: AppRouter.dashboard, icon: Icons.dashboard),
+        _NavItem(
+            label: 'Requests',
+            route: AppRouter.requests,
+            icon: Icons.inbox_outlined),
+        _NavItem(
+            label: 'Estimates',
+            route: AppRouter.estimates,
+            icon: Icons.request_quote_outlined),
+        _NavItem(
+            label: 'Appointments',
+            route: AppRouter.appointments,
+            icon: Icons.calendar_month),
+        _NavItem(
+            label: 'Invoices',
+            route: AppRouter.invoices,
+            icon: Icons.receipt_long),
+        _NavItem(
+            label: 'Messages',
+            route: AppRouter.messages,
+            icon: Icons.chat_bubble_outline),
+        _NavItem(
+            label: 'Clients',
+            route: AppRouter.clients,
+            icon: Icons.people_outline),
+        _NavItem(
+            label: 'Team',
+            route: AppRouter.teamAdmin,
+            icon: Icons.groups_outlined),
+        _NavItem(
+            label: 'Reports',
+            route: AppRouter.reports,
+            icon: Icons.bar_chart_outlined),
+        _NavItem(
           label: "Today's Route",
           route: AppRouter.todaysRoute,
           icon: Icons.alt_route_outlined,
@@ -304,7 +368,7 @@ class AppScaffold extends StatelessWidget {
   double _getResponsiveTextScaleFactor(double screenWidth, int itemCount) {
     // Each item gets roughly equal horizontal space
     final spacePerItem = screenWidth / itemCount;
-    
+
     // Scale factor (1.0 = 100% = normal size)
     // Aggressive early shrinking to prevent wrapping on mobile
     if (spacePerItem < 50) {
@@ -322,17 +386,55 @@ class AppScaffold extends StatelessWidget {
     } else if (spacePerItem < 110) {
       return 0.94;
     }
-    
+
     return 1.0; // Full size for wider screens
   }
 }
 
 class _NavItem {
-  const _NavItem({required this.label, required this.route, required this.icon});
+  const _NavItem(
+      {required this.label, required this.route, required this.icon});
 
   final String label;
   final String route;
   final IconData icon;
+}
+
+/// bell icon with an unread-count badge, opening the notifications inbox
+class _NotificationBell extends StatelessWidget {
+  const _NotificationBell({required this.role, this.authToken});
+
+  final String role;
+  final String? authToken;
+
+  @override
+  Widget build(BuildContext context) {
+    final recipientId = recipientIdFor(role);
+    if (recipientId == null) return const SizedBox.shrink();
+
+    return StreamBuilder<List<AppNotification>>(
+      stream: NotificationService.watchForRecipient(role, recipientId),
+      builder: (context, snapshot) {
+        final unreadCount = (snapshot.data ?? const <AppNotification>[])
+            .where((n) => !n.isRead)
+            .length;
+
+        return IconButton(
+          tooltip: 'Notifications',
+          icon: Badge(
+            isLabelVisible: unreadCount > 0,
+            label: Text('$unreadCount'),
+            child: const Icon(Icons.notifications_outlined),
+          ),
+          onPressed: () => Navigator.pushNamed(
+            context,
+            AppRouter.notifications,
+            arguments: {'role': role, 'authToken': authToken},
+          ),
+        );
+      },
+    );
+  }
 }
 
 Future<void> _confirmLogout(BuildContext context) async {
@@ -360,7 +462,8 @@ Future<void> _confirmLogout(BuildContext context) async {
   await SessionPersistenceService.clearSession();
   if (!context.mounted) return;
 
-  Navigator.of(context).pushNamedAndRemoveUntil(AppRouter.login, (route) => false);
+  Navigator.of(context)
+      .pushNamedAndRemoveUntil(AppRouter.login, (route) => false);
 }
 
 class _ClientSettingsDialog extends StatefulWidget {
@@ -380,7 +483,8 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
   late final TextEditingController _addressController;
   final TextEditingController _oldPasswordController = TextEditingController();
   final TextEditingController _newPasswordController = TextEditingController();
-  final TextEditingController _confirmNewPasswordController = TextEditingController();
+  final TextEditingController _confirmNewPasswordController =
+      TextEditingController();
   bool _isSaving = false;
   bool _isLoadingAddressSuggestions = false;
   List<String> _addressSuggestions = const [];
@@ -389,10 +493,14 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
   @override
   void initState() {
     super.initState();
-    _firstNameController = TextEditingController(text: widget.initialProfile.firstName);
-    _lastNameController = TextEditingController(text: widget.initialProfile.lastName);
-    _phoneNumberController = TextEditingController(text: widget.initialProfile.phoneNumber);
-    _addressController = TextEditingController(text: widget.initialProfile.address);
+    _firstNameController =
+        TextEditingController(text: widget.initialProfile.firstName);
+    _lastNameController =
+        TextEditingController(text: widget.initialProfile.lastName);
+    _phoneNumberController =
+        TextEditingController(text: widget.initialProfile.phoneNumber);
+    _addressController =
+        TextEditingController(text: widget.initialProfile.address);
   }
 
   @override
@@ -504,7 +612,9 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
                 TextFormField(
                   controller: _firstNameController,
                   decoration: const InputDecoration(labelText: 'First name'),
-                  validator: (value) => (value == null || value.trim().isEmpty) ? 'First name is required' : null,
+                  validator: (value) => (value == null || value.trim().isEmpty)
+                      ? 'First name is required'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -568,11 +678,13 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
                 TextFormField(
                   controller: _oldPasswordController,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Current password'),
+                  decoration:
+                      const InputDecoration(labelText: 'Current password'),
                   validator: (value) {
-                    final hasAnyPasswordInput = _oldPasswordController.text.isNotEmpty ||
-                        _newPasswordController.text.isNotEmpty ||
-                        _confirmNewPasswordController.text.isNotEmpty;
+                    final hasAnyPasswordInput =
+                        _oldPasswordController.text.isNotEmpty ||
+                            _newPasswordController.text.isNotEmpty ||
+                            _confirmNewPasswordController.text.isNotEmpty;
                     if (!hasAnyPasswordInput) {
                       return null;
                     }
@@ -588,9 +700,10 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
                   obscureText: true,
                   decoration: const InputDecoration(labelText: 'New password'),
                   validator: (value) {
-                    final hasAnyPasswordInput = _oldPasswordController.text.isNotEmpty ||
-                        _newPasswordController.text.isNotEmpty ||
-                        _confirmNewPasswordController.text.isNotEmpty;
+                    final hasAnyPasswordInput =
+                        _oldPasswordController.text.isNotEmpty ||
+                            _newPasswordController.text.isNotEmpty ||
+                            _confirmNewPasswordController.text.isNotEmpty;
                     if (!hasAnyPasswordInput) {
                       return null;
                     }
@@ -611,11 +724,13 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
                 TextFormField(
                   controller: _confirmNewPasswordController,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Confirm new password'),
+                  decoration:
+                      const InputDecoration(labelText: 'Confirm new password'),
                   validator: (value) {
-                    final hasAnyPasswordInput = _oldPasswordController.text.isNotEmpty ||
-                        _newPasswordController.text.isNotEmpty ||
-                        _confirmNewPasswordController.text.isNotEmpty;
+                    final hasAnyPasswordInput =
+                        _oldPasswordController.text.isNotEmpty ||
+                            _newPasswordController.text.isNotEmpty ||
+                            _confirmNewPasswordController.text.isNotEmpty;
                     if (!hasAnyPasswordInput) {
                       return null;
                     }
@@ -673,7 +788,8 @@ class _EmployeeSettingsDialog extends StatefulWidget {
   final EmployeeProfile initialProfile;
 
   @override
-  State<_EmployeeSettingsDialog> createState() => _EmployeeSettingsDialogState();
+  State<_EmployeeSettingsDialog> createState() =>
+      _EmployeeSettingsDialogState();
 }
 
 class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
@@ -683,15 +799,19 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
   late final TextEditingController _phoneNumberController;
   final TextEditingController _oldPasswordController = TextEditingController();
   final TextEditingController _newPasswordController = TextEditingController();
-  final TextEditingController _confirmNewPasswordController = TextEditingController();
+  final TextEditingController _confirmNewPasswordController =
+      TextEditingController();
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _firstNameController = TextEditingController(text: widget.initialProfile.firstName);
-    _lastNameController = TextEditingController(text: widget.initialProfile.lastName);
-    _phoneNumberController = TextEditingController(text: widget.initialProfile.phoneNumber);
+    _firstNameController =
+        TextEditingController(text: widget.initialProfile.firstName);
+    _lastNameController =
+        TextEditingController(text: widget.initialProfile.lastName);
+    _phoneNumberController =
+        TextEditingController(text: widget.initialProfile.phoneNumber);
   }
 
   @override
@@ -771,7 +891,9 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
                 TextFormField(
                   controller: _firstNameController,
                   decoration: const InputDecoration(labelText: 'First name'),
-                  validator: (value) => (value == null || value.trim().isEmpty) ? 'First name is required' : null,
+                  validator: (value) => (value == null || value.trim().isEmpty)
+                      ? 'First name is required'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -796,11 +918,13 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
                 TextFormField(
                   controller: _oldPasswordController,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Current password'),
+                  decoration:
+                      const InputDecoration(labelText: 'Current password'),
                   validator: (value) {
-                    final hasAnyPasswordInput = _oldPasswordController.text.isNotEmpty ||
-                        _newPasswordController.text.isNotEmpty ||
-                        _confirmNewPasswordController.text.isNotEmpty;
+                    final hasAnyPasswordInput =
+                        _oldPasswordController.text.isNotEmpty ||
+                            _newPasswordController.text.isNotEmpty ||
+                            _confirmNewPasswordController.text.isNotEmpty;
                     if (!hasAnyPasswordInput) {
                       return null;
                     }
@@ -816,9 +940,10 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
                   obscureText: true,
                   decoration: const InputDecoration(labelText: 'New password'),
                   validator: (value) {
-                    final hasAnyPasswordInput = _oldPasswordController.text.isNotEmpty ||
-                        _newPasswordController.text.isNotEmpty ||
-                        _confirmNewPasswordController.text.isNotEmpty;
+                    final hasAnyPasswordInput =
+                        _oldPasswordController.text.isNotEmpty ||
+                            _newPasswordController.text.isNotEmpty ||
+                            _confirmNewPasswordController.text.isNotEmpty;
                     if (!hasAnyPasswordInput) {
                       return null;
                     }
@@ -838,12 +963,14 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _confirmNewPasswordController,
-                  decoration: const InputDecoration(labelText: 'Confirm new password'),
+                  decoration:
+                      const InputDecoration(labelText: 'Confirm new password'),
                   obscureText: true,
                   validator: (value) {
-                    final hasAnyPasswordInput = _oldPasswordController.text.isNotEmpty ||
-                        _newPasswordController.text.isNotEmpty ||
-                        _confirmNewPasswordController.text.isNotEmpty;
+                    final hasAnyPasswordInput =
+                        _oldPasswordController.text.isNotEmpty ||
+                            _newPasswordController.text.isNotEmpty ||
+                            _confirmNewPasswordController.text.isNotEmpty;
                     if (!hasAnyPasswordInput) {
                       return null;
                     }
@@ -920,10 +1047,12 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
   @override
   void initState() {
     super.initState();
-    _companyNameController = TextEditingController(text: widget.initialSettings.companyName);
-    _addressController = TextEditingController(text: widget.initialSettings.address);
-    _nextEstimateNumberController =
-        TextEditingController(text: widget.initialSettings.nextEstimateNumber.toString());
+    _companyNameController =
+        TextEditingController(text: widget.initialSettings.companyName);
+    _addressController =
+        TextEditingController(text: widget.initialSettings.address);
+    _nextEstimateNumberController = TextEditingController(
+        text: widget.initialSettings.nextEstimateNumber.toString());
     _logoBase64 = widget.initialSettings.logoBase64;
   }
 
@@ -973,8 +1102,9 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
         companyName: _companyNameController.text.trim(),
         address: _addressController.text.trim(),
         logoBase64: _logoBase64,
-        nextEstimateNumber: int.tryParse(_nextEstimateNumberController.text.trim()) ??
-            widget.initialSettings.nextEstimateNumber,
+        nextEstimateNumber:
+            int.tryParse(_nextEstimateNumberController.text.trim()) ??
+                widget.initialSettings.nextEstimateNumber,
       );
       final saved = await OwnerSettingsService.save(settings);
       if (!mounted) return;
@@ -1008,15 +1138,18 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
                 TextFormField(
                   controller: _companyNameController,
                   decoration: const InputDecoration(labelText: 'Company name'),
-                  validator: (value) =>
-                      (value == null || value.trim().isEmpty) ? 'Company name is required' : null,
+                  validator: (value) => (value == null || value.trim().isEmpty)
+                      ? 'Company name is required'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _addressController,
-                  decoration: const InputDecoration(labelText: 'Business address'),
-                  validator: (value) =>
-                      (value == null || value.trim().isEmpty) ? 'Business address is required' : null,
+                  decoration:
+                      const InputDecoration(labelText: 'Business address'),
+                  validator: (value) => (value == null || value.trim().isEmpty)
+                      ? 'Business address is required'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -1024,7 +1157,8 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'Next quote number',
-                    helperText: 'The next estimate created will use EST-#### starting from this number.',
+                    helperText:
+                        'The next estimate created will use EST-#### starting from this number.',
                   ),
                   validator: (value) {
                     final parsed = int.tryParse((value ?? '').trim());
@@ -1035,7 +1169,8 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
                   },
                 ),
                 const SizedBox(height: 16),
-                const Text('Logo', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text('Logo',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 Container(
                   height: 120,
@@ -1049,11 +1184,13 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
                     child: hasPending
                         ? Image.memory(_pendingLogoBytes!, fit: BoxFit.contain)
                         : hasBase64
-                            ? Image.memory(base64Decode(_logoBase64!), fit: BoxFit.contain)
+                            ? Image.memory(base64Decode(_logoBase64!),
+                                fit: BoxFit.contain)
                             : Image.asset(
                                 AppLogo.assetPath,
                                 fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => const Text('No logo uploaded'),
+                                errorBuilder: (_, __, ___) =>
+                                    const Text('No logo uploaded'),
                               ),
                   ),
                 ),
@@ -1077,7 +1214,8 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.upload_file_outlined),
-                      label: Text(_isPickingLogo ? 'Selecting...' : 'Select logo'),
+                      label:
+                          Text(_isPickingLogo ? 'Selecting...' : 'Select logo'),
                     ),
                     TextButton(
                       onPressed: _isPickingLogo
@@ -1098,7 +1236,9 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: OutlinedButton.icon(
-                    onPressed: _isSaving || _isPickingLogo ? null : () => _confirmLogout(context),
+                    onPressed: _isSaving || _isPickingLogo
+                        ? null
+                        : () => _confirmLogout(context),
                     icon: const Icon(Icons.logout, size: 18),
                     label: const Text('Log out'),
                     style: OutlinedButton.styleFrom(
@@ -1113,7 +1253,9 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _isSaving || _isPickingLogo ? null : () => Navigator.of(context).pop(),
+          onPressed: _isSaving || _isPickingLogo
+              ? null
+              : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         FilledButton(

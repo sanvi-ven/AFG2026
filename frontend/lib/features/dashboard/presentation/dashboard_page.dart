@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/services/owner_settings_service.dart';
+import '../../../core/services/reminder_check_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../core/state/employee_session.dart';
 import '../../../core/router/app_router.dart';
@@ -28,6 +31,9 @@ class _DashboardPageState extends State<DashboardPage> {
     _ownerSettingsFuture = widget.role == 'owner'
         ? OwnerSettingsService.fetch().catchError((_) => OwnerSettings.empty())
         : Future.value(OwnerSettings.empty());
+    // fire-and-forget: not a real background job, just a pragmatic trigger
+    // point so reminders get generated roughly whenever anyone opens the app
+    unawaited(ReminderCheckService.checkAndCreateReminders());
   }
 
   @override
@@ -45,9 +51,10 @@ class _DashboardPageState extends State<DashboardPage> {
               future: _ownerSettingsFuture,
               builder: (context, snapshot) {
                 final companyName = snapshot.data?.companyName.trim();
-                final welcomeName = companyName != null && companyName.isNotEmpty
-                    ? companyName
-                    : 'Business Owner';
+                final welcomeName =
+                    companyName != null && companyName.isNotEmpty
+                        ? companyName
+                        : 'Business Owner';
 
                 return Text(
                   'Welcome, $welcomeName',
@@ -59,9 +66,10 @@ class _DashboardPageState extends State<DashboardPage> {
             ValueListenableBuilder(
               valueListenable: EmployeeSession.profile,
               builder: (context, profile, _) {
-                final welcomeName = profile?.greetingName.trim().isNotEmpty == true
-                    ? profile!.greetingName
-                    : 'there';
+                final welcomeName =
+                    profile?.greetingName.trim().isNotEmpty == true
+                        ? profile!.greetingName
+                        : 'there';
                 return Text(
                   'Welcome, $welcomeName',
                   style: Theme.of(context).textTheme.headlineSmall,
@@ -72,9 +80,10 @@ class _DashboardPageState extends State<DashboardPage> {
             ValueListenableBuilder<ClientProfile?>(
               valueListenable: ClientSession.profile,
               builder: (context, profile, _) {
-                final welcomeName = profile?.greetingName.trim().isNotEmpty == true
-                    ? profile!.greetingName
-                    : 'Client';
+                final welcomeName =
+                    profile?.greetingName.trim().isNotEmpty == true
+                        ? profile!.greetingName
+                        : 'Client';
                 return Text(
                   'Welcome, $welcomeName',
                   style: Theme.of(context).textTheme.headlineSmall,
@@ -96,6 +105,12 @@ class _DashboardPageState extends State<DashboardPage> {
               route: AppRouter.myHours,
             ),
           ] else ...[
+            if (widget.role == 'owner')
+              _linkCard(context,
+                  title: 'Requests',
+                  subtitle: 'Triage incoming work requests',
+                  route: AppRouter.requests),
+            if (widget.role == 'client') _requestWorkCard(context),
             _linkCard(context,
                 title: 'Estimates',
                 subtitle: 'Create and review quotes for clients',
@@ -114,14 +129,13 @@ class _DashboardPageState extends State<DashboardPage> {
                 subtitle: 'View, download, and manage all invoices',
                 route: AppRouter.invoices),
             _linkCard(context,
-                title: 'Announcements',
+                title: 'Messages',
                 subtitle: 'Messages between you and the business owner',
                 route: AppRouter.messages),
             if (widget.role == 'owner') ...[
               _linkCard(context,
                   title: 'Reports',
-                  subtitle:
-                      'Revenue, payroll, expenses, and job profitability',
+                  subtitle: 'Revenue, payroll, expenses, and job profitability',
                   route: AppRouter.reports),
               _linkCard(context,
                   title: "Today's Route",
@@ -130,6 +144,34 @@ class _DashboardPageState extends State<DashboardPage> {
             ],
           ],
         ],
+      ),
+    );
+  }
+
+  /// dashboard tile for a logged-in client to request new work, pre-filled
+  /// with their profile info
+  Widget _requestWorkCard(BuildContext context) {
+    return Card(
+      child: ListTile(
+        title: const Text('Request Work'),
+        subtitle: const Text('Ask for a new quote on additional work'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () {
+          final profile = ClientSession.profile.value;
+          Navigator.pushNamed(
+            context,
+            AppRouter.requestWork,
+            arguments: {
+              'clientId': profile?.signupId,
+              'initialName': profile == null
+                  ? ''
+                  : '${profile.firstName} ${profile.lastName}'.trim(),
+              'initialEmail': profile?.email ?? '',
+              'initialPhone': profile?.phoneNumber ?? '',
+              'initialAddress': profile?.address ?? '',
+            },
+          );
+        },
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'checklist_template.dart';
 import 'invoice.dart';
 
 /// represents scheduled work orders from approved estimates
@@ -22,6 +23,8 @@ class ScheduledWork {
     required this.updatedAt,
     this.isArchived = false,
     this.recurringGroupId,
+    this.reminderSentAt,
+    this.checklistItems = const [],
   });
 
   final String id;
@@ -49,6 +52,12 @@ class ScheduledWork {
   /// shared id stamped on every job created in one recurring-schedule batch;
   /// null for a one-off job
   final String? recurringGroupId;
+  /// when an upcoming-appointment reminder notification was last created for
+  /// this job; null means none has been sent yet
+  final DateTime? reminderSentAt;
+  /// snapshot of a ChecklistTemplate's items (if one was picked when this job
+  /// was scheduled); empty means no checklist attached
+  final List<ChecklistItem> checklistItems;
 
   /// check if this work is scheduled
   bool get isScheduled => status == ScheduledWorkStatus.scheduled;
@@ -69,6 +78,12 @@ class ScheduledWork {
       if (value is Timestamp) return value.toDate();
       if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
       return DateTime.now();
+    }
+
+    DateTime? readOptionalDate(dynamic value) {
+      if (value is Timestamp) return value.toDate();
+      if (value is String) return DateTime.tryParse(value);
+      return null;
     }
 
     return ScheduledWork(
@@ -93,6 +108,11 @@ class ScheduledWork {
       recurringGroupId: (map['recurringGroupId'] as String?)?.trim().isEmpty ?? true
           ? null
           : (map['recurringGroupId'] as String).trim(),
+      reminderSentAt: readOptionalDate(map['reminderSentAt']),
+      checklistItems: (map['checklistItems'] as List<dynamic>? ?? const <dynamic>[])
+          .whereType<Map<String, dynamic>>()
+          .map(ChecklistItem.fromMap)
+          .toList(),
     );
   }
 
@@ -116,6 +136,8 @@ class ScheduledWork {
       'updatedAt': updatedAt,
       'archived': isArchived,
       'recurringGroupId': recurringGroupId,
+      'reminderSentAt': reminderSentAt,
+      'checklistItems': checklistItems.map((item) => item.toMap()).toList(),
     };
   }
 }

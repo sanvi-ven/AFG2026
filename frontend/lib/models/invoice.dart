@@ -15,6 +15,7 @@ class Invoice {
     this.isArchived = false,
     this.notes = '',
     this.terms = '',
+    this.lastReminderSentAt,
   });
 
   final String id;
@@ -29,6 +30,9 @@ class Invoice {
   final bool isArchived;
   final String notes;
   final String terms;
+  /// when an overdue-invoice reminder notification was last created; null
+  /// means none has been sent yet
+  final DateTime? lastReminderSentAt;
 
   bool get isPending => status == InvoiceStatus.pending;
   bool get isApproved => InvoiceStatus.isSent(status);
@@ -51,6 +55,12 @@ class Invoice {
       return DateTime.now();
     }
 
+    DateTime? readOptionalDate(dynamic value) {
+      if (value is Timestamp) return value.toDate();
+      if (value is String) return DateTime.tryParse(value);
+      return null;
+    }
+
     return Invoice(
       id: (map['id'] as String? ?? '').trim(),
       invoiceNumber: (map['invoiceNumber'] as String? ?? '').trim(),
@@ -64,6 +74,7 @@ class Invoice {
       isArchived: map['archived'] as bool? ?? false,
       notes: (map['notes'] as String? ?? '').trim(),
       terms: (map['terms'] as String? ?? '').trim(),
+      lastReminderSentAt: readOptionalDate(map['lastReminderSentAt']),
     );
   }
 
@@ -81,6 +92,7 @@ class Invoice {
       'archived': isArchived,
       'notes': notes,
       'terms': terms,
+      'lastReminderSentAt': lastReminderSentAt,
     };
   }
 }

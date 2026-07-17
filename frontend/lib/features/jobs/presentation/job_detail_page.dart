@@ -198,6 +198,32 @@ class _JobDetailPageState extends State<JobDetailPage> {
             ),
           ),
         ),
+        if (job.checklistItems.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Checklist', style: Theme.of(context).textTheme.titleMedium),
+                  for (var i = 0; i < job.checklistItems.length; i++)
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: job.checklistItems[i].done,
+                      title: Text(job.checklistItems[i].label),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      onChanged: (checked) => ScheduledWorkService.updateChecklistItem(
+                        workId: job.id,
+                        index: i,
+                        done: checked ?? false,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         if (existingForm != null)
           Card(

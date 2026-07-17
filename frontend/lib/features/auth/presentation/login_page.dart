@@ -210,6 +210,11 @@ class _LoginPageState extends State<LoginPage> {
                       onPressed: _goToClaimAccount,
                       child: const Text('Have work done already? Claim your account'),
                     ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () => Navigator.pushNamed(context, AppRouter.requestWork),
+                      child: const Text('New here? Request a Quote'),
+                    ),
                   ],
                   if (_error != null) ...[
                     const SizedBox(height: 12),

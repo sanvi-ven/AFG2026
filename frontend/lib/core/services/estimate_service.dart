@@ -91,7 +91,7 @@ class EstimateService {
   }
 /// create a new estimate with services and auto-calculated total
   
-  static Future<void> createEstimate({
+  static Future<String> createEstimate({
     required String estimateNumber,
     required String clientId,
     required List<InvoiceServiceItem> services,
@@ -118,8 +118,10 @@ class EstimateService {
     );
 
     await doc.set(estimate.toMap());
-  /// request changes on estimate from client with a message
+    return doc.id;
   }
+
+  /// request changes on estimate from client with a message
 
   static Future<void> requestChanges({
     required String estimateId,

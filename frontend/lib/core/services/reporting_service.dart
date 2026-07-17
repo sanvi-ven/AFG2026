@@ -133,23 +133,33 @@ class ReportingService {
     return rows;
   }
 
-  /// per-employee hours worked and calculated payout (hours × hourlyRate;
-  /// rate is 0 for employees with no rate set yet).
+  /// per-employee hours worked and calculated payout. Each entry's payout
+  /// uses its own wageOverride when set (e.g. a one-off holiday/overtime
+  /// rate), falling back to the employee's normal hourlyRate (0 if unset) —
+  /// so a per-shift override actually moves the payout total, not just the
+  /// displayed base rate.
   static List<EmployeePayoutRow> employeePayoutReport({
     required List<TimeEntry> entries,
     required List<EmployeeProfile> employees,
   }) {
-    final hoursByEmployee = employeeHoursByEmployee(entries);
     return employees.map((employee) {
-      final duration = hoursByEmployee[employee.employeeId] ?? Duration.zero;
-      final rate = employee.hourlyRate ?? 0;
-      final hours = duration.inMinutes / 60.0;
+      var hours = 0.0;
+      var payout = 0.0;
+      for (final entry in entries.where((e) => e.employeeId == employee.employeeId)) {
+        final clockInAt = entry.clockInAt;
+        final clockOutAt = entry.clockOutAt;
+        if (clockInAt == null || clockOutAt == null) continue;
+        final entryHours = clockOutAt.difference(clockInAt).inMinutes / 60.0;
+        final rate = entry.wageOverride ?? employee.hourlyRate ?? 0;
+        hours += entryHours;
+        payout += entryHours * rate;
+      }
       return EmployeePayoutRow(
         employeeId: employee.employeeId,
         name: employee.fullName,
         hours: hours,
-        rate: rate,
-        payout: hours * rate,
+        rate: employee.hourlyRate ?? 0,
+        payout: payout,
       );
     }).toList();
   }

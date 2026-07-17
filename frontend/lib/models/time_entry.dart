@@ -8,6 +8,9 @@ class TimeEntry {
     required this.date,
     this.clockInAt,
     this.clockOutAt,
+    this.wageOverride,
+    this.notes = '',
+    this.isPaid = false,
   });
 
   final String id;
@@ -16,6 +19,10 @@ class TimeEntry {
   final String date;
   final DateTime? clockInAt;
   final DateTime? clockOutAt;
+  /// this shift's hourly rate; null means "use the employee's normal hourlyRate"
+  final double? wageOverride;
+  final String notes;
+  final bool isPaid;
 
   bool get isClockedIn => clockInAt != null && clockOutAt == null;
 
@@ -33,6 +40,9 @@ class TimeEntry {
       date: (map['date'] as String? ?? '').trim(),
       clockInAt: readDate(map['clockInAt']),
       clockOutAt: readDate(map['clockOutAt']),
+      wageOverride: (map['wageOverride'] as num?)?.toDouble(),
+      notes: (map['notes'] as String? ?? '').trim(),
+      isPaid: map['isPaid'] as bool? ?? false,
     );
   }
 
@@ -44,6 +54,9 @@ class TimeEntry {
       'date': date,
       'clockInAt': clockInAt,
       'clockOutAt': clockOutAt,
+      'wageOverride': wageOverride,
+      'notes': notes,
+      'isPaid': isPaid,
     };
   }
 }

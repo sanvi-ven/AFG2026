@@ -70,6 +70,18 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    match /notifications/{document=**} {
+      allow read, write: if true;
+    }
+
+    match /requests/{document=**} {
+      allow read, write: if true;
+    }
+
+    match /checklist_templates/{document=**} {
+      allow read, write: if true;
+    }
+
     // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;

@@ -139,4 +139,13 @@ class InvoiceService {
       SetOptions(merge: true),
     );
   }
+
+  /// stamp that an overdue-invoice reminder notification has been created,
+  /// so [ReminderCheckService] doesn't create a duplicate
+  static Future<void> markReminderSent(String invoiceId) async {
+    await _collection.doc(invoiceId).set(
+      {'lastReminderSentAt': DateTime.now()},
+      SetOptions(merge: true),
+    );
+  }
 }

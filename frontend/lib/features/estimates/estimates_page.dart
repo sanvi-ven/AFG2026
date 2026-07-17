@@ -6,14 +6,17 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/services/checklist_template_service.dart';
 import '../../core/services/client_profile_service.dart';
 import '../../core/services/estimate_pdf_service.dart';
 import '../../core/services/estimate_service.dart';
 import '../../core/services/invoice_pdf_service.dart';
 import '../../core/services/invoice_service.dart';
+import '../../core/services/request_service.dart';
 import '../../core/services/scheduled_work_service.dart';
 import '../../core/services/service_catalog_service.dart';
 import '../../core/state/client_session.dart';
+import '../../models/checklist_template.dart';
 import '../../models/client_profile.dart';
 import '../../models/common_service.dart';
 import '../../models/estimate.dart';
@@ -25,11 +28,26 @@ import '../clients/presentation/quick_add_client_dialog.dart';
 
 /// page for viewing and managing estimates with client approval and owner conversion flows
 class EstimatesPage extends StatefulWidget {
-  const EstimatesPage({required this.role, this.authToken, this.highlightId, super.key});
+  const EstimatesPage({
+    required this.role,
+    this.authToken,
+    this.highlightId,
+    this.initialClientId,
+    this.initialNotes,
+    this.convertRequestId,
+    super.key,
+  });
 
   final String role;
   final String? authToken;
   final String? highlightId;
+  /// pre-select this client and pre-fill notes when arriving from a
+  /// converted Request (see RequestsPage) — null for the normal create flow
+  final String? initialClientId;
+  final String? initialNotes;
+  /// when set, the created estimate is linked back to this Request via
+  /// RequestService.markConverted once submitted
+  final String? convertRequestId;
 
   @override
   State<EstimatesPage> createState() => _EstimatesPageState();
@@ -60,6 +78,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
   bool _isLoadingClientSuggestions = true;
   ListSortMode _sortMode = ListSortMode.newestFirst;
   late final ListHighlightController _highlight = ListHighlightController(widget.highlightId);
+  bool _appliedInitialClient = false;
 
   @override
   void initState() {
@@ -70,6 +89,12 @@ class _EstimatesPageState extends State<EstimatesPage> {
           setState(() => _estimateNumberController.text = preview);
         }
       });
+    }
+    if (widget.initialNotes != null) {
+      _notesController.text = widget.initialNotes!;
+    }
+    if (widget.initialClientId != null) {
+      _clientIdController.text = widget.initialClientId!;
     }
     _catalogSub = ServiceCatalogService.watchAllServices().listen((services) {
       if (!mounted) return;
@@ -96,6 +121,15 @@ class _EstimatesPageState extends State<EstimatesPage> {
           query: query,
           limit: 8,
         );
+
+        if (!_appliedInitialClient && widget.initialClientId != null) {
+          _appliedInitialClient = true;
+          final match = profiles.where((profile) => profile.signupId == widget.initialClientId).toList();
+          if (match.isNotEmpty) {
+            _selectedClient = match.first;
+            _clientSuggestions = const [];
+          }
+        }
       });
     });
   }
@@ -257,13 +291,16 @@ class _EstimatesPageState extends State<EstimatesPage> {
           ? consumedNumber
           : _estimateNumberController.text.trim();
 
-      await EstimateService.createEstimate(
+      final newEstimateId = await EstimateService.createEstimate(
         estimateNumber: estimateNumber,
         clientId: clientId,
         services: services,
         notes: _notesController.text.trim(),
         terms: _termsController.text.trim(),
       );
+      if (widget.convertRequestId != null) {
+        await RequestService.markConverted(requestId: widget.convertRequestId!, estimateId: newEstimateId);
+      }
       if (!mounted) {
         return;
       }
@@ -425,6 +462,15 @@ class _EstimatesPageState extends State<EstimatesPage> {
     );
     if (recurrence == null || !mounted) return;
 
+    final checklistTemplate = await showDialog<ChecklistTemplate>(
+      context: context,
+      builder: (_) => const _ChecklistTemplatePickerDialog(),
+    );
+    if (!mounted) return;
+    final checklistItems = checklistTemplate == null
+        ? const <ChecklistItem>[]
+        : checklistTemplate.items.map((label) => ChecklistItem(label: label)).toList();
+
     setState(() => _schedulingEstimateId = estimate.id);
     try {
       // Denormalize the client's address/phone onto the job record so employee
@@ -443,6 +489,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
           scheduledDate: scheduledDateTime,
           address: address,
           phoneNumber: phoneNumber,
+          checklistItems: checklistItems,
         );
         await EstimateService.markScheduled(estimateId: estimate.id, scheduledWorkId: workId);
       } else {
@@ -468,6 +515,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
             address: address,
             phoneNumber: phoneNumber,
             recurringGroupId: groupId,
+            checklistItems: checklistItems,
           );
           if (n == 0) {
             await EstimateService.markScheduled(estimateId: estimate.id, scheduledWorkId: workId);
@@ -666,14 +714,28 @@ class _EstimatesPageState extends State<EstimatesPage> {
           if (widget.role == 'owner') ...[
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => Navigator.pushNamed(
-                  context,
-                  AppRouter.serviceCatalog,
-                  arguments: {'role': widget.role, 'authToken': widget.authToken},
-                ),
-                icon: const Icon(Icons.list_alt_outlined),
-                label: const Text('Manage Common Services'),
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => Navigator.pushNamed(
+                      context,
+                      AppRouter.serviceCatalog,
+                      arguments: {'role': widget.role, 'authToken': widget.authToken},
+                    ),
+                    icon: const Icon(Icons.list_alt_outlined),
+                    label: const Text('Manage Common Services'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => Navigator.pushNamed(
+                      context,
+                      AppRouter.checklistTemplates,
+                      arguments: {'role': widget.role, 'authToken': widget.authToken},
+                    ),
+                    icon: const Icon(Icons.checklist_outlined),
+                    label: const Text('Manage Checklist Templates'),
+                  ),
+                ],
               ),
             ),
             _OwnerEstimateForm(
@@ -1516,6 +1578,48 @@ class _RecurrenceDialogState extends State<_RecurrenceDialog> {
           onPressed: _submit,
           child: const Text('Continue'),
         ),
+      ],
+    );
+  }
+}
+
+/// optional step in the "Schedule Work" flow: pick a checklist template to
+/// snapshot onto the new job, or skip entirely
+class _ChecklistTemplatePickerDialog extends StatelessWidget {
+  const _ChecklistTemplatePickerDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Attach a Checklist? (optional)'),
+      content: SizedBox(
+        width: 380,
+        child: StreamBuilder<List<ChecklistTemplate>>(
+          stream: ChecklistTemplateService.watchAllTemplates(),
+          builder: (context, snapshot) {
+            final templates = snapshot.data ?? const <ChecklistTemplate>[];
+            if (templates.isEmpty) {
+              return const Text('No checklist templates saved yet.');
+            }
+            return SizedBox(
+              height: 240,
+              child: ListView.builder(
+                itemCount: templates.length,
+                itemBuilder: (context, index) {
+                  final template = templates[index];
+                  return ListTile(
+                    title: Text(template.name),
+                    subtitle: Text(template.items.join(' · ')),
+                    onTap: () => Navigator.of(context).pop(template),
+                  );
+                },
+              ),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Skip')),
       ],
     );
   }
