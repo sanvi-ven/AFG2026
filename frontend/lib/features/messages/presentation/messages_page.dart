@@ -1,7 +1,6 @@
 // made with chatgpt 4.0: build a flutter messaging page for a service business app. owners should be able to send broadcast messages to multiple client IDs
 // snapshot--https://firebase.google.com/docs/reference/js/firestore_.documentsnapshot
 
-
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -25,7 +24,8 @@ class MessagesPage extends StatefulWidget {
   State<MessagesPage> createState() => _MessagesPageState();
 }
 
-class _MessagesPageState extends State<MessagesPage> with SingleTickerProviderStateMixin {
+class _MessagesPageState extends State<MessagesPage>
+    with SingleTickerProviderStateMixin {
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
   final _clientIdsController = TextEditingController();
@@ -45,6 +45,14 @@ class _MessagesPageState extends State<MessagesPage> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    if (widget.role == 'client') {
+      final clientId = ClientSession.profile.value?.signupId;
+      if (clientId != null && clientId.trim().isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          MessageService.markAllAsRead(clientId: clientId).catchError((_) {});
+        });
+      }
+    }
     _clientDirectorySub =
         ClientProfileService.watchAllProfiles().listen((profiles) {
       if (!mounted) {
@@ -86,7 +94,8 @@ class _MessagesPageState extends State<MessagesPage> with SingleTickerProviderSt
       profiles: _knownClients,
       query: query,
       limit: 8,
-      excludeSignupIds: _selectedRecipients.map((item) => item.signupId).toSet(),
+      excludeSignupIds:
+          _selectedRecipients.map((item) => item.signupId).toSet(),
     );
   }
 
@@ -171,12 +180,14 @@ class _MessagesPageState extends State<MessagesPage> with SingleTickerProviderSt
 
     if (!_tryResolveTypedClientId()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select a valid client from suggestions.')),
+        const SnackBar(
+            content: Text('Select a valid client from suggestions.')),
       );
       return;
     }
 
-    final clientIds = _selectedRecipients.map((item) => item.signupId).toSet().toList();
+    final clientIds =
+        _selectedRecipients.map((item) => item.signupId).toSet().toList();
     if (clientIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Select at least one valid client.')),
@@ -217,38 +228,6 @@ class _MessagesPageState extends State<MessagesPage> with SingleTickerProviderSt
       if (mounted) {
         setState(() => _isSending = false);
       }
-    }
-  }
-
-  Future<void> _markMessageRead(String messageId) async {
-    try {
-      await MessageService.markAsRead(messageId: messageId);
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to mark message as read: $error')),
-      );
-    }
-  }
-
-  Future<void> _markAllRead(String clientId) async {
-    try {
-      await MessageService.markAllAsRead(clientId: clientId);
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All messages marked as read.')),
-      );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to mark all read: $error')),
-      );
     }
   }
 
@@ -382,7 +361,8 @@ class _MessagesPageState extends State<MessagesPage> with SingleTickerProviderSt
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Failed to load threads: ${snapshot.error}'));
+          return Center(
+              child: Text('Failed to load threads: ${snapshot.error}'));
         }
 
         final threads = snapshot.data ?? const <ClientThreadSummary>[];
@@ -395,7 +375,8 @@ class _MessagesPageState extends State<MessagesPage> with SingleTickerProviderSt
           itemCount: threads.length,
           itemBuilder: (context, index) {
             final thread = threads[index];
-            final displayName = ClientProfileService.displayNameFor(_knownClients, thread.clientId);
+            final displayName = ClientProfileService.displayNameFor(
+                _knownClients, thread.clientId);
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Card(
@@ -446,75 +427,52 @@ class _MessagesPageState extends State<MessagesPage> with SingleTickerProviderSt
       );
     }
 
-    return StreamBuilder<List<MessageLog>>(
-      stream: MessageService.watchClientMessages(clientId: clientId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text('Failed to load inbox: ${snapshot.error}'),
-              ),
-            ),
-          );
-        }
-
-        final messages = snapshot.data ?? const <MessageLog>[];
-        final unreadCount = messages.where((item) => item.isUnread).length;
-
-        return Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-                children: [
-                  _ClientInboxBanner(unreadCount: unreadCount),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: OutlinedButton.icon(
-                      onPressed:
-                          unreadCount > 0 ? () => _markAllRead(clientId) : null,
-                      icon: const Icon(Icons.done_all),
-                      label: const Text('Mark All Read'),
+    return Column(
+      children: [
+        Expanded(
+          child: StreamBuilder<List<MessageLog>>(
+            stream: MessageService.watchClientMessages(clientId: clientId),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text('Failed to load messages: ${snapshot.error}'),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  if (messages.isEmpty)
-                    const Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text('No messages yet.'),
-                      ),
-                    )
-                  else
-                    ...messages.map(
-                      (message) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _ClientMessageCard(
-                          message: message,
-                          onMarkRead: message.isUnread
-                              ? () => _markMessageRead(message.id)
-                              : null,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            _ReplyComposer(
-              controller: _replyController,
-              isSending: _isSendingReply,
-              onSend: () => _sendClientReply(clientId),
-            ),
-          ],
-        );
-      },
+                );
+              }
+
+              final messages = snapshot.data ?? const <MessageLog>[];
+              if (messages.isEmpty) {
+                return const Center(child: Text('No messages yet.'));
+              }
+
+              // messages come back newest-first; reverse for a chat-style
+              // oldest-to-newest reading order (same as the owner's thread view).
+              final chronological = messages.reversed.toList();
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: chronological.length,
+                itemBuilder: (context, index) => _ChatBubble(
+                  message: chronological[index],
+                  isMe: chronological[index].senderRole == 'client',
+                ),
+              );
+            },
+          ),
+        ),
+        _ReplyComposer(
+          controller: _replyController,
+          isSending: _isSendingReply,
+          onSend: () => _sendClientReply(clientId),
+        ),
+      ],
     );
   }
 }
@@ -612,7 +570,8 @@ class _OwnerComposerCard extends StatelessWidget {
               children: [
                 for (final recipient in selectedRecipients)
                   InputChip(
-                    label: Text('${recipient.signupId} · ${recipient.fullName}'),
+                    label:
+                        Text('${recipient.signupId} · ${recipient.fullName}'),
                     onDeleted: () => onRecipientRemoved(recipient.signupId),
                   ),
               ],
@@ -631,7 +590,8 @@ class _OwnerComposerCard extends StatelessWidget {
                     final suggestion = clientSuggestions[index];
                     return ListTile(
                       dense: true,
-                      title: Text('${suggestion.signupId} · ${suggestion.fullName}'),
+                      title: Text(
+                          '${suggestion.signupId} · ${suggestion.fullName}'),
                       subtitle: Text(
                         suggestion.address.isEmpty
                             ? 'Address unavailable'
@@ -709,109 +669,8 @@ class _OwnerBroadcastLogCard extends StatelessWidget {
   }
 }
 
-class _ClientInboxBanner extends StatelessWidget {
-  const _ClientInboxBanner({required this.unreadCount});
-
-  final int unreadCount;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.notifications_active_outlined,
-              color: colorScheme.onSecondaryContainer),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              unreadCount == 0
-                  ? 'No unread announcements.'
-                  : 'You have $unreadCount unread announcement(s).',
-              style: TextStyle(
-                  color: colorScheme.onSecondaryContainer,
-                  fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ClientMessageCard extends StatelessWidget {
-  const _ClientMessageCard({required this.message, this.onMarkRead});
-
-  final MessageLog message;
-  final VoidCallback? onMarkRead;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final statusColor = message.read ? colorScheme.primary : colorScheme.error;
-    final dateLabel = DateFormat.yMMMd().add_jm().format(message.createdAt);
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    message.title,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    message.read ? 'Read' : 'Unread',
-                    style: TextStyle(
-                        color: statusColor, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(message.body),
-            const SizedBox(height: 10),
-            Text(dateLabel, style: Theme.of(context).textTheme.bodySmall),
-            if (onMarkRead != null) ...[
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton.icon(
-                  onPressed: onMarkRead,
-                  icon: const Icon(Icons.mark_email_read_outlined),
-                  label: const Text('Mark Read'),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// shared reply text field + send button, used both in the client's inbox
-/// and in the owner's per-client thread detail view.
+/// shared reply text field + send button, used both in the client's message
+/// thread and in the owner's per-client thread detail view.
 class _ReplyComposer extends StatelessWidget {
   const _ReplyComposer({
     required this.controller,
@@ -860,7 +719,8 @@ class _ReplyComposer extends StatelessWidget {
 
 /// owner-side chat-style view of a single client's two-way message thread
 class _OwnerThreadDetailPage extends StatefulWidget {
-  const _OwnerThreadDetailPage({required this.clientId, required this.displayName});
+  const _OwnerThreadDetailPage(
+      {required this.clientId, required this.displayName});
 
   final String clientId;
   final String displayName;
@@ -910,7 +770,8 @@ class _OwnerThreadDetailPageState extends State<_OwnerThreadDetailPage> {
         children: [
           Expanded(
             child: StreamBuilder<List<MessageLog>>(
-              stream: MessageService.watchClientMessages(clientId: widget.clientId),
+              stream:
+                  MessageService.watchClientMessages(clientId: widget.clientId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -925,12 +786,18 @@ class _OwnerThreadDetailPageState extends State<_OwnerThreadDetailPage> {
                 return ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: chronological.length,
-                  itemBuilder: (context, index) => _ChatBubble(message: chronological[index]),
+                  itemBuilder: (context, index) => _ChatBubble(
+                    message: chronological[index],
+                    isMe: chronological[index].senderRole == 'owner',
+                  ),
                 );
               },
             ),
           ),
-          _ReplyComposer(controller: _replyController, isSending: _isSending, onSend: _send),
+          _ReplyComposer(
+              controller: _replyController,
+              isSending: _isSending,
+              onSend: _send),
         ],
       ),
     );
@@ -938,24 +805,29 @@ class _OwnerThreadDetailPageState extends State<_OwnerThreadDetailPage> {
 }
 
 class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({required this.message});
+  const _ChatBubble({required this.message, required this.isMe});
 
   final MessageLog message;
 
+  /// true if this message was sent by the person currently viewing the
+  /// thread (aligns/colors it as "my" bubble vs "their" bubble)
+  final bool isMe;
+
   @override
   Widget build(BuildContext context) {
-    final isOwner = message.senderRole == 'owner';
     final colorScheme = Theme.of(context).colorScheme;
     final dateLabel = DateFormat.MMMd().add_jm().format(message.createdAt);
 
     return Align(
-      alignment: isOwner ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(12),
         constraints: const BoxConstraints(maxWidth: 360),
         decoration: BoxDecoration(
-          color: isOwner ? colorScheme.primaryContainer : colorScheme.secondaryContainer,
+          color: isMe
+              ? colorScheme.primaryContainer
+              : colorScheme.secondaryContainer,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
