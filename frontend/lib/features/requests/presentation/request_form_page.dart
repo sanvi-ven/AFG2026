@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/services/address_autocomplete_service.dart';
 import '../../../core/services/comms_service.dart';
 import '../../../core/services/job_photo_upload_service.dart';
 import '../../../core/services/owner_settings_service.dart';
@@ -41,6 +42,9 @@ class _RequestFormPageState extends State<RequestFormPage> {
   bool _isUploadingPhoto = false;
   bool _isSaving = false;
   bool _submitted = false;
+  Timer? _addressDebounce;
+  List<String> _addressSuggestions = const [];
+  bool _isLoadingAddressSuggestions = false;
 
   @override
   void dispose() {
@@ -49,7 +53,39 @@ class _RequestFormPageState extends State<RequestFormPage> {
     _phoneController.dispose();
     _addressController.dispose();
     _descriptionController.dispose();
+    _addressDebounce?.cancel();
     super.dispose();
+  }
+
+  void _onAddressChanged(String value) {
+    _addressDebounce?.cancel();
+
+    final query = value.trim();
+    if (query.length < 3) {
+      setState(() {
+        _addressSuggestions = const [];
+        _isLoadingAddressSuggestions = false;
+      });
+      return;
+    }
+
+    setState(() => _isLoadingAddressSuggestions = true);
+    _addressDebounce = Timer(const Duration(milliseconds: 300), () async {
+      final suggestions = await AddressAutocompleteService.search(query);
+      if (!mounted) return;
+      setState(() {
+        _addressSuggestions = suggestions;
+        _isLoadingAddressSuggestions = false;
+      });
+    });
+  }
+
+  void _pickAddressSuggestion(String value) {
+    _addressController.text = value;
+    setState(() {
+      _addressSuggestions = const [];
+      _isLoadingAddressSuggestions = false;
+    });
   }
 
   Future<void> _addPhoto() async {
@@ -197,8 +233,43 @@ class _RequestFormPageState extends State<RequestFormPage> {
             const SizedBox(height: 12),
             TextFormField(
               controller: _addressController,
-              decoration: const InputDecoration(labelText: 'Address', border: OutlineInputBorder()),
+              decoration: InputDecoration(
+                labelText: 'Address',
+                border: const OutlineInputBorder(),
+                suffixIcon: _isLoadingAddressSuggestions
+                    ? const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : null,
+              ),
+              onChanged: _onAddressChanged,
             ),
+            if (_addressSuggestions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Card(
+                margin: EdgeInsets.zero,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 180),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _addressSuggestions.length,
+                    itemBuilder: (context, index) {
+                      final suggestion = _addressSuggestions[index];
+                      return ListTile(
+                        dense: true,
+                        title: Text(suggestion),
+                        onTap: () => _pickAddressSuggestion(suggestion),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             TextFormField(
               controller: _descriptionController,

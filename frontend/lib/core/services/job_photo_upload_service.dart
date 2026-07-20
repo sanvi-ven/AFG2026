@@ -18,7 +18,7 @@ class JobPhotoUploadService {
 
   static String _uniqueFileName() {
     final stamp = DateTime.now().microsecondsSinceEpoch;
-    final suffix = _random.nextInt(1 << 32);
+    final suffix = _random.nextInt(1 << 31);
     return '${stamp}_$suffix.jpg';
   }
 
