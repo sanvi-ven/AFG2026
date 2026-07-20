@@ -4,21 +4,75 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/equipment_service.dart';
 import '../../../models/equipment.dart';
 import '../../../shared/widgets/app_scaffold.dart';
+import 'equipment_schedule_tab.dart';
+import 'my_equipment_tab.dart';
 
-/// browsable catalog of equipment + supplies, visible to both owners and
-/// employees. Search, type-filter, and sort are client-side; owner-only "+ Add"
-/// pushes the create form. (Schedule / my-equipment tabs arrive in Phase 5.)
-class EquipmentCatalogPage extends StatefulWidget {
+/// Equipment area shell: a [DefaultTabController] with a "Catalog" tab (search /
+/// filter / sort / list, plus owner-only "+ Add") and a role-conditional second
+/// tab — "Schedule" for owners, "My Equipment" for employees.
+class EquipmentCatalogPage extends StatelessWidget {
   const EquipmentCatalogPage({required this.role, this.authToken, super.key});
 
   final String role;
   final String? authToken;
 
+  bool get _isOwner => role == 'owner';
+
   @override
-  State<EquipmentCatalogPage> createState() => _EquipmentCatalogPageState();
+  Widget build(BuildContext context) {
+    return AppScaffold(
+      title: 'Equipment',
+      role: role,
+      authToken: authToken,
+      selectedRoute: AppRouter.equipmentCatalog,
+      body: DefaultTabController(
+        length: 2,
+        child: Column(
+          children: [
+            TabBar(
+              tabs: [
+                const Tab(
+                    text: 'Catalog',
+                    icon: Icon(Icons.inventory_2_outlined)),
+                _isOwner
+                    ? const Tab(
+                        text: 'Schedule',
+                        icon: Icon(Icons.event_note_outlined))
+                    : const Tab(
+                        text: 'My Equipment',
+                        icon: Icon(Icons.handyman_outlined)),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _CatalogTab(role: role, authToken: authToken),
+                  _isOwner
+                      ? const EquipmentScheduleTab()
+                      : const MyEquipmentTab(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _EquipmentCatalogPageState extends State<EquipmentCatalogPage> {
+/// the browsable catalog list with search, type filter, show-archived, sort,
+/// and (owner-only) add. Client-side filter/sort; tap a card to open detail.
+class _CatalogTab extends StatefulWidget {
+  const _CatalogTab({required this.role, this.authToken});
+
+  final String role;
+  final String? authToken;
+
+  @override
+  State<_CatalogTab> createState() => _CatalogTabState();
+}
+
+class _CatalogTabState extends State<_CatalogTab> {
   final _searchController = TextEditingController();
   String _query = '';
   String? _typeFilter; // null = All
@@ -55,59 +109,53 @@ class _EquipmentCatalogPageState extends State<EquipmentCatalogPage> {
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffold(
-      title: 'Equipment',
-      role: widget.role,
-      authToken: widget.authToken,
-      selectedRoute: AppRouter.equipmentCatalog,
-      body: Column(
-        children: [
-          _buildControls(context),
-          const Divider(height: 1),
-          Expanded(
-            child: StreamBuilder<List<EquipmentItem>>(
-              stream: EquipmentService.watchAll(includeArchived: _showArchived),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(
-                      child: Text('Failed to load equipment: ${snapshot.error}'));
-                }
+    return Column(
+      children: [
+        _buildControls(context),
+        const Divider(height: 1),
+        Expanded(
+          child: StreamBuilder<List<EquipmentItem>>(
+            stream: EquipmentService.watchAll(includeArchived: _showArchived),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(
+                    child: Text('Failed to load equipment: ${snapshot.error}'));
+              }
 
-                final all = snapshot.data ?? const <EquipmentItem>[];
-                final items = EquipmentService.filterAndSort(
-                  items: all,
-                  query: _query,
-                  typeFilter: _typeFilter,
-                  sortBy: _sortBy,
-                );
+              final all = snapshot.data ?? const <EquipmentItem>[];
+              final items = EquipmentService.filterAndSort(
+                items: all,
+                query: _query,
+                typeFilter: _typeFilter,
+                sortBy: _sortBy,
+              );
 
-                if (all.isEmpty) {
-                  return const Center(child: Text('No equipment yet.'));
-                }
-                if (items.isEmpty) {
-                  return const Center(
-                      child: Text('No items match your filters.'));
-                }
+              if (all.isEmpty) {
+                return const Center(child: Text('No equipment yet.'));
+              }
+              if (items.isEmpty) {
+                return const Center(
+                    child: Text('No items match your filters.'));
+              }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: items.length,
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    return _EquipmentCard(
-                      item: item,
-                      onTap: () => _openDetail(item.id),
-                    );
-                  },
-                );
-              },
-            ),
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  return _EquipmentCard(
+                    item: item,
+                    onTap: () => _openDetail(item.id),
+                  );
+                },
+              );
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

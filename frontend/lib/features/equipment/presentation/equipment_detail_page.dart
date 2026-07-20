@@ -138,6 +138,8 @@ class EquipmentDetailPage extends StatelessWidget {
                 _buildReservationHistory(context, item),
                 const SizedBox(height: 24),
                 _buildServiceHistory(context, item),
+                const SizedBox(height: 24),
+                _buildActivityTimeline(context, item),
               ],
             ],
           );
@@ -572,6 +574,129 @@ class EquipmentDetailPage extends StatelessWidget {
         );
       },
     );
+  }
+
+  // --- activity timeline (Equipment only) -----------------------------------
+
+  /// a compact, chronological (newest-first) merge of broken reports, repair
+  /// attempts, service records, and reservations for this item — synthesized
+  /// client-side from the three streams the page already uses elsewhere (no new
+  /// collection/service). This is an overview; the dedicated history sections
+  /// above still carry the full detail.
+  Widget _buildActivityTimeline(BuildContext context, EquipmentItem item) {
+    return StreamBuilder<List<BrokenReport>>(
+      stream: BrokenReportService.watchForEquipment(item.id),
+      builder: (context, brokenSnap) {
+        return StreamBuilder<List<ServiceRecord>>(
+          stream: ServiceRecordService.watchForEquipment(item.id),
+          builder: (context, serviceSnap) {
+            return StreamBuilder<List<EquipmentReservation>>(
+              stream: EquipmentReservationService.watchForEquipment(item.id),
+              builder: (context, reservationSnap) {
+                // only show the spinner if NONE of the three sources have
+                // emitted yet — otherwise a fast-resolving stream (broken
+                // reports is usually smallest) can flash "No activity yet."
+                // before the slower service/reservation streams finish.
+                final waiting = [brokenSnap, serviceSnap, reservationSnap]
+                    .every((s) =>
+                        s.connectionState == ConnectionState.waiting &&
+                        !s.hasData);
+                final events = _buildActivityEvents(
+                  broken: brokenSnap.data ?? const <BrokenReport>[],
+                  services: serviceSnap.data ?? const <ServiceRecord>[],
+                  reservations:
+                      reservationSnap.data ?? const <EquipmentReservation>[],
+                );
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Activity',
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 12),
+                    if (waiting && events.isEmpty)
+                      const Center(child: CircularProgressIndicator())
+                    else if (events.isEmpty)
+                      const Text('No activity yet.')
+                    else
+                      for (final event in events.take(20))
+                        _ActivityRow(event: event),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// merge the three sources into a single newest-first list of timeline events.
+  List<_ActivityEvent> _buildActivityEvents({
+    required List<BrokenReport> broken,
+    required List<ServiceRecord> services,
+    required List<EquipmentReservation> reservations,
+  }) {
+    final timeFmt = DateFormat('h:mm a');
+    final events = <_ActivityEvent>[];
+
+    for (final report in broken) {
+      events.add(_ActivityEvent(
+        timestamp: report.reportedAt,
+        icon: Icons.report_problem_outlined,
+        color: Colors.red,
+        description: 'Unit #${report.unitNumber} marked broken',
+      ));
+      for (final attempt in report.repairAttempts) {
+        events.add(_ActivityEvent(
+          timestamp: attempt.attemptedAt,
+          icon: Icons.build_outlined,
+          color: Colors.orange,
+          description: 'Repair attempt on unit #${report.unitNumber}',
+        ));
+      }
+      if (report.resolvedAt != null) {
+        events.add(_ActivityEvent(
+          timestamp: report.resolvedAt!,
+          icon: Icons.check_circle_outline,
+          color: Colors.green,
+          description: 'Unit #${report.unitNumber} marked fixed',
+        ));
+      }
+    }
+
+    for (final record in services) {
+      events.add(_ActivityEvent(
+        timestamp: record.createdAt,
+        icon: Icons.handyman_outlined,
+        color: Colors.blue,
+        description: 'Service logged on unit #${record.unitNumber}',
+      ));
+    }
+
+    for (final reservation in reservations) {
+      final window =
+          '${timeFmt.format(reservation.startTime)}–${timeFmt.format(reservation.endTime)}';
+      events.add(_ActivityEvent(
+        timestamp: reservation.createdAt,
+        icon: Icons.event_available_outlined,
+        color: Colors.indigo,
+        description:
+            'Unit #${reservation.unitNumber} reserved by ${reservation.employeeName} for $window',
+      ));
+      if (reservation.isCancelled && reservation.cancelledAt != null) {
+        events.add(_ActivityEvent(
+          timestamp: reservation.cancelledAt!,
+          icon: Icons.event_busy_outlined,
+          color: Colors.grey,
+          description:
+              'Reservation of unit #${reservation.unitNumber} cancelled',
+        ));
+      }
+    }
+
+    events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return events;
   }
 
   Future<void> _logService(
@@ -1539,6 +1664,58 @@ class _Pill extends StatelessWidget {
       child: Text(label,
           style: TextStyle(
               fontSize: 12, color: color, fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
+/// one synthesized timeline entry merged from broken/service/reservation data.
+class _ActivityEvent {
+  const _ActivityEvent({
+    required this.timestamp,
+    required this.icon,
+    required this.color,
+    required this.description,
+  });
+
+  final DateTime timestamp;
+  final IconData icon;
+  final Color color;
+  final String description;
+}
+
+/// one compact row in the activity timeline: icon + description + timestamp.
+class _ActivityRow extends StatelessWidget {
+  const _ActivityRow({required this.event});
+
+  final _ActivityEvent event;
+
+  @override
+  Widget build(BuildContext context) {
+    final stamp = DateFormat('MMM d, yyyy · h:mm a').format(event.timestamp);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(event.icon, size: 18, color: event.color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(event.description,
+                    style: Theme.of(context).textTheme.bodyMedium),
+                const SizedBox(height: 2),
+                Text(stamp,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: Colors.grey.shade600)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
