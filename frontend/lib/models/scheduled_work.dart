@@ -25,6 +25,7 @@ class ScheduledWork {
     this.recurringGroupId,
     this.reminderSentAt,
     this.checklistItems = const [],
+    this.routeOrder,
   });
 
   final String id;
@@ -58,6 +59,9 @@ class ScheduledWork {
   /// snapshot of a ChecklistTemplate's items (if one was picked when this job
   /// was scheduled); empty means no checklist attached
   final List<ChecklistItem> checklistItems;
+  /// owner-set position of this job within its team's route for the day;
+  /// null means "not yet manually sequenced" — falls back to scheduledDate order
+  final int? routeOrder;
 
   /// check if this work is scheduled
   bool get isScheduled => status == ScheduledWorkStatus.scheduled;
@@ -113,6 +117,7 @@ class ScheduledWork {
           .whereType<Map<String, dynamic>>()
           .map(ChecklistItem.fromMap)
           .toList(),
+      routeOrder: (map['routeOrder'] as num?)?.toInt(),
     );
   }
 
@@ -138,6 +143,7 @@ class ScheduledWork {
       'recurringGroupId': recurringGroupId,
       'reminderSentAt': reminderSentAt,
       'checklistItems': checklistItems.map((item) => item.toMap()).toList(),
+      'routeOrder': routeOrder,
     };
   }
 }

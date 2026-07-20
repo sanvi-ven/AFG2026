@@ -5,6 +5,7 @@ import '../../../core/services/scheduled_work_service.dart';
 import '../../../core/services/team_service.dart';
 import '../../../models/scheduled_work.dart';
 import '../../../models/team.dart';
+import '../../../shared/utils/route_order.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/get_directions_button.dart';
 import 'job_manager_tab.dart';
@@ -79,6 +80,11 @@ class _TodaysRouteTab extends StatelessWidget {
               final teamId = job.teamId?.trim() ?? '';
               grouped.putIfAbsent(teamId, () => <ScheduledWork>[]).add(job);
             }
+            // apply the shared route-order sort to each team's jobs so the list
+            // reflects the owner-set sequence (routeOrder, then scheduledDate).
+            for (final teamId in grouped.keys) {
+              grouped[teamId] = sortByRouteOrder(grouped[teamId]!);
+            }
             final teamIds = grouped.keys.toList()
               ..sort((a, b) {
                 if (a.isEmpty) return 1;
@@ -97,27 +103,54 @@ class _TodaysRouteTab extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ),
-                  for (final job in grouped[teamId]!)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Card(
-                        margin: EdgeInsets.zero,
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(14),
-                          title: Text(
-                            job.address.isEmpty ? 'Address unavailable' : job.address,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: GetDirectionsButton(address: job.address),
+                  ReorderableListView.builder(
+                    // each team section is its own reorderable list nested in the
+                    // outer scrollable; a per-team key keeps element identity from
+                    // leaking across sections.
+                    key: ValueKey('route-group-$teamId'),
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    buildDefaultDragHandles: false,
+                    itemCount: grouped[teamId]!.length,
+                    itemBuilder: (context, index) {
+                      final job = grouped[teamId]![index];
+                      return Padding(
+                        key: ValueKey(job.id),
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Card(
+                          margin: EdgeInsets.zero,
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.all(14),
+                            leading: ReorderableDragStartListener(
+                              index: index,
+                              child: const Icon(Icons.drag_handle),
+                            ),
+                            title: Text(
+                              job.address.isEmpty ? 'Address unavailable' : job.address,
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: GetDirectionsButton(address: job.address),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
+                    onReorder: (oldIndex, newIndex) {
+                      // standard ReorderableListView index adjustment
+                      if (newIndex > oldIndex) newIndex -= 1;
+                      final teamJobs = [...grouped[teamId]!];
+                      final moved = teamJobs.removeAt(oldIndex);
+                      teamJobs.insert(newIndex, moved);
+                      ScheduledWorkService.reorderJobs(
+                        workIdsInOrder: teamJobs.map((job) => job.id).toList(),
+                      );
+                    },
+                  ),
                 ],
               ],
             );
