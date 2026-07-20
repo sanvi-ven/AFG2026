@@ -1304,7 +1304,19 @@ class _ReservationRow extends StatelessWidget {
               style: const TextStyle(fontSize: 12)),
         ),
         title: Text('${reservation.date} · $window'),
-        subtitle: Text(reservation.employeeName),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(reservation.employeeName),
+            if (reservation.isLinkedToJob) ...[
+              const SizedBox(height: 4),
+              _Pill(
+                label: 'Job: ${reservation.jobAddress}',
+                color: Colors.indigo,
+              ),
+            ],
+          ],
+        ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
