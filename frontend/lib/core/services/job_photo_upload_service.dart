@@ -75,4 +75,23 @@ class JobPhotoUploadService {
     final bytes = await picked.readAsBytes();
     return _uploadBytes(bytes: bytes, folder: 'request_photos/$requestId');
   }
+
+  /// prompt the user to take a photo, then upload it under
+  /// equipment_photos/{equipmentId}/ — camera (not gallery) since equipment
+  /// photos are of a physical on-site asset, like job photos.
+  /// returns the hosted url, or null if the user cancelled the picker
+  static Future<String?> pickAndUploadEquipmentPhoto({
+    required String equipmentId,
+  }) async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 80,
+    );
+    if (picked == null) return null;
+
+    final bytes = await picked.readAsBytes();
+    return _uploadBytes(bytes: bytes, folder: 'equipment_photos/$equipmentId');
+  }
 }

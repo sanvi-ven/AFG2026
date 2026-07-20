@@ -12,6 +12,9 @@ import '../../features/auth/presentation/owner_signin_page.dart';
 import '../../features/availability/presentation/availability_page.dart';
 import '../../features/clients/presentation/clients_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
+import '../../features/equipment/presentation/equipment_catalog_page.dart';
+import '../../features/equipment/presentation/equipment_detail_page.dart';
+import '../../features/equipment/presentation/equipment_form_page.dart';
 import '../../features/estimates/estimates_page.dart';
 import '../../features/estimates/presentation/checklist_templates_page.dart';
 import '../../features/estimates/presentation/service_catalog_page.dart';
@@ -88,6 +91,9 @@ class AppRouter {
   static const requests = '/requests';
   static const requestWork = '/requests/new';
   static const checklistTemplates = '/estimates/checklists';
+  static const equipmentCatalog = '/equipment';
+  static const equipmentDetail = '/equipment/detail';
+  static const equipmentForm = '/equipment/form';
 /// generates appropriate page route based on settings and passes role/auth context
   
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
@@ -227,6 +233,29 @@ class AppRouter {
       case checklistTemplates:
         return _NoAnimationPageRoute(
           builder: (_) => ChecklistTemplatesPage(role: role, authToken: authToken),
+          settings: settings,
+        );
+      case equipmentCatalog:
+        return _NoAnimationPageRoute(
+          builder: (_) => EquipmentCatalogPage(role: role, authToken: authToken),
+          settings: settings,
+        );
+      case equipmentDetail:
+        return _NoAnimationPageRoute(
+          builder: (_) => EquipmentDetailPage(
+            role: role,
+            authToken: authToken,
+            equipmentId: (args['equipmentId'] as String?) ?? '',
+          ),
+          settings: settings,
+        );
+      case equipmentForm:
+        return _NoAnimationPageRoute(
+          builder: (_) => EquipmentFormPage(
+            role: role,
+            authToken: authToken,
+            existingId: args['existingId'] as String?,
+          ),
           settings: settings,
         );
       default:

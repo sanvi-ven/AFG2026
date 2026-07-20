@@ -292,6 +292,10 @@ class AppScaffold extends StatelessWidget {
             label: 'My Hours',
             route: AppRouter.myHours,
             icon: Icons.access_time),
+        _NavItem(
+            label: 'Equipment',
+            route: AppRouter.equipmentCatalog,
+            icon: Icons.build_outlined),
       ];
     }
 
@@ -357,6 +361,10 @@ class AppScaffold extends StatelessWidget {
           route: AppRouter.todaysRoute,
           icon: Icons.alt_route_outlined,
         ),
+        _NavItem(
+            label: 'Equipment',
+            route: AppRouter.equipmentCatalog,
+            icon: Icons.build_outlined),
       ];
     }
 

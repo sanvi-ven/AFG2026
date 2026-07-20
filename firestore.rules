@@ -82,6 +82,18 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Equipment catalog (durable items with embedded units + consumable
+    // supplies). Same open trust model as the collections above — this app has
+    // no real Firebase Auth session to gate on.
+    match /equipment/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Broken-equipment incident reports (with embedded repair attempts).
+    match /broken_reports/{document=**} {
+      allow read, write: if true;
+    }
+
     // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;
