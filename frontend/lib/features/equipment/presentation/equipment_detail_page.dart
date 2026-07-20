@@ -93,10 +93,17 @@ class EquipmentDetailPage extends StatelessWidget {
     );
     if (confirmed != true) return;
 
-    if (archiving) {
-      await EquipmentService.archiveEquipment(item.id);
-    } else {
-      await EquipmentService.restoreEquipment(item.id);
+    try {
+      if (archiving) {
+        await EquipmentService.archiveEquipment(item.id);
+      } else {
+        await EquipmentService.restoreEquipment(item.id);
+      }
+      if (!context.mounted) return;
+      _snack(context, archiving ? 'Item archived.' : 'Item restored.');
+    } catch (error) {
+      if (!context.mounted) return;
+      _snack(context, _errorText(error));
     }
   }
 
@@ -1039,7 +1046,7 @@ class EquipmentDetailPage extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).whenComplete(controller.dispose);
   }
 
   /// prompt for an integer. Returns null if cancelled or invalid-and-dismissed.
@@ -1094,7 +1101,7 @@ class EquipmentDetailPage extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).whenComplete(controller.dispose);
   }
 
   // --- small helpers --------------------------------------------------------

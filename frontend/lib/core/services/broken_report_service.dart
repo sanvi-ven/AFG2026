@@ -31,6 +31,18 @@ class BrokenReportService {
     });
   }
 
+  /// every report (open + repaired), newest first. Used by reporting to count
+  /// how often each item has broken historically, not just what's open now.
+  static Stream<List<BrokenReport>> watchAllReports() {
+    return _collection.snapshots().map((snapshot) {
+      final reports = snapshot.docs
+          .map((doc) => BrokenReport.fromMap({...doc.data(), 'id': doc.id}))
+          .toList();
+      reports.sort((a, b) => b.reportedAt.compareTo(a.reportedAt));
+      return reports;
+    });
+  }
+
   /// all reports (open + repaired) for one equipment item, newest first.
   static Stream<List<BrokenReport>> watchForEquipment(String equipmentId) {
     return _collection
