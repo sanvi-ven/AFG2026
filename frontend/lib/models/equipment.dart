@@ -201,3 +201,8 @@ class EquipmentUnitStatus {
   static const broken = 'broken';
   static const inRepair = 'inRepair';
 }
+
+/// how far ahead a unit's next-service date counts as "due soon." Shared by
+/// ReminderCheckService (which fires the notification) and the equipment
+/// detail page (which shows the badge), so the two can't silently drift apart.
+const Duration equipmentServiceDueLeadTime = Duration(days: 14);

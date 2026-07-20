@@ -6,10 +6,12 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/broken_report_service.dart';
 import '../../../core/services/equipment_reservation_service.dart';
 import '../../../core/services/equipment_service.dart';
+import '../../../core/services/service_record_service.dart';
 import '../../../core/state/employee_session.dart';
 import '../../../models/broken_report.dart';
 import '../../../models/equipment.dart';
 import '../../../models/equipment_reservation.dart';
+import '../../../models/service_record.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
 /// detail view of a catalog item, visible to both roles. Renders the photo
@@ -30,7 +32,22 @@ class EquipmentDetailPage extends StatelessWidget {
   final String? authToken;
   final String equipmentId;
 
+  /// how far ahead a unit's next-service date counts as "due soon" — shared
+  /// with ReminderCheckService so the badge and the notification always agree.
+  static const _serviceDueLeadTime = equipmentServiceDueLeadTime;
+
   bool get _isOwner => role == 'owner';
+
+  /// true when a unit's next service is within the lead time (or already past)
+  /// and not currently snoozed.
+  bool _isServiceDue(EquipmentUnit unit) {
+    final due = unit.nextServiceDueDate;
+    if (due == null) return false;
+    final now = DateTime.now();
+    final snoozed = unit.serviceDueSnoozedUntil;
+    if (snoozed != null && snoozed.isAfter(now)) return false;
+    return !due.isAfter(now.add(_serviceDueLeadTime));
+  }
 
   /// who is acting — the owner is attributed as 'owner'/'Owner' (matching
   /// ownerNotificationRecipientId); an employee comes from the active session.
@@ -119,8 +136,9 @@ class EquipmentDetailPage extends StatelessWidget {
                 _buildRequestSection(context, item),
                 const SizedBox(height: 24),
                 _buildReservationHistory(context, item),
+                const SizedBox(height: 24),
+                _buildServiceHistory(context, item),
               ],
-              // Phase 4: service history + due badges slot in here.
             ],
           );
         },
@@ -391,6 +409,7 @@ class EquipmentDetailPage extends StatelessWidget {
                   for (final unit in units)
                     _UnitChip(
                       unit: unit,
+                      serviceDue: _isServiceDue(unit),
                       onTap: () =>
                           _showUnitSheet(context, item, unit, reports),
                     ),
@@ -451,6 +470,8 @@ class EquipmentDetailPage extends StatelessWidget {
                   ],
                   const SizedBox(height: 20),
                   ..._unitActions(pageContext, sheetCtx, item, unit, openReport),
+                  const SizedBox(height: 8),
+                  ..._serviceActions(pageContext, sheetCtx, item, unit),
                 ],
               ),
             ),
@@ -463,9 +484,20 @@ class EquipmentDetailPage extends StatelessWidget {
   Widget _serviceInfo(BuildContext context, EquipmentUnit unit) {
     final last = unit.lastServiceDate;
     final next = unit.nextServiceDueDate;
+    final due = _isServiceDue(unit);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(
+          children: [
+            Text('Service', style: Theme.of(context).textTheme.titleSmall),
+            if (due) ...[
+              const SizedBox(width: 8),
+              _Pill(label: 'Service due', color: Colors.amber.shade800),
+            ],
+          ],
+        ),
+        const SizedBox(height: 4),
         Text(
           last == null
               ? 'Not yet serviced'
@@ -479,6 +511,130 @@ class EquipmentDetailPage extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  /// service-related actions in the unit sheet: "Log service" (both roles),
+  /// plus "Snooze" when the unit is currently due.
+  List<Widget> _serviceActions(
+    BuildContext pageContext,
+    BuildContext sheetCtx,
+    EquipmentItem item,
+    EquipmentUnit unit,
+  ) {
+    return [
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () {
+            Navigator.of(sheetCtx).pop();
+            _logService(pageContext, item, unit);
+          },
+          icon: const Icon(Icons.build_outlined, size: 18),
+          label: const Text('Log service'),
+        ),
+      ),
+      if (_isServiceDue(unit)) ...[
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              Navigator.of(sheetCtx).pop();
+              _snoozeService(pageContext, item, unit);
+            },
+            icon: const Icon(Icons.snooze_outlined, size: 18),
+            label: const Text('Snooze service reminder'),
+          ),
+        ),
+      ],
+    ];
+  }
+
+  Widget _buildServiceHistory(BuildContext context, EquipmentItem item) {
+    return StreamBuilder<List<ServiceRecord>>(
+      stream: ServiceRecordService.watchForEquipment(item.id),
+      builder: (context, snapshot) {
+        final records = snapshot.data ?? const <ServiceRecord>[];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Service history',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                records.isEmpty)
+              const Center(child: CircularProgressIndicator())
+            else if (records.isEmpty)
+              const Text('No service logged yet.')
+            else
+              for (final record in records) _ServiceRow(record: record),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _logService(
+      BuildContext context, EquipmentItem item, EquipmentUnit unit) async {
+    final request = await showDialog<_LogServiceRequest>(
+      context: context,
+      builder: (_) => _LogServiceDialog(
+        defaultInterval:
+            unit.serviceIntervalDays ?? item.defaultServiceIntervalDays,
+      ),
+    );
+    if (request == null || !context.mounted) return;
+
+    try {
+      final actor = _actor();
+      await ServiceRecordService.logService(
+        equipmentId: item.id,
+        unitNumber: unit.unitNumber,
+        servicedDate: request.servicedDate,
+        note: request.note,
+        mode: request.mode,
+        explicitNextDate: request.explicitNextDate,
+        intervalDays: request.intervalDays,
+        recordedByRole: role,
+        recordedById: actor.id,
+        recordedByName: actor.name,
+      );
+      if (!context.mounted) return;
+      _snack(context, 'Service logged for unit #${unit.unitNumber}.');
+    } catch (error) {
+      if (!context.mounted) return;
+      _snack(context, _errorText(error));
+    }
+  }
+
+  Future<void> _snoozeService(
+      BuildContext context, EquipmentItem item, EquipmentUnit unit) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      helpText: 'Snooze service reminder until',
+      initialDate: now.add(const Duration(days: 7)),
+      firstDate: now.add(const Duration(days: 1)),
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (picked == null || !context.mounted) return;
+    // showDatePicker returns a date-only DateTime (midnight) — normalize to
+    // end-of-day so "snooze until tomorrow" actually means ~24h, not however
+    // many hours remain until midnight tonight.
+    final until = DateTime(picked.year, picked.month, picked.day, 23, 59, 59);
+
+    try {
+      await EquipmentService.snoozeUnitServiceDue(
+        equipmentId: item.id,
+        unitNumber: unit.unitNumber,
+        until: until,
+      );
+      if (!context.mounted) return;
+      _snack(context, 'Service reminder snoozed to ${_fmtDate(picked)}.');
+    } catch (error) {
+      if (!context.mounted) return;
+      _snack(context, _errorText(error));
+    }
   }
 
   Widget _reportDetails(BuildContext context, BrokenReport report) {
@@ -1040,10 +1196,237 @@ class _ReservationRow extends StatelessWidget {
   }
 }
 
+/// the collected inputs from [_LogServiceDialog], handed back to the page which
+/// owns the actual service call + SnackBar.
+class _LogServiceRequest {
+  const _LogServiceRequest({
+    required this.servicedDate,
+    required this.note,
+    required this.mode,
+    this.explicitNextDate,
+    this.intervalDays,
+  });
+
+  final DateTime servicedDate;
+  final String note;
+  final String mode;
+  final DateTime? explicitNextDate;
+  final int? intervalDays;
+}
+
+/// serviced-date + note + a mode toggle (explicit next date vs interval days)
+/// for logging a service record. Follows the codebase's manual showDatePicker
+/// pattern; the interval field is prefilled from the unit/item default.
+class _LogServiceDialog extends StatefulWidget {
+  const _LogServiceDialog({this.defaultInterval});
+
+  final int? defaultInterval;
+
+  @override
+  State<_LogServiceDialog> createState() => _LogServiceDialogState();
+}
+
+class _LogServiceDialogState extends State<_LogServiceDialog> {
+  DateTime _servicedDate = DateTime.now();
+  final _noteController = TextEditingController();
+  late final TextEditingController _intervalController;
+  String _mode = ServiceDueMode.intervalDays;
+  DateTime? _explicitNextDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _intervalController = TextEditingController(
+      text: widget.defaultInterval != null ? '${widget.defaultInterval}' : '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    _intervalController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickServicedDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _servicedDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+    if (picked != null) setState(() => _servicedDate = picked);
+  }
+
+  Future<void> _pickExplicitNextDate() async {
+    final base = _explicitNextDate ?? _servicedDate.add(const Duration(days: 90));
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: base,
+      firstDate: _servicedDate,
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+    );
+    if (picked != null) setState(() => _explicitNextDate = picked);
+  }
+
+  void _submit() {
+    if (_mode == ServiceDueMode.intervalDays) {
+      final interval = int.tryParse(_intervalController.text.trim());
+      if (interval == null || interval <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a positive number of days.')),
+        );
+        return;
+      }
+      Navigator.of(context).pop(_LogServiceRequest(
+        servicedDate: _servicedDate,
+        note: _noteController.text.trim(),
+        mode: ServiceDueMode.intervalDays,
+        intervalDays: interval,
+      ));
+    } else {
+      if (_explicitNextDate == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pick the next service date.')),
+        );
+        return;
+      }
+      Navigator.of(context).pop(_LogServiceRequest(
+        servicedDate: _servicedDate,
+        note: _noteController.text.trim(),
+        mode: ServiceDueMode.explicitDate,
+        explicitNextDate: _explicitNextDate,
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Log service'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.calendar_today_outlined),
+              title: const Text('Serviced on'),
+              subtitle: Text(DateFormat('MMM d, yyyy').format(_servicedDate)),
+              onTap: _pickServicedDate,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _noteController,
+              minLines: 1,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Note (what was done)',
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Next service due',
+                style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                    value: ServiceDueMode.intervalDays,
+                    label: Text('Interval'),
+                    icon: Icon(Icons.repeat)),
+                ButtonSegment(
+                    value: ServiceDueMode.explicitDate,
+                    label: Text('Date'),
+                    icon: Icon(Icons.event)),
+              ],
+              selected: {_mode},
+              onSelectionChanged: (selection) =>
+                  setState(() => _mode = selection.first),
+            ),
+            const SizedBox(height: 12),
+            if (_mode == ServiceDueMode.intervalDays)
+              TextField(
+                controller: _intervalController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Days until next service',
+                  suffixText: 'days',
+                ),
+              )
+            else
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.event_outlined),
+                title: const Text('Next service date'),
+                subtitle: Text(_explicitNextDate == null
+                    ? 'Not set'
+                    : DateFormat('MMM d, yyyy').format(_explicitNextDate!)),
+                onTap: _pickExplicitNextDate,
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel')),
+        FilledButton(onPressed: _submit, child: const Text('Save')),
+      ],
+    );
+  }
+}
+
+/// one row in the detail-page service history: serviced date, note, next-due
+/// date, and who logged it.
+class _ServiceRow extends StatelessWidget {
+  const _ServiceRow({required this.record});
+
+  final ServiceRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    final dateFmt = DateFormat('MMM d, yyyy');
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          child: Text('#${record.unitNumber}',
+              style: const TextStyle(fontSize: 12)),
+        ),
+        title: Text('Serviced ${dateFmt.format(record.servicedDate)}'),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (record.note.isNotEmpty) Text(record.note),
+            Text('Next due: ${dateFmt.format(record.nextServiceDueDate)}'),
+            Text(
+              'by ${record.recordedByName.isEmpty ? 'Unknown' : record.recordedByName}',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+        isThreeLine: true,
+      ),
+    );
+  }
+}
+
 class _UnitChip extends StatelessWidget {
-  const _UnitChip({required this.unit, required this.onTap});
+  const _UnitChip({
+    required this.unit,
+    required this.serviceDue,
+    required this.onTap,
+  });
 
   final EquipmentUnit unit;
+  final bool serviceDue;
   final VoidCallback onTap;
 
   @override
@@ -1062,11 +1445,26 @@ class _UnitChip extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Unit #${unit.unitNumber}',
-                style: TextStyle(color: color, fontWeight: FontWeight.w700)),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Unit #${unit.unitNumber}',
+                    style:
+                        TextStyle(color: color, fontWeight: FontWeight.w700)),
+                if (serviceDue) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.build_circle_outlined,
+                      size: 14, color: Colors.amber.shade800),
+                ],
+              ],
+            ),
             const SizedBox(height: 2),
             Text(_statusLabel(unit.status),
                 style: TextStyle(color: color, fontSize: 11)),
+            if (serviceDue)
+              Text('Service due',
+                  style:
+                      TextStyle(color: Colors.amber.shade800, fontSize: 10)),
           ],
         ),
       ),

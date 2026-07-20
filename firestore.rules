@@ -99,6 +99,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Service/maintenance records logged against Equipment units.
+    match /service_records/{document=**} {
+      allow read, write: if true;
+    }
+
     // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;

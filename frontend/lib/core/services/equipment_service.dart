@@ -139,10 +139,21 @@ class EquipmentService {
     required String id,
     required bool flagged,
   }) async {
-    await _collection.doc(id).set(
-      {'lowStockManualFlag': flagged, 'updatedAt': DateTime.now()},
-      SetOptions(merge: true),
-    );
+    final data = <String, dynamic>{
+      'lowStockManualFlag': flagged,
+      'updatedAt': DateTime.now(),
+    };
+    // if this change leaves the item NOT low, clear any prior low-stock
+    // notified stamp so a future low-stock episode notifies again (Phase 4).
+    final doc = await _collection.doc(id).get();
+    if (doc.exists) {
+      final item = EquipmentItem.fromMap({...?doc.data(), 'id': doc.id});
+      final wouldBeLow = flagged ||
+          (item.lowStockThreshold != null &&
+              item.quantity <= item.lowStockThreshold!);
+      if (!wouldBeLow) data['lowStockNotifiedAt'] = null;
+    }
+    await _collection.doc(id).set(data, SetOptions(merge: true));
   }
 
   // --- Phase 2: per-unit status + count adjustment ---------------------------
@@ -280,8 +291,140 @@ class EquipmentService {
     final currentQuantity = (data?['quantity'] as num?)?.toInt() ?? 0;
     final newQuantity = math.max(0, currentQuantity + delta);
 
+    final write = <String, dynamic>{
+      'quantity': newQuantity,
+      'updatedAt': DateTime.now(),
+    };
+    // if the restock leaves the item NOT low, clear any prior low-stock
+    // notified stamp so a future low-stock episode notifies again (Phase 4).
+    final threshold = (data?['lowStockThreshold'] as num?)?.toInt();
+    final manualFlag = data?['lowStockManualFlag'] as bool? ?? false;
+    final wouldBeLow =
+        manualFlag || (threshold != null && newQuantity <= threshold);
+    if (!wouldBeLow) write['lowStockNotifiedAt'] = null;
+
+    await _collection.doc(equipmentId).set(write, SetOptions(merge: true));
+  }
+
+  // --- Phase 4: per-unit service info + due/snooze/notified stamps -----------
+
+  /// shared read-modify-write for a single embedded unit: reads the parent doc,
+  /// finds the unit by number, replaces it with [update]'s result, and writes
+  /// the whole units list back via merge (this codebase does not use
+  /// FieldValue array ops). Mirrors [setUnitStatus]'s pattern.
+  static Future<void> _updateUnit({
+    required String equipmentId,
+    required int unitNumber,
+    required EquipmentUnit Function(EquipmentUnit existing) update,
+  }) async {
+    final doc = await _collection.doc(equipmentId).get();
+    if (!doc.exists) {
+      throw Exception('Equipment $equipmentId no longer exists.');
+    }
+    final item = EquipmentItem.fromMap({...?doc.data(), 'id': doc.id});
+
+    final index = item.units.indexWhere((u) => u.unitNumber == unitNumber);
+    if (index < 0) {
+      throw Exception('Unit #$unitNumber does not exist on this item.');
+    }
+
+    final updatedUnits = List<EquipmentUnit>.from(item.units);
+    updatedUnits[index] = update(item.units[index]);
+
     await _collection.doc(equipmentId).set(
-      {'quantity': newQuantity, 'updatedAt': DateTime.now()},
+      {
+        'units': updatedUnits.map((u) => u.toMap()).toList(),
+        'updatedAt': DateTime.now(),
+      },
+      SetOptions(merge: true),
+    );
+  }
+
+  /// stamp a unit's service fields after a service record is logged. Sets
+  /// [lastServiceDate] and [nextServiceDueDate]. [serviceIntervalDays] is
+  /// written only when non-null (service logged by interval); when null the
+  /// unit's existing interval is left untouched (an explicit one-off next date
+  /// shouldn't wipe a recurring interval). When [clearSnooze] is true, also
+  /// nulls out serviceDueSnoozedUntil + serviceDueNotifiedAt so a fresh service
+  /// resets any prior due/snooze/notified state.
+  static Future<void> updateUnitServiceInfo({
+    required String equipmentId,
+    required int unitNumber,
+    required DateTime lastServiceDate,
+    required DateTime nextServiceDueDate,
+    int? serviceIntervalDays,
+    bool clearSnooze = true,
+  }) async {
+    await _updateUnit(
+      equipmentId: equipmentId,
+      unitNumber: unitNumber,
+      update: (existing) => EquipmentUnit(
+        unitNumber: existing.unitNumber,
+        status: existing.status,
+        currentBrokenReportId: existing.currentBrokenReportId,
+        lastServiceDate: lastServiceDate,
+        nextServiceDueDate: nextServiceDueDate,
+        serviceIntervalDays:
+            serviceIntervalDays ?? existing.serviceIntervalDays,
+        serviceDueSnoozedUntil:
+            clearSnooze ? null : existing.serviceDueSnoozedUntil,
+        serviceDueNotifiedAt:
+            clearSnooze ? null : existing.serviceDueNotifiedAt,
+      ),
+    );
+  }
+
+  /// snooze a unit's service-due alert until [until]. Clears serviceDueNotifiedAt
+  /// so it can notify again once the snooze passes.
+  static Future<void> snoozeUnitServiceDue({
+    required String equipmentId,
+    required int unitNumber,
+    required DateTime until,
+  }) async {
+    await _updateUnit(
+      equipmentId: equipmentId,
+      unitNumber: unitNumber,
+      update: (existing) => EquipmentUnit(
+        unitNumber: existing.unitNumber,
+        status: existing.status,
+        currentBrokenReportId: existing.currentBrokenReportId,
+        lastServiceDate: existing.lastServiceDate,
+        nextServiceDueDate: existing.nextServiceDueDate,
+        serviceIntervalDays: existing.serviceIntervalDays,
+        serviceDueSnoozedUntil: until,
+        serviceDueNotifiedAt: null,
+      ),
+    );
+  }
+
+  /// stamp a unit's serviceDueNotifiedAt to now — used by the reminder scan to
+  /// dedupe so a service-due alert doesn't refire on every dashboard load.
+  static Future<void> stampUnitServiceDueNotified({
+    required String equipmentId,
+    required int unitNumber,
+  }) async {
+    await _updateUnit(
+      equipmentId: equipmentId,
+      unitNumber: unitNumber,
+      update: (existing) => EquipmentUnit(
+        unitNumber: existing.unitNumber,
+        status: existing.status,
+        currentBrokenReportId: existing.currentBrokenReportId,
+        lastServiceDate: existing.lastServiceDate,
+        nextServiceDueDate: existing.nextServiceDueDate,
+        serviceIntervalDays: existing.serviceIntervalDays,
+        serviceDueSnoozedUntil: existing.serviceDueSnoozedUntil,
+        serviceDueNotifiedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  /// stamp an item's lowStockNotifiedAt to now — used by the reminder scan to
+  /// dedupe low-stock alerts (cleared again by restock / manual-flag changes
+  /// that leave the item no longer low).
+  static Future<void> stampLowStockNotified(String equipmentId) async {
+    await _collection.doc(equipmentId).set(
+      {'lowStockNotifiedAt': DateTime.now(), 'updatedAt': DateTime.now()},
       SetOptions(merge: true),
     );
   }
