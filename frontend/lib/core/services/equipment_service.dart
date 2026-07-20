@@ -40,6 +40,16 @@ class EquipmentService {
     });
   }
 
+  /// one-time fetch of a single catalog item, or null if it doesn't exist.
+  /// Used where a fresh read is needed instead of trusting a possibly-stale
+  /// value already in hand (e.g. re-checking unit statuses right before a
+  /// reservation is booked).
+  static Future<EquipmentItem?> fetchOnce(String id) async {
+    final doc = await _collection.doc(id).get();
+    if (!doc.exists) return null;
+    return EquipmentItem.fromMap({...?doc.data(), 'id': doc.id});
+  }
+
   /// create a catalog item. For Equipment, builds [quantity] units numbered
   /// 1..quantity all starting active; Supply has no units.
   static Future<void> createEquipment({

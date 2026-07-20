@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/services/broken_report_service.dart';
+import '../../../core/services/equipment_reservation_service.dart';
 import '../../../core/services/equipment_service.dart';
 import '../../../core/state/employee_session.dart';
 import '../../../models/broken_report.dart';
 import '../../../models/equipment.dart';
+import '../../../models/equipment_reservation.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
 /// detail view of a catalog item, visible to both roles. Renders the photo
@@ -112,8 +115,11 @@ class EquipmentDetailPage extends StatelessWidget {
               if (item.isEquipment) ...[
                 const SizedBox(height: 24),
                 _buildUnitSection(context, item),
+                const SizedBox(height: 24),
+                _buildRequestSection(context, item),
+                const SizedBox(height: 24),
+                _buildReservationHistory(context, item),
               ],
-              // Phase 3: reservation / request section slots in here.
               // Phase 4: service history + due badges slot in here.
             ],
           );
@@ -223,6 +229,141 @@ class EquipmentDetailPage extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  // --- reservations (Equipment only) ----------------------------------------
+
+  /// number of units currently in an active (reservable) state — the physical
+  /// ceiling on how many can be requested at once. The real per-window
+  /// conflict check happens in the service.
+  int _availableUnitCount(EquipmentItem item) => item.units
+      .where((u) => u.status == EquipmentUnitStatus.active)
+      .length;
+
+  Widget _buildRequestSection(BuildContext context, EquipmentItem item) {
+    final available = _availableUnitCount(item);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Request', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Text(
+          available == 0
+              ? 'No active units are available to reserve right now.'
+              : 'Reserve a unit for a day and time window. It\'s approved '
+                  'automatically if a unit is free.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: available == 0
+                ? null
+                : () => _requestEquipment(context, item),
+            icon: const Icon(Icons.event_available_outlined, size: 18),
+            label: const Text('Request this equipment'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReservationHistory(BuildContext context, EquipmentItem item) {
+    return StreamBuilder<List<EquipmentReservation>>(
+      stream: EquipmentReservationService.watchForEquipment(item.id),
+      builder: (context, snapshot) {
+        final reservations = snapshot.data ?? const <EquipmentReservation>[];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Reservations',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                reservations.isEmpty)
+              const Center(child: CircularProgressIndicator())
+            else if (reservations.isEmpty)
+              const Text('No reservations yet.')
+            else
+              for (final reservation in reservations)
+                _ReservationRow(
+                  reservation: reservation,
+                  canCancel: _isOwner && reservation.isActive,
+                  onCancel: () => _cancelReservation(context, reservation),
+                ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _requestEquipment(
+      BuildContext context, EquipmentItem item) async {
+    final available = _availableUnitCount(item);
+    if (available == 0) {
+      _snack(context, 'No active units are available to reserve.');
+      return;
+    }
+
+    final request = await showDialog<_ReserveRequest>(
+      context: context,
+      builder: (_) => _ReserveDialog(maxQuantity: available),
+    );
+    if (request == null || !context.mounted) return;
+
+    try {
+      final actor = _actor();
+      final created = await EquipmentReservationService.reserveUnits(
+        equipment: item,
+        quantity: request.quantity,
+        startTime: request.start,
+        endTime: request.end,
+        employeeId: actor.id,
+        employeeName: actor.name,
+      );
+      if (!context.mounted) return;
+      final units = created.map((r) => '#${r.unitNumber}').join(', ');
+      _snack(
+          context,
+          created.length == 1
+              ? 'Reserved unit $units.'
+              : 'Reserved units $units.');
+    } catch (error) {
+      if (!context.mounted) return;
+      _snack(context, _errorText(error));
+    }
+  }
+
+  Future<void> _cancelReservation(
+      BuildContext context, EquipmentReservation reservation) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel reservation'),
+        content: Text(
+            'Cancel ${reservation.employeeName}\'s reservation of unit '
+            '#${reservation.unitNumber} on ${reservation.date}?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Back')),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Cancel reservation')),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await EquipmentReservationService.cancelReservation(id: reservation.id);
+      if (!context.mounted) return;
+      _snack(context, 'Reservation cancelled.');
+    } catch (error) {
+      if (!context.mounted) return;
+      _snack(context, _errorText(error));
+    }
   }
 
   // --- per-unit status grid (Equipment only) --------------------------------
@@ -690,6 +831,213 @@ class EquipmentDetailPage extends StatelessWidget {
 
   String _fmtDateTime(DateTime d) =>
       '${_fmtDate(d)} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+}
+
+/// the collected inputs from [_ReserveDialog], handed back to the page which
+/// owns the actual service call + SnackBar.
+class _ReserveRequest {
+  const _ReserveRequest({
+    required this.quantity,
+    required this.start,
+    required this.end,
+  });
+
+  final int quantity;
+  final DateTime start;
+  final DateTime end;
+}
+
+/// quantity + date + start/end-time picker for a reservation. Follows the
+/// codebase's manual showDatePicker + showTimePicker pattern (no date-range
+/// package), keeping separate start/end time-of-day state fields.
+class _ReserveDialog extends StatefulWidget {
+  const _ReserveDialog({required this.maxQuantity});
+
+  final int maxQuantity;
+
+  @override
+  State<_ReserveDialog> createState() => _ReserveDialogState();
+}
+
+class _ReserveDialogState extends State<_ReserveDialog> {
+  int _quantity = 1;
+  DateTime _date = DateTime.now();
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) setState(() => _date = picked);
+  }
+
+  Future<void> _pickStart() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _startTime ?? TimeOfDay.now(),
+    );
+    if (picked != null) setState(() => _startTime = picked);
+  }
+
+  Future<void> _pickEnd() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _endTime ?? _startTime ?? TimeOfDay.now(),
+    );
+    if (picked != null) setState(() => _endTime = picked);
+  }
+
+  DateTime _combine(TimeOfDay time) =>
+      DateTime(_date.year, _date.month, _date.day, time.hour, time.minute);
+
+  void _submit() {
+    if (_startTime == null || _endTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pick a start and end time.')),
+      );
+      return;
+    }
+    final start = _combine(_startTime!);
+    final end = _combine(_endTime!);
+    if (!start.isBefore(end)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('End time must be after start time.')),
+      );
+      return;
+    }
+    Navigator.of(context).pop(_ReserveRequest(
+      quantity: _quantity,
+      start: start,
+      end: end,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dateLabel = DateFormat('MMM d, yyyy').format(_date);
+    return AlertDialog(
+      title: const Text('Request equipment'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Quantity'),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                IconButton.outlined(
+                  onPressed: _quantity > 1
+                      ? () => setState(() => _quantity--)
+                      : null,
+                  icon: const Icon(Icons.remove),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text('$_quantity',
+                      style: Theme.of(context).textTheme.titleLarge),
+                ),
+                IconButton.outlined(
+                  onPressed: _quantity < widget.maxQuantity
+                      ? () => setState(() => _quantity++)
+                      : null,
+                  icon: const Icon(Icons.add),
+                ),
+              ],
+            ),
+            Text('${widget.maxQuantity} unit(s) available',
+                style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 16),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.calendar_today_outlined),
+              title: const Text('Date'),
+              subtitle: Text(dateLabel),
+              onTap: _pickDate,
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.schedule_outlined),
+              title: const Text('Start time'),
+              subtitle:
+                  Text(_startTime == null ? 'Not set' : _startTime!.format(context)),
+              onTap: _pickStart,
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.schedule_outlined),
+              title: const Text('End time'),
+              subtitle:
+                  Text(_endTime == null ? 'Not set' : _endTime!.format(context)),
+              onTap: _pickEnd,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel')),
+        FilledButton(onPressed: _submit, child: const Text('Reserve')),
+      ],
+    );
+  }
+}
+
+/// one row in the detail-page reservation history: unit, date, time window,
+/// employee, and an active/cancelled indicator (+ owner-only cancel action).
+class _ReservationRow extends StatelessWidget {
+  const _ReservationRow({
+    required this.reservation,
+    required this.canCancel,
+    required this.onCancel,
+  });
+
+  final EquipmentReservation reservation;
+  final bool canCancel;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final timeFmt = DateFormat('h:mm a');
+    final window =
+        '${timeFmt.format(reservation.startTime)} – ${timeFmt.format(reservation.endTime)}';
+    final cancelled = reservation.isCancelled;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          child: Text('#${reservation.unitNumber}',
+              style: const TextStyle(fontSize: 12)),
+        ),
+        title: Text('${reservation.date} · $window'),
+        subtitle: Text(reservation.employeeName),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _Pill(
+              label: cancelled ? 'Cancelled' : 'Active',
+              color: cancelled ? Colors.grey : Colors.green,
+            ),
+            if (canCancel) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                onPressed: onCancel,
+                icon: const Icon(Icons.cancel_outlined),
+                tooltip: 'Cancel reservation',
+                iconSize: 20,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _UnitChip extends StatelessWidget {
