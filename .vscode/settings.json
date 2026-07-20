@@ -3,5 +3,6 @@
   "chat.tools.terminal.autoApprove": {
     "flutter": true,
     "npx --yes vercel": true
-  }
+  },
+  "java.import.gradle.java.home": "/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home"
 }
