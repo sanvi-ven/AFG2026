@@ -199,11 +199,13 @@ class _LoginPageState extends State<LoginPage> {
                     onPressed: _goToSignup,
                     child: Text(_selectedRole == 'employee' ? 'Create Employee Profile' : 'Create Client Profile'),
                   ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _goToOwnerSignin,
-                    child: const Text('Business Owner Sign In'),
-                  ),
+                  if (_selectedRole == 'employee') ...[
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: _goToOwnerSignin,
+                      child: const Text('Business Owner Sign In'),
+                    ),
+                  ],
                   if (_selectedRole == 'client') ...[
                     const SizedBox(height: 8),
                     TextButton(

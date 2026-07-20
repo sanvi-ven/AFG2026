@@ -133,6 +133,24 @@ class ReportingService {
     return rows;
   }
 
+  /// hours worked on a single time entry (0 if not yet clocked out)
+  static double hoursForEntry(TimeEntry entry) {
+    final clockInAt = entry.clockInAt;
+    final clockOutAt = entry.clockOutAt;
+    if (clockInAt == null || clockOutAt == null) return 0;
+    return clockOutAt.difference(clockInAt).inMinutes / 60.0;
+  }
+
+  /// the hourly rate that actually applies to this entry — its own
+  /// wageOverride when set, else the employee's normal hourlyRate (0 if
+  /// neither is set)
+  static double effectiveRateForEntry(TimeEntry entry, EmployeeProfile? employee) =>
+      entry.wageOverride ?? employee?.hourlyRate ?? 0;
+
+  /// calculated pay for a single time entry: hoursForEntry × effectiveRateForEntry
+  static double payoutForEntry(TimeEntry entry, EmployeeProfile? employee) =>
+      hoursForEntry(entry) * effectiveRateForEntry(entry, employee);
+
   /// per-employee hours worked and calculated payout. Each entry's payout
   /// uses its own wageOverride when set (e.g. a one-off holiday/overtime
   /// rate), falling back to the employee's normal hourlyRate (0 if unset) —
@@ -146,13 +164,8 @@ class ReportingService {
       var hours = 0.0;
       var payout = 0.0;
       for (final entry in entries.where((e) => e.employeeId == employee.employeeId)) {
-        final clockInAt = entry.clockInAt;
-        final clockOutAt = entry.clockOutAt;
-        if (clockInAt == null || clockOutAt == null) continue;
-        final entryHours = clockOutAt.difference(clockInAt).inMinutes / 60.0;
-        final rate = entry.wageOverride ?? employee.hourlyRate ?? 0;
-        hours += entryHours;
-        payout += entryHours * rate;
+        hours += hoursForEntry(entry);
+        payout += payoutForEntry(entry, employee);
       }
       return EmployeePayoutRow(
         employeeId: employee.employeeId,

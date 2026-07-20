@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/router/app_router.dart';
+import '../../../core/services/reporting_service.dart';
 import '../../../core/services/time_entry_service.dart';
 import '../../../core/state/employee_session.dart';
 import '../../../models/time_entry.dart';
+import '../../../shared/utils/time_entry_pay_format.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
 /// general shift clock in/out and recent hours history for the signed-in employee
@@ -111,13 +113,15 @@ class _MyHoursPageState extends State<MyHoursPage> {
                       stream: TimeEntryService.watchEntriesForEmployee(employeeId),
                       builder: (context, snapshot) {
                         final entries = snapshot.data ?? const <TimeEntry>[];
-                        final totalDuration = entries.fold<Duration>(Duration.zero, (sum, e) {
-                          if (e.clockInAt == null || e.clockOutAt == null) return sum;
-                          return sum + e.clockOutAt!.difference(e.clockInAt!);
-                        });
                         final rate = profile?.hourlyRate;
-                        final hours = totalDuration.inMinutes / 60.0;
-                        final payout = rate != null ? hours * rate : null;
+                        final hours = entries.fold<double>(
+                          0,
+                          (sum, e) => sum + ReportingService.hoursForEntry(e),
+                        );
+                        final payout = entries.fold<double>(
+                          0,
+                          (sum, e) => sum + ReportingService.payoutForEntry(e, profile),
+                        );
 
                         return Card(
                           child: Padding(
@@ -131,7 +135,7 @@ class _MyHoursPageState extends State<MyHoursPage> {
                                 Text(rate == null
                                     ? 'Hourly rate not set yet.'
                                     : 'Rate: \$${rate.toStringAsFixed(2)}/hr'),
-                                if (payout != null) ...[
+                                if (payout > 0) ...[
                                   const SizedBox(height: 4),
                                   Text(
                                     'Total payout: \$${payout.toStringAsFixed(2)}',
@@ -165,11 +169,11 @@ class _MyHoursPageState extends State<MyHoursPage> {
                                 child: ListTile(
                                   title: Text(entry.date),
                                   subtitle: Text(
-                                    entry.clockInAt == null
-                                        ? 'No clock-in recorded'
-                                        : '${DateFormat('h:mm a').format(entry.clockInAt!)}'
-                                            ' – ${entry.clockOutAt == null ? 'in progress' : DateFormat('h:mm a').format(entry.clockOutAt!)}',
+                                    '${entry.clockInAt == null ? 'No clock-in recorded' : '${DateFormat('h:mm a').format(entry.clockInAt!)}'
+                                        ' – ${entry.clockOutAt == null ? 'in progress' : DateFormat('h:mm a').format(entry.clockOutAt!)}'}'
+                                    '\n${formatEntryPay(entry, profile)}',
                                   ),
+                                  isThreeLine: true,
                                 ),
                               ),
                           ],

@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../../core/services/comms_service.dart';
 import '../../../core/services/job_photo_upload_service.dart';
+import '../../../core/services/owner_settings_service.dart';
 import '../../../core/services/request_service.dart';
 
 /// standalone "request work" form — reachable both by a public, not-yet-a-client
@@ -81,6 +85,7 @@ class _RequestFormPageState extends State<RequestFormPage> {
         description: _descriptionController.text,
         photoUrls: _photoUrls,
       );
+      unawaited(_sendIntakeEmails());
       if (mounted) setState(() => _submitted = true);
     } catch (error) {
       if (mounted) {
@@ -90,6 +95,35 @@ class _RequestFormPageState extends State<RequestFormPage> {
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _sendIntakeEmails() async {
+    final name = _nameController.text.trim();
+    final clientEmail = _emailController.text.trim();
+    final description = _descriptionController.text.trim();
+
+    if (clientEmail.isNotEmpty) {
+      unawaited(CommsService.sendEmail(
+        to: clientEmail,
+        subject: 'We received your request',
+        htmlBody: '<p>Hi $name,</p>'
+            '<p>Thanks for reaching out — we received your request and will follow up with a quote soon.</p>',
+      ));
+    }
+
+    try {
+      final ownerSettings = await OwnerSettingsService.fetch();
+      final ownerEmail = ownerSettings.email.trim();
+      if (ownerEmail.isNotEmpty) {
+        unawaited(CommsService.sendEmail(
+          to: ownerEmail,
+          subject: 'New work request from $name',
+          htmlBody: '<p>New request from $name ($clientEmail).</p><p>$description</p>',
+        ));
+      }
+    } catch (_) {
+      // owner settings unavailable — skip the owner notification, in-app request inbox still has it
     }
   }
 

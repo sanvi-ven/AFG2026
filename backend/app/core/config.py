@@ -12,6 +12,17 @@ class Settings(BaseSettings):
     use_mock_firestore: bool = False
     dev_auth_bypass: bool = False
 
+    resend_api_key: str = ""
+    resend_from_email: str = ""
+
+    cloudinary_cloud_name: str = ""
+    cloudinary_api_key: str = ""
+    cloudinary_api_secret: str = ""
+
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

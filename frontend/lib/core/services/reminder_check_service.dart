@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import '../../models/app_notification.dart';
+import '../../models/client_profile.dart';
 import '../../models/invoice.dart';
 import 'client_profile_service.dart';
+import 'comms_service.dart';
 import 'invoice_service.dart';
 import 'local_notification_service.dart';
 import 'notification_service.dart';
@@ -17,6 +21,13 @@ class ReminderCheckService {
 
   static const _appointmentLookahead = Duration(hours: 48);
   static const _invoiceOverdueAfter = Duration(days: 7);
+
+  static ClientProfile? _findClient(List<ClientProfile> clients, String clientId) {
+    for (final client in clients) {
+      if (client.signupId == clientId) return client;
+    }
+    return null;
+  }
 
   static Future<void> checkAndCreateReminders() async {
     await _checkAppointmentReminders();
@@ -35,6 +46,7 @@ class ReminderCheckService {
 
       final clients = await ClientProfileService.watchAllProfiles().first;
       final clientName = ClientProfileService.displayNameFor(clients, job.clientId);
+      final client = _findClient(clients, job.clientId);
 
       await NotificationService.create(
         recipientRole: 'client',
@@ -57,6 +69,14 @@ class ReminderCheckService {
         title: 'Upcoming appointment',
         body: '$clientName — Est #${job.estimateNumber}',
       );
+      if (client != null && client.email.trim().isNotEmpty) {
+        unawaited(CommsService.sendEmail(
+          to: client.email.trim(),
+          subject: 'Upcoming appointment reminder',
+          htmlBody: '<p>Hi $clientName,</p>'
+              '<p>This is a reminder that your appointment for Estimate #${job.estimateNumber} is coming up soon.</p>',
+        ));
+      }
       await ScheduledWorkService.markReminderSent(job.id);
     }
   }
@@ -75,6 +95,7 @@ class ReminderCheckService {
 
       final clients = await ClientProfileService.watchAllProfiles().first;
       final clientName = ClientProfileService.displayNameFor(clients, invoice.clientId);
+      final client = _findClient(clients, invoice.clientId);
 
       await NotificationService.create(
         recipientRole: 'client',
@@ -92,6 +113,22 @@ class ReminderCheckService {
         body: '$clientName has not paid ${invoice.invoiceNumber} (\$${invoice.total.toStringAsFixed(2)}).',
         relatedId: invoice.id,
       );
+      if (client != null && client.email.trim().isNotEmpty) {
+        unawaited(CommsService.sendEmail(
+          to: client.email.trim(),
+          subject: 'Invoice ${invoice.invoiceNumber} — payment reminder',
+          htmlBody: '<p>Hi $clientName,</p>'
+              '<p>This is a reminder that invoice ${invoice.invoiceNumber} for '
+              '\$${invoice.total.toStringAsFixed(2)} is still outstanding.</p>',
+        ));
+      }
+      if (client != null && client.phoneNumber.trim().isNotEmpty) {
+        unawaited(CommsService.sendSms(
+          to: client.phoneNumber.trim(),
+          body: 'Reminder: invoice ${invoice.invoiceNumber} for '
+              '\$${invoice.total.toStringAsFixed(2)} is still outstanding.',
+        ));
+      }
       await LocalNotificationService.showMessageNotification(
         id: invoice.id.hashCode,
         title: 'Invoice reminder',

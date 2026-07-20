@@ -41,10 +41,12 @@ class EstimatesPage extends StatefulWidget {
   final String role;
   final String? authToken;
   final String? highlightId;
+
   /// pre-select this client and pre-fill notes when arriving from a
   /// converted Request (see RequestsPage) — null for the normal create flow
   final String? initialClientId;
   final String? initialNotes;
+
   /// when set, the created estimate is linked back to this Request via
   /// RequestService.markConverted once submitted
   final String? convertRequestId;
@@ -58,6 +60,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
   final _clientIdController = TextEditingController();
   final _notesController = TextEditingController();
   final _termsController = TextEditingController();
+  final _depositPercentController = TextEditingController();
+  bool _requireDeposit = false;
   final List<_ServiceRowController> _serviceRows = [_ServiceRowController()];
   StreamSubscription<List<CommonService>>? _catalogSub;
   List<CommonService> _knownCatalog = const [];
@@ -77,7 +81,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
   ClientProfile? _selectedClient;
   bool _isLoadingClientSuggestions = true;
   ListSortMode _sortMode = ListSortMode.newestFirst;
-  late final ListHighlightController _highlight = ListHighlightController(widget.highlightId);
+  late final ListHighlightController _highlight =
+      ListHighlightController(widget.highlightId);
   bool _appliedInitialClient = false;
 
   @override
@@ -124,7 +129,9 @@ class _EstimatesPageState extends State<EstimatesPage> {
 
         if (!_appliedInitialClient && widget.initialClientId != null) {
           _appliedInitialClient = true;
-          final match = profiles.where((profile) => profile.signupId == widget.initialClientId).toList();
+          final match = profiles
+              .where((profile) => profile.signupId == widget.initialClientId)
+              .toList();
           if (match.isNotEmpty) {
             _selectedClient = match.first;
             _clientSuggestions = const [];
@@ -143,13 +150,14 @@ class _EstimatesPageState extends State<EstimatesPage> {
     _clientIdController.dispose();
     _notesController.dispose();
     _termsController.dispose();
+    _depositPercentController.dispose();
     for (final row in _serviceRows) {
       row.dispose();
     }
     super.dispose();
   }
 
-///https://api.flutter.dev/flutter/widgets/TextEditingController-class.html
+  ///https://api.flutter.dev/flutter/widgets/TextEditingController-class.html
   void _addServiceRow() {
     setState(() {
       _serviceRows.add(_ServiceRowController());
@@ -189,7 +197,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
       }
       setState(() {
         _clientSuggestions = ClientProfileService.searchProfiles(
-          profiles: _knownClients.where((profile) => !profile.archived).toList(),
+          profiles:
+              _knownClients.where((profile) => !profile.archived).toList(),
           query: query,
           limit: 8,
         );
@@ -221,7 +230,11 @@ class _EstimatesPageState extends State<EstimatesPage> {
     Navigator.pushNamed(
       context,
       AppRouter.appointments,
-      arguments: {'role': widget.role, 'authToken': widget.authToken, 'highlightId': workId},
+      arguments: {
+        'role': widget.role,
+        'authToken': widget.authToken,
+        'highlightId': workId
+      },
     );
   }
 
@@ -240,7 +253,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Estimate approved on the client\'s behalf.')),
+        const SnackBar(
+            content: Text('Estimate approved on the client\'s behalf.')),
       );
     } catch (error) {
       if (!mounted) return;
@@ -265,7 +279,9 @@ class _EstimatesPageState extends State<EstimatesPage> {
       final item = row.toServiceItem();
       if (item == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Each service needs a name and price greater than 0.')),
+          const SnackBar(
+              content:
+                  Text('Each service needs a name and price greater than 0.')),
         );
         return;
       }
@@ -274,11 +290,13 @@ class _EstimatesPageState extends State<EstimatesPage> {
 
     setState(() => _isSubmitting = true);
     try {
-      final existingClient = await ClientProfileService.fetchBySignupId(clientId);
+      final existingClient =
+          await ClientProfileService.fetchBySignupId(clientId);
       if (existingClient == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Select a valid client from suggestions.')),
+            const SnackBar(
+                content: Text('Select a valid client from suggestions.')),
           );
         }
         return;
@@ -297,9 +315,13 @@ class _EstimatesPageState extends State<EstimatesPage> {
         services: services,
         notes: _notesController.text.trim(),
         terms: _termsController.text.trim(),
+        depositPercent: _requireDeposit
+            ? double.tryParse(_depositPercentController.text.trim())
+            : null,
       );
       if (widget.convertRequestId != null) {
-        await RequestService.markConverted(requestId: widget.convertRequestId!, estimateId: newEstimateId);
+        await RequestService.markConverted(
+            requestId: widget.convertRequestId!, estimateId: newEstimateId);
       }
       if (!mounted) {
         return;
@@ -309,6 +331,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
       _clientIdController.clear();
       _notesController.clear();
       _termsController.clear();
+      _depositPercentController.clear();
+      _requireDeposit = false;
       for (final row in _serviceRows) {
         row.dispose();
       }
@@ -344,10 +368,14 @@ class _EstimatesPageState extends State<EstimatesPage> {
   Future<void> _downloadEstimatePdf(Estimate estimate) async {
     setState(() => _downloadingEstimatePdfId = estimate.id);
     try {
-      final savedPath = await EstimatePdfService.generateAndDownloadEstimatePdf(estimate: estimate);
+      final savedPath = await EstimatePdfService.generateAndDownloadEstimatePdf(
+          estimate: estimate);
       if (!mounted) return;
-      final message = savedPath == null ? 'Estimate PDF downloaded.' : 'Estimate PDF saved: $savedPath';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      final message = savedPath == null
+          ? 'Estimate PDF downloaded.'
+          : 'Estimate PDF saved: $savedPath';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -417,7 +445,9 @@ class _EstimatesPageState extends State<EstimatesPage> {
       }
       final nextVersion = estimate.revisionNumber + 1;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Estimate revised to v$nextVersion and re-sent to client.')),
+        SnackBar(
+            content: Text(
+                'Estimate revised to v$nextVersion and re-sent to client.')),
       );
     } catch (error) {
       if (!mounted) {
@@ -469,13 +499,16 @@ class _EstimatesPageState extends State<EstimatesPage> {
     if (!mounted) return;
     final checklistItems = checklistTemplate == null
         ? const <ChecklistItem>[]
-        : checklistTemplate.items.map((label) => ChecklistItem(label: label)).toList();
+        : checklistTemplate.items
+            .map((label) => ChecklistItem(label: label))
+            .toList();
 
     setState(() => _schedulingEstimateId = estimate.id);
     try {
       // Denormalize the client's address/phone onto the job record so employee
       // screens never need read access to the client_signups collection.
-      final client = await ClientProfileService.fetchBySignupId(estimate.clientId);
+      final client =
+          await ClientProfileService.fetchBySignupId(estimate.clientId);
       final address = client?.address ?? '';
       final phoneNumber = client?.phoneNumber ?? '';
 
@@ -491,19 +524,22 @@ class _EstimatesPageState extends State<EstimatesPage> {
           phoneNumber: phoneNumber,
           checklistItems: checklistItems,
         );
-        await EstimateService.markScheduled(estimateId: estimate.id, scheduledWorkId: workId);
+        await EstimateService.markScheduled(
+            estimateId: estimate.id, scheduledWorkId: workId);
       } else {
         final groupId = ScheduledWorkService.newRecurringGroupId();
         for (var n = 0; n < recurrence.occurrences; n++) {
-          final occurrenceDate = recurrence.cadence == _RecurrenceCadence.monthly
-              ? DateTime(
-                  scheduledDateTime.year,
-                  scheduledDateTime.month + n,
-                  scheduledDateTime.day,
-                  scheduledDateTime.hour,
-                  scheduledDateTime.minute,
-                )
-              : scheduledDateTime.add(Duration(days: recurrence.cadenceDays! * n));
+          final occurrenceDate =
+              recurrence.cadence == _RecurrenceCadence.monthly
+                  ? DateTime(
+                      scheduledDateTime.year,
+                      scheduledDateTime.month + n,
+                      scheduledDateTime.day,
+                      scheduledDateTime.hour,
+                      scheduledDateTime.minute,
+                    )
+                  : scheduledDateTime
+                      .add(Duration(days: recurrence.cadenceDays! * n));
 
           final workId = await ScheduledWorkService.createScheduledWork(
             estimateId: estimate.id,
@@ -518,17 +554,20 @@ class _EstimatesPageState extends State<EstimatesPage> {
             checklistItems: checklistItems,
           );
           if (n == 0) {
-            await EstimateService.markScheduled(estimateId: estimate.id, scheduledWorkId: workId);
+            await EstimateService.markScheduled(
+                estimateId: estimate.id, scheduledWorkId: workId);
           }
         }
       }
 
       if (!mounted) return;
-      final formatted = DateFormat('MMM d, yyyy · h:mm a').format(scheduledDateTime);
+      final formatted =
+          DateFormat('MMM d, yyyy · h:mm a').format(scheduledDateTime);
       final message = recurrence.cadence == _RecurrenceCadence.none
           ? 'Work scheduled for $formatted.'
           : '${recurrence.occurrences} jobs scheduled starting $formatted.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -541,7 +580,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
 
   Future<void> _setEstimateStatus(String estimateId, String status) async {
     try {
-      await EstimateService.updateStatus(estimateId: estimateId, status: status);
+      await EstimateService.updateStatus(
+          estimateId: estimateId, status: status);
       if (!mounted) {
         return;
       }
@@ -571,8 +611,12 @@ class _EstimatesPageState extends State<EstimatesPage> {
           'Archive ${estimate.estimateNumber}? It will be removed from the client\'s view and moved to your archived section.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Archive')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Archive')),
         ],
       ),
     );
@@ -600,10 +644,15 @@ class _EstimatesPageState extends State<EstimatesPage> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Delete Estimate Permanently'),
-        content: Text("Permanently delete ${estimate.estimateNumber}? This can't be undone."),
+        content: Text(
+            "Permanently delete ${estimate.estimateNumber}? This can't be undone."),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete')),
         ],
       ),
     );
@@ -615,7 +664,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+          SnackBar(
+              content: Text(error.toString().replaceFirst('Exception: ', ''))),
         );
       }
     } finally {
@@ -638,12 +688,15 @@ class _EstimatesPageState extends State<EstimatesPage> {
         notes: estimate.notes,
         terms: estimate.terms,
       );
-      await EstimateService.markConverted(estimateId: estimate.id, invoiceId: invoiceId);
+      await EstimateService.markConverted(
+          estimateId: estimate.id, invoiceId: invoiceId);
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${estimate.estimateNumber} converted to invoice and sent to client.')),
+        SnackBar(
+            content: Text(
+                '${estimate.estimateNumber} converted to invoice and sent to client.')),
       );
     } catch (error) {
       if (!mounted) {
@@ -663,7 +716,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
     final invoiceId = estimate.convertedInvoiceId?.trim() ?? '';
     if (invoiceId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No converted invoice found for this estimate.')),
+        const SnackBar(
+            content: Text('No converted invoice found for this estimate.')),
       );
       return;
     }
@@ -675,7 +729,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
         throw Exception('Converted invoice not found.');
       }
 
-      final savedPath = await InvoicePdfService.generateAndDownloadInvoicePdf(invoice: invoice);
+      final savedPath = await InvoicePdfService.generateAndDownloadInvoicePdf(
+          invoice: invoice);
       if (!mounted) {
         return;
       }
@@ -683,7 +738,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
       final message = savedPath == null
           ? 'Invoice PDF downloaded.'
           : 'Invoice PDF saved: $savedPath';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } catch (error) {
       if (!mounted) {
         return;
@@ -721,7 +777,10 @@ class _EstimatesPageState extends State<EstimatesPage> {
                     onPressed: () => Navigator.pushNamed(
                       context,
                       AppRouter.serviceCatalog,
-                      arguments: {'role': widget.role, 'authToken': widget.authToken},
+                      arguments: {
+                        'role': widget.role,
+                        'authToken': widget.authToken
+                      },
                     ),
                     icon: const Icon(Icons.list_alt_outlined),
                     label: const Text('Manage Common Services'),
@@ -730,7 +789,10 @@ class _EstimatesPageState extends State<EstimatesPage> {
                     onPressed: () => Navigator.pushNamed(
                       context,
                       AppRouter.checklistTemplates,
-                      arguments: {'role': widget.role, 'authToken': widget.authToken},
+                      arguments: {
+                        'role': widget.role,
+                        'authToken': widget.authToken
+                      },
                     ),
                     icon: const Icon(Icons.checklist_outlined),
                     label: const Text('Manage Checklist Templates'),
@@ -751,6 +813,10 @@ class _EstimatesPageState extends State<EstimatesPage> {
               catalog: _knownCatalog,
               notesController: _notesController,
               termsController: _termsController,
+              requireDeposit: _requireDeposit,
+              onRequireDepositChanged: (value) =>
+                  setState(() => _requireDeposit = value),
+              depositPercentController: _depositPercentController,
               isSubmitting: _isSubmitting,
               onAddService: _addServiceRow,
               onRemoveService: _removeServiceRow,
@@ -758,16 +824,19 @@ class _EstimatesPageState extends State<EstimatesPage> {
             ),
             const SizedBox(height: 16),
           ],
-          if (widget.role == 'client' && (clientId == null || clientId.trim().isEmpty))
+          if (widget.role == 'client' &&
+              (clientId == null || clientId.trim().isEmpty))
             const Card(
               child: Padding(
                 padding: EdgeInsets.all(16),
-                child: Text('Client ID not found. Please log in from the client email flow first.'),
+                child: Text(
+                    'Client ID not found. Please log in from the client email flow first.'),
               ),
             )
           else
             StreamBuilder<List<Estimate>>(
-              stream: EstimateService.watchEstimates(role: widget.role, clientId: clientId),
+              stream: EstimateService.watchEstimates(
+                  role: widget.role, clientId: clientId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -777,13 +846,15 @@ class _EstimatesPageState extends State<EstimatesPage> {
                   return Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Text('Failed to load estimates: ${snapshot.error}'),
+                      child:
+                          Text('Failed to load estimates: ${snapshot.error}'),
                     ),
                   );
                 }
 
                 final allEstimates = snapshot.data ?? const <Estimate>[];
-                var estimates = allEstimates.where((e) => !e.isArchived).toList();
+                var estimates =
+                    allEstimates.where((e) => !e.isArchived).toList();
                 var archived = allEstimates.where((e) => e.isArchived).toList();
 
                 void applySort(List<Estimate> list) {
@@ -795,9 +866,12 @@ class _EstimatesPageState extends State<EstimatesPage> {
                       list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
                       break;
                     case ListSortMode.client:
-                      list.sort((a, b) => ClientProfileService.displayNameFor(_knownClients, a.clientId)
+                      list.sort((a, b) => ClientProfileService.displayNameFor(
+                              _knownClients, a.clientId)
                           .toLowerCase()
-                          .compareTo(ClientProfileService.displayNameFor(_knownClients, b.clientId).toLowerCase()));
+                          .compareTo(ClientProfileService.displayNameFor(
+                                  _knownClients, b.clientId)
+                              .toLowerCase()));
                       break;
                   }
                 }
@@ -832,24 +906,36 @@ class _EstimatesPageState extends State<EstimatesPage> {
                           role: widget.role,
                           isHighlighted: _highlight.isHighlighted(estimate.id),
                           isConverting: _convertingEstimateId == estimate.id,
-                          isDownloadingPdf: _downloadingEstimateId == estimate.id,
+                          isDownloadingPdf:
+                              _downloadingEstimateId == estimate.id,
                           isScheduling: _schedulingEstimateId == estimate.id,
-                          isDownloadingEstimatePdf: _downloadingEstimatePdfId == estimate.id,
-                          isRequestingChanges: _requestingChangesEstimateId == estimate.id,
+                          isDownloadingEstimatePdf:
+                              _downloadingEstimatePdfId == estimate.id,
+                          isRequestingChanges:
+                              _requestingChangesEstimateId == estimate.id,
                           isRevising: _revisingEstimateId == estimate.id,
                           isArchiving: _archivingEstimateId == estimate.id,
                           isDeleting: _deletingEstimateId == estimate.id,
-                          onApprove: () => _setEstimateStatus(estimate.id, InvoiceStatus.approved),
-                          onRequestChanges: () => _requestEstimateChanges(estimate),
+                          onApprove: () => _setEstimateStatus(
+                              estimate.id, InvoiceStatus.approved),
+                          onRequestChanges: () =>
+                              _requestEstimateChanges(estimate),
                           onConvert: () => _convertToInvoice(estimate),
-                          onDownloadPdf: () => _downloadConvertedInvoicePdf(estimate),
+                          onDownloadPdf: () =>
+                              _downloadConvertedInvoicePdf(estimate),
                           onScheduleWork: () => _scheduleWork(estimate),
-                          onDownloadEstimatePdf: () => _downloadEstimatePdf(estimate),
-                          onReviseAndResend: () => _reviseAndResendEstimate(estimate),
-                          onArchive: widget.role == 'owner' ? () => _archiveEstimate(estimate) : null,
-                          onDeletePermanently:
-                              widget.role == 'owner' ? () => _deleteEstimatePermanently(estimate) : null,
-                          onViewInAppointments: () => _viewInAppointments(estimate),
+                          onDownloadEstimatePdf: () =>
+                              _downloadEstimatePdf(estimate),
+                          onReviseAndResend: () =>
+                              _reviseAndResendEstimate(estimate),
+                          onArchive: widget.role == 'owner'
+                              ? () => _archiveEstimate(estimate)
+                              : null,
+                          onDeletePermanently: widget.role == 'owner'
+                              ? () => _deleteEstimatePermanently(estimate)
+                              : null,
+                          onViewInAppointments: () =>
+                              _viewInAppointments(estimate),
                           onOwnerApprove: () => _approveByOwner(estimate),
                         ),
                       ),
@@ -870,12 +956,17 @@ class _EstimatesPageState extends State<EstimatesPage> {
                       ExpansionTile(
                         title: Text(
                           'Archived (${archived.length})',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.outline),
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(
+                                  color: Theme.of(context).colorScheme.outline),
                         ),
                         tilePadding: const EdgeInsets.symmetric(horizontal: 4),
                         childrenPadding: EdgeInsets.zero,
                         children: [
-                          for (final estimate in archived) estimateCard(estimate),
+                          for (final estimate in archived)
+                            estimateCard(estimate),
                         ],
                       ),
                     ],
@@ -903,6 +994,9 @@ class _OwnerEstimateForm extends StatelessWidget {
     required this.catalog,
     required this.notesController,
     required this.termsController,
+    required this.requireDeposit,
+    required this.onRequireDepositChanged,
+    required this.depositPercentController,
     required this.isSubmitting,
     required this.onAddService,
     required this.onRemoveService,
@@ -921,6 +1015,9 @@ class _OwnerEstimateForm extends StatelessWidget {
   final List<CommonService> catalog;
   final TextEditingController notesController;
   final TextEditingController termsController;
+  final bool requireDeposit;
+  final ValueChanged<bool> onRequireDepositChanged;
+  final TextEditingController depositPercentController;
   final bool isSubmitting;
   final VoidCallback onAddService;
   final void Function(int index) onRemoveService;
@@ -934,7 +1031,8 @@ class _OwnerEstimateForm extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Create Estimate', style: Theme.of(context).textTheme.titleMedium),
+            Text('Create Estimate',
+                style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
             TextField(
               controller: estimateNumberController,
@@ -960,7 +1058,8 @@ class _OwnerEstimateForm extends StatelessWidget {
                               child: SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               ),
                             )
                           : null,
@@ -1005,7 +1104,9 @@ class _OwnerEstimateForm extends StatelessWidget {
                         dense: true,
                         title: Text('${client.signupId} · ${client.fullName}'),
                         subtitle: Text(
-                          client.address.isEmpty ? 'Address unavailable' : client.address,
+                          client.address.isEmpty
+                              ? 'Address unavailable'
+                              : client.address,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1039,16 +1140,38 @@ class _OwnerEstimateForm extends StatelessWidget {
               controller: notesController,
               maxLines: 3,
               minLines: 2,
-              decoration: const InputDecoration(labelText: 'Notes (optional)', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                  labelText: 'Notes (optional)', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: termsController,
               maxLines: 3,
               minLines: 2,
-              decoration: const InputDecoration(labelText: 'Terms (optional)', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                  labelText: 'Terms (optional)', border: OutlineInputBorder()),
             ),
-            const SizedBox(height: 12),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: requireDeposit,
+              onChanged: (value) => onRequireDepositChanged(value ?? false),
+              title: const Text('Require a deposit to begin work'),
+            ),
+            if (requireDeposit) ...[
+              TextField(
+                controller: depositPercentController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Deposit percentage',
+                  border: OutlineInputBorder(),
+                  suffixText: '%',
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            const SizedBox(height: 4),
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton(
@@ -1123,7 +1246,8 @@ class _EstimateCard extends StatelessWidget {
     if (statusKey.isEmpty) {
       return 'Pending';
     }
-    return statusKey[0].toUpperCase() + statusKey.substring(1).replaceAll('_', ' ');
+    return statusKey[0].toUpperCase() +
+        statusKey.substring(1).replaceAll('_', ' ');
   }
 
   Widget _versionColumn(
@@ -1142,7 +1266,11 @@ class _EstimateCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text(title,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           Text('Status: ${_displayStatus(status)}'),
           const SizedBox(height: 6),
@@ -1151,7 +1279,9 @@ class _EstimateCard extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 4),
               child: Row(
                 children: [
-                  Expanded(child: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  Expanded(
+                      child: Text(item.name,
+                          maxLines: 1, overflow: TextOverflow.ellipsis)),
                   Text('\$${item.price.toStringAsFixed(2)}'),
                 ],
               ),
@@ -1159,8 +1289,11 @@ class _EstimateCard extends StatelessWidget {
           const Divider(height: 16),
           Row(
             children: [
-              const Expanded(child: Text('Total', style: TextStyle(fontWeight: FontWeight.w700))),
-              Text('\$${total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+              const Expanded(
+                  child: Text('Total',
+                      style: TextStyle(fontWeight: FontWeight.w700))),
+              Text('\$${total.toStringAsFixed(2)}',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
             ],
           ),
         ],
@@ -1195,297 +1328,345 @@ class _EstimateCard extends StatelessWidget {
             : null,
       ),
       child: Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    estimate.estimateNumber,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    statusText,
-                    style: TextStyle(color: statusColor, fontWeight: FontWeight.w700),
-                  ),
-                ),
-                if (!estimate.isArchived && onArchive != null) ...[
-                  const SizedBox(width: 4),
-                  isArchiving
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                      : IconButton(
-                          onPressed: onArchive,
-                          icon: const Icon(Icons.archive_outlined),
-                          tooltip: 'Archive estimate',
-                          color: Theme.of(context).colorScheme.outline,
-                          iconSize: 20,
-                        ),
-                ] else if (estimate.isArchived && onDeletePermanently != null) ...[
-                  const SizedBox(width: 4),
-                  isDeleting
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                      : IconButton(
-                          onPressed: onDeletePermanently,
-                          icon: const Icon(Icons.delete_forever_outlined),
-                          tooltip: 'Delete permanently',
-                          color: Theme.of(context).colorScheme.error,
-                          iconSize: 20,
-                        ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text('Client ID: ${estimate.clientId}'),
-            if (estimate.revisionNumber > 1) ...[
-              const SizedBox(height: 4),
-              Text(
-                'Revision: v${estimate.revisionNumber}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-              ),
-            ],
-            if (estimate.changeRequestMessage != null && estimate.changeRequestMessage!.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text('Client requested changes: ${estimate.changeRequestMessage!}'),
-              ),
-            ],
-            if (estimate.approvedByOwner) ...[
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  'Approved by owner — confirmed via ${estimate.ownerApprovalMethod ?? 'phone/text'}'
-                  '${(estimate.ownerApprovalNote?.isNotEmpty ?? false) ? ': ${estimate.ownerApprovalNote}' : ''}',
-                  style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-            const SizedBox(height: 10),
-            Text('Services', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 6),
-            for (final item in estimate.services)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: Text(item.name)),
-                        Text('\$${item.price.toStringAsFixed(2)}'),
-                      ],
-                    ),
-                    if (item.description.isNotEmpty)
-                      Text(item.description, style: Theme.of(context).textTheme.bodySmall),
-                    if (item.isPerUnit)
-                      Text(
-                        '${item.quantity} ${item.unit?.isEmpty ?? true ? 'unit(s)' : item.unit} × \$${item.unitPrice!.toStringAsFixed(2)}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                  ],
-                ),
-              ),
-            const Divider(height: 16),
-            Row(
-              children: [
-                const Expanded(child: Text('Total', style: TextStyle(fontWeight: FontWeight.w700))),
-                Text('\$${estimate.total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700)),
-              ],
-            ),
-            if (estimate.notes.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text('Notes', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 4),
-              Text(estimate.notes),
-            ],
-            if (estimate.terms.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text('Terms', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 4),
-              Text(estimate.terms),
-            ],
-            if (estimate.originalVersion != null && estimate.revisionNumber > 1) ...[
-              const SizedBox(height: 12),
-              Text('Compare revisions', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final oldVersion = estimate.originalVersion!;
-                  final oldTitle = 'v${oldVersion.version} (original)';
-                  final newTitle = 'v${estimate.revisionNumber} (current)';
-                  if (constraints.maxWidth < 760) {
-                    return Column(
-                      children: [
-                        _versionColumn(
-                          context,
-                          title: oldTitle,
-                          services: oldVersion.services,
-                          total: oldVersion.total,
-                          status: oldVersion.status,
-                        ),
-                        const SizedBox(height: 10),
-                        _versionColumn(
-                          context,
-                          title: newTitle,
-                          services: estimate.services,
-                          total: estimate.total,
-                          status: estimate.status,
-                        ),
-                      ],
-                    );
-                  }
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: _versionColumn(
-                          context,
-                          title: oldTitle,
-                          services: oldVersion.services,
-                          total: oldVersion.total,
-                          status: oldVersion.status,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _versionColumn(
-                          context,
-                          title: newTitle,
-                          services: estimate.services,
-                          total: estimate.total,
-                          status: estimate.status,
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ],
-            if (role == 'client' && estimate.isPending) ...[
-              const SizedBox(height: 12),
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: isRequestingChanges ? null : onRequestChanges,
-                      icon: isRequestingChanges
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.edit_note_outlined),
-                      label: const Text('Request Changes'),
+                    child: Text(
+                      estimate.estimateNumber,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: onApprove,
-                      icon: const Icon(Icons.check),
-                      label: const Text('Approve'),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      statusText,
+                      style: TextStyle(
+                          color: statusColor, fontWeight: FontWeight.w700),
                     ),
                   ),
+                  if (!estimate.isArchived && onArchive != null) ...[
+                    const SizedBox(width: 4),
+                    isArchiving
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : IconButton(
+                            onPressed: onArchive,
+                            icon: const Icon(Icons.archive_outlined),
+                            tooltip: 'Archive estimate',
+                            color: Theme.of(context).colorScheme.outline,
+                            iconSize: 20,
+                          ),
+                  ] else if (estimate.isArchived &&
+                      onDeletePermanently != null) ...[
+                    const SizedBox(width: 4),
+                    isDeleting
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : IconButton(
+                            onPressed: onDeletePermanently,
+                            icon: const Icon(Icons.delete_forever_outlined),
+                            tooltip: 'Delete permanently',
+                            color: Theme.of(context).colorScheme.error,
+                            iconSize: 20,
+                          ),
+                  ],
                 ],
               ),
-            ],
-            if (role == 'client' && estimate.isChangesRequested) ...[
-              const SizedBox(height: 12),
-              const Row(
-                children: [
-                  Icon(Icons.schedule, size: 16),
-                  SizedBox(width: 6),
-                  Expanded(child: Text('Change request sent. Waiting for revised estimate from owner.')),
-                ],
-              ),
-            ],
-            if (role == 'owner') ...[
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: isDownloadingEstimatePdf ? null : onDownloadEstimatePdf,
-                icon: isDownloadingEstimatePdf
-                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.download_outlined),
-                label: const Text('Download Estimate PDF'),
-              ),
+              const SizedBox(height: 4),
+              Text('Client ID: ${estimate.clientId}'),
+              if (estimate.revisionNumber > 1) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Revision: v${estimate.revisionNumber}',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ],
+              if (estimate.changeRequestMessage != null &&
+                  estimate.changeRequestMessage!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                      'Client requested changes: ${estimate.changeRequestMessage!}'),
+                ),
+              ],
+              if (estimate.approvedByOwner) ...[
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    'Approved by owner — confirmed via ${estimate.ownerApprovalMethod ?? 'phone/text'}'
+                    '${(estimate.ownerApprovalNote?.isNotEmpty ?? false) ? ': ${estimate.ownerApprovalNote}' : ''}',
+                    style: const TextStyle(
+                        color: Colors.green, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
               const SizedBox(height: 10),
-              if (estimate.convertedToInvoice)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              Text('Services', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 6),
+              for (final item in estimate.services)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: Text(item.name)),
+                          Text('\$${item.price.toStringAsFixed(2)}'),
+                        ],
+                      ),
+                      if (item.description.isNotEmpty)
+                        Text(item.description,
+                            style: Theme.of(context).textTheme.bodySmall),
+                      if (item.isPerUnit)
+                        Text(
+                          '${item.quantity} ${item.unit?.isEmpty ?? true ? 'unit(s)' : item.unit} × \$${item.unitPrice!.toStringAsFixed(2)}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
+                ),
+              const Divider(height: 16),
+              Row(
+                children: [
+                  const Expanded(
+                      child: Text('Total',
+                          style: TextStyle(fontWeight: FontWeight.w700))),
+                  Text('\$${estimate.total.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                ],
+              ),
+              if (estimate.notes.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text('Notes', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(estimate.notes),
+              ],
+              if (estimate.terms.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text('Terms', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(estimate.terms),
+              ],
+              if (estimate.originalVersion != null &&
+                  estimate.revisionNumber > 1) ...[
+                const SizedBox(height: 12),
+                Text('Compare revisions',
+                    style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 8),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final oldVersion = estimate.originalVersion!;
+                    final oldTitle = 'v${oldVersion.version} (original)';
+                    final newTitle = 'v${estimate.revisionNumber} (current)';
+                    if (constraints.maxWidth < 760) {
+                      return Column(
+                        children: [
+                          _versionColumn(
+                            context,
+                            title: oldTitle,
+                            services: oldVersion.services,
+                            total: oldVersion.total,
+                            status: oldVersion.status,
+                          ),
+                          const SizedBox(height: 10),
+                          _versionColumn(
+                            context,
+                            title: newTitle,
+                            services: estimate.services,
+                            total: estimate.total,
+                            status: estimate.status,
+                          ),
+                        ],
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _versionColumn(
+                            context,
+                            title: oldTitle,
+                            services: oldVersion.services,
+                            total: oldVersion.total,
+                            status: oldVersion.status,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _versionColumn(
+                            context,
+                            title: newTitle,
+                            services: estimate.services,
+                            total: estimate.total,
+                            status: estimate.status,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+              if (role == 'client' && estimate.isPending) ...[
+                const SizedBox(height: 12),
+                Row(
                   children: [
-                    Text(
-                      'Converted to invoice${estimate.convertedInvoiceId == null ? '' : ': ${estimate.convertedInvoiceId}'}',
-                      style: Theme.of(context).textTheme.bodySmall,
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed:
+                            isRequestingChanges ? null : onRequestChanges,
+                        icon: isRequestingChanges
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.edit_note_outlined),
+                        label: const Text('Request Changes'),
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: isDownloadingPdf ? null : onDownloadPdf,
-                      icon: isDownloadingPdf
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.download_outlined),
-                      label: const Text('Download Invoice PDF'),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: onApprove,
+                        icon: const Icon(Icons.check),
+                        label: const Text('Approve'),
+                      ),
                     ),
                   ],
-                )
-              else ...[
-                if (estimate.isChangesRequested) ...[
-                  FilledButton.icon(
-                    onPressed: isRevising ? null : onReviseAndResend,
-                    icon: isRevising
-                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.edit_outlined),
-                    label: const Text('Revise & Re-send'),
-                  ),
-                ] else if (estimate.isApproved) ...[
-                  if (estimate.isScheduled)
-                    OutlinedButton.icon(
-                      onPressed: onViewInAppointments,
-                      icon: const Icon(Icons.event_available, size: 16, color: Colors.green),
-                      label: const Text('View in Appointments'),
-                    )
-                  else
+                ),
+              ],
+              if (role == 'client' && estimate.isChangesRequested) ...[
+                const SizedBox(height: 12),
+                const Row(
+                  children: [
+                    Icon(Icons.schedule, size: 16),
+                    SizedBox(width: 6),
+                    Expanded(
+                        child: Text(
+                            'Change request sent. Waiting for revised estimate from owner.')),
+                  ],
+                ),
+              ],
+              if (role == 'owner') ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed:
+                      isDownloadingEstimatePdf ? null : onDownloadEstimatePdf,
+                  icon: isDownloadingEstimatePdf
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.download_outlined),
+                  label: const Text('Download Estimate PDF'),
+                ),
+                const SizedBox(height: 10),
+                if (estimate.convertedToInvoice)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Converted to invoice${estimate.convertedInvoiceId == null ? '' : ': ${estimate.convertedInvoiceId}'}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: isDownloadingPdf ? null : onDownloadPdf,
+                        icon: isDownloadingPdf
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.download_outlined),
+                        label: const Text('Download Invoice PDF'),
+                      ),
+                    ],
+                  )
+                else ...[
+                  if (estimate.isChangesRequested) ...[
                     FilledButton.icon(
-                      onPressed: isScheduling ? null : onScheduleWork,
-                      icon: isScheduling
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.event_outlined),
-                      label: const Text('Schedule Work'),
+                      onPressed: isRevising ? null : onReviseAndResend,
+                      icon: isRevising
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.edit_outlined),
+                      label: const Text('Revise & Re-send'),
                     ),
-                ] else if (estimate.isPending) ...[
-                  FilledButton.icon(
-                    onPressed: onOwnerApprove,
-                    icon: const Icon(Icons.phone_in_talk_outlined),
-                    label: const Text('Approve (Phone/Text Confirmed)'),
-                  ),
-                ] else
-                  FilledButton.icon(
-                    onPressed: null,
-                    icon: const Icon(Icons.swap_horiz),
-                    label: const Text('Approval Required'),
-                  ),
+                  ] else if (estimate.isApproved) ...[
+                    if (estimate.isScheduled)
+                      OutlinedButton.icon(
+                        onPressed: onViewInAppointments,
+                        icon: const Icon(Icons.event_available,
+                            size: 16, color: Colors.green),
+                        label: const Text('View in Appointments'),
+                      )
+                    else
+                      FilledButton.icon(
+                        onPressed: isScheduling ? null : onScheduleWork,
+                        icon: isScheduling
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.event_outlined),
+                        label: const Text('Schedule Work'),
+                      ),
+                  ] else if (estimate.isPending) ...[
+                    FilledButton.icon(
+                      onPressed: onOwnerApprove,
+                      icon: const Icon(Icons.phone_in_talk_outlined),
+                      label: const Text('Approve (Phone/Text Confirmed)'),
+                    ),
+                  ] else
+                    FilledButton.icon(
+                      onPressed: null,
+                      icon: const Icon(Icons.swap_horiz),
+                      label: const Text('Approval Required'),
+                    ),
+                ],
               ],
             ],
-          ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -1504,13 +1685,15 @@ class _RecurrenceChoice {
   const _RecurrenceChoice({required this.cadence, required this.occurrences});
 
   final _RecurrenceCadence cadence;
+
   /// ignored when cadence == none
   final int occurrences;
 
   int? get cadenceDays => switch (cadence) {
         _RecurrenceCadence.weekly => 7,
         _RecurrenceCadence.biweekly => 14,
-        _ => null, // monthly is computed via DateTime month-add, not a fixed day count
+        _ =>
+          null, // monthly is computed via DateTime month-add, not a fixed day count
       };
 }
 
@@ -1541,29 +1724,41 @@ class _RecurrenceDialogState extends State<_RecurrenceDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Schedule this as a one-time job, or set up a recurring cadence.'),
+            const Text(
+                'Schedule this as a one-time job, or set up a recurring cadence.'),
             const SizedBox(height: 12),
             DropdownButtonFormField<_RecurrenceCadence>(
               initialValue: _cadence,
-              decoration: const InputDecoration(labelText: 'Repeat', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                  labelText: 'Repeat', border: OutlineInputBorder()),
               items: const [
-                DropdownMenuItem(value: _RecurrenceCadence.none, child: Text("Don't repeat")),
-                DropdownMenuItem(value: _RecurrenceCadence.weekly, child: Text('Weekly')),
-                DropdownMenuItem(value: _RecurrenceCadence.biweekly, child: Text('Every 2 weeks')),
-                DropdownMenuItem(value: _RecurrenceCadence.monthly, child: Text('Monthly')),
+                DropdownMenuItem(
+                    value: _RecurrenceCadence.none,
+                    child: Text("Don't repeat")),
+                DropdownMenuItem(
+                    value: _RecurrenceCadence.weekly, child: Text('Weekly')),
+                DropdownMenuItem(
+                    value: _RecurrenceCadence.biweekly,
+                    child: Text('Every 2 weeks')),
+                DropdownMenuItem(
+                    value: _RecurrenceCadence.monthly, child: Text('Monthly')),
               ],
-              onChanged: (value) => setState(() => _cadence = value ?? _RecurrenceCadence.none),
+              onChanged: (value) =>
+                  setState(() => _cadence = value ?? _RecurrenceCadence.none),
             ),
             if (_cadence != _RecurrenceCadence.none) ...[
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
                 initialValue: _occurrences,
-                decoration: const InputDecoration(labelText: 'Number of occurrences', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'Number of occurrences',
+                    border: OutlineInputBorder()),
                 items: [
                   for (final count in [2, 4, 6, 8, 12, 16, 26, 52])
                     DropdownMenuItem(value: count, child: Text('$count')),
                 ],
-                onChanged: (value) => setState(() => _occurrences = value ?? _occurrences),
+                onChanged: (value) =>
+                    setState(() => _occurrences = value ?? _occurrences),
               ),
             ],
           ],
@@ -1619,7 +1814,9 @@ class _ChecklistTemplatePickerDialog extends StatelessWidget {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Skip')),
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Skip')),
       ],
     );
   }
@@ -1643,7 +1840,8 @@ class _OwnerApprovalDialogState extends State<_OwnerApprovalDialog> {
   }
 
   void _submit() {
-    Navigator.of(context).pop(_OwnerApprovalResult(method: _method, note: _noteController.text.trim()));
+    Navigator.of(context).pop(_OwnerApprovalResult(
+        method: _method, note: _noteController.text.trim()));
   }
 
   @override
@@ -1664,7 +1862,8 @@ class _OwnerApprovalDialogState extends State<_OwnerApprovalDialog> {
                 ButtonSegment(value: 'text', label: Text('Text message')),
               ],
               selected: {_method},
-              onSelectionChanged: (selection) => setState(() => _method = selection.first),
+              onSelectionChanged: (selection) =>
+                  setState(() => _method = selection.first),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -1698,10 +1897,12 @@ class _RequestEstimateChangesDialog extends StatefulWidget {
   const _RequestEstimateChangesDialog();
 
   @override
-  State<_RequestEstimateChangesDialog> createState() => _RequestEstimateChangesDialogState();
+  State<_RequestEstimateChangesDialog> createState() =>
+      _RequestEstimateChangesDialogState();
 }
 
-class _RequestEstimateChangesDialogState extends State<_RequestEstimateChangesDialog> {
+class _RequestEstimateChangesDialogState
+    extends State<_RequestEstimateChangesDialog> {
   final TextEditingController _controller = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
@@ -1732,7 +1933,8 @@ class _RequestEstimateChangesDialogState extends State<_RequestEstimateChangesDi
             minLines: 3,
             decoration: const InputDecoration(
               labelText: 'What should be changed?',
-              hintText: 'Example: Remove pressure washing and add window cleaning.',
+              hintText:
+                  'Example: Remove pressure washing and add window cleaning.',
               border: OutlineInputBorder(),
             ),
             validator: (value) {
@@ -1822,7 +2024,9 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
       final item = row.toServiceItem();
       if (item == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Each revised service must have a name and price > 0.')),
+          const SnackBar(
+              content:
+                  Text('Each revised service must have a name and price > 0.')),
         );
         return;
       }
@@ -1877,7 +2081,10 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
         FilledButton(
           onPressed: _isSaving ? null : _submit,
           child: _isSaving
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Re-send Estimate'),
         ),
       ],
@@ -1904,7 +2111,9 @@ class _ServiceRowController {
     return _ServiceRowController(
       name: item.name,
       description: item.description,
-      price: item.isPerUnit ? item.unitPrice!.toStringAsFixed(2) : item.price.toStringAsFixed(2),
+      price: item.isPerUnit
+          ? item.unitPrice!.toStringAsFixed(2)
+          : item.price.toStringAsFixed(2),
       quantity: item.quantity?.toString() ?? '',
       unit: item.unit ?? '',
       isPerUnit: item.isPerUnit,
@@ -1913,6 +2122,7 @@ class _ServiceRowController {
 
   final TextEditingController nameController;
   final TextEditingController descriptionController;
+
   /// flat price, or price-per-unit when [isPerUnit] is true
   final TextEditingController priceController;
   final TextEditingController quantityController;
@@ -1954,8 +2164,10 @@ class _ServiceRowController {
       name: name,
       description: descriptionController.text.trim(),
       price: total,
-      unitPrice: isPerUnit ? double.tryParse(priceController.text.trim()) : null,
-      quantity: isPerUnit ? double.tryParse(quantityController.text.trim()) : null,
+      unitPrice:
+          isPerUnit ? double.tryParse(priceController.text.trim()) : null,
+      quantity:
+          isPerUnit ? double.tryParse(quantityController.text.trim()) : null,
       unit: isPerUnit ? unitController.text.trim() : null,
     );
   }
@@ -2029,7 +2241,9 @@ class _ServiceRowEditorState extends State<_ServiceRowEditor> {
     final price = double.tryParse(widget.row.priceController.text.trim());
     if (name.isEmpty || price == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add a name and price before saving to common services.')),
+        const SnackBar(
+            content:
+                Text('Add a name and price before saving to common services.')),
       );
       return;
     }
@@ -2037,7 +2251,8 @@ class _ServiceRowEditorState extends State<_ServiceRowEditor> {
       await ServiceCatalogService.saveService(
         name: name,
         description: widget.row.descriptionController.text.trim(),
-        unit: widget.row.isPerUnit ? widget.row.unitController.text.trim() : null,
+        unit:
+            widget.row.isPerUnit ? widget.row.unitController.text.trim() : null,
         unitPrice: widget.row.isPerUnit ? price : null,
         flatPrice: widget.row.isPerUnit ? null : price,
       );
@@ -2048,7 +2263,8 @@ class _ServiceRowEditorState extends State<_ServiceRowEditor> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save: $error')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to save: $error')));
       }
     }
   }
@@ -2072,7 +2288,8 @@ class _ServiceRowEditorState extends State<_ServiceRowEditor> {
               Expanded(
                 child: TextField(
                   controller: row.nameController,
-                  decoration: const InputDecoration(labelText: 'Service name', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                      labelText: 'Service name', border: OutlineInputBorder()),
                   onChanged: _onNameChanged,
                 ),
               ),
@@ -2117,7 +2334,9 @@ class _ServiceRowEditorState extends State<_ServiceRowEditor> {
             controller: row.descriptionController,
             maxLines: 2,
             minLines: 1,
-            decoration: const InputDecoration(labelText: 'Description (optional)', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: 'Description (optional)',
+                border: OutlineInputBorder()),
           ),
           const SizedBox(height: 8),
           SegmentedButton<bool>(
@@ -2126,7 +2345,8 @@ class _ServiceRowEditorState extends State<_ServiceRowEditor> {
               ButtonSegment(value: true, label: Text('Price per unit')),
             ],
             selected: {row.isPerUnit},
-            onSelectionChanged: (selection) => setState(() => row.isPerUnit = selection.first),
+            onSelectionChanged: (selection) =>
+                setState(() => row.isPerUnit = selection.first),
           ),
           const SizedBox(height: 8),
           if (row.isPerUnit)
@@ -2135,8 +2355,11 @@ class _ServiceRowEditorState extends State<_ServiceRowEditor> {
                 Expanded(
                   child: TextField(
                     controller: row.priceController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Price per unit', border: OutlineInputBorder()),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                        labelText: 'Price per unit',
+                        border: OutlineInputBorder()),
                     onChanged: (_) => setState(() {}),
                   ),
                 ),
@@ -2144,8 +2367,10 @@ class _ServiceRowEditorState extends State<_ServiceRowEditor> {
                 Expanded(
                   child: TextField(
                     controller: row.quantityController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Quantity', border: OutlineInputBorder()),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                        labelText: 'Quantity', border: OutlineInputBorder()),
                     onChanged: (_) => setState(() {}),
                   ),
                 ),
@@ -2153,7 +2378,9 @@ class _ServiceRowEditorState extends State<_ServiceRowEditor> {
                 Expanded(
                   child: TextField(
                     controller: row.unitController,
-                    decoration: const InputDecoration(labelText: 'Unit (e.g. ft)', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                        labelText: 'Unit (e.g. ft)',
+                        border: OutlineInputBorder()),
                   ),
                 ),
               ],
@@ -2161,15 +2388,19 @@ class _ServiceRowEditorState extends State<_ServiceRowEditor> {
           else
             TextField(
               controller: row.priceController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Price', border: OutlineInputBorder()),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                  labelText: 'Price', border: OutlineInputBorder()),
             ),
           if (row.isPerUnit) ...[
             const SizedBox(height: 6),
             Align(
               alignment: Alignment.centerRight,
               child: Text(
-                row.computedPrice == null ? 'Total: —' : 'Total: \$${row.computedPrice!.toStringAsFixed(2)}',
+                row.computedPrice == null
+                    ? 'Total: —'
+                    : 'Total: \$${row.computedPrice!.toStringAsFixed(2)}',
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),

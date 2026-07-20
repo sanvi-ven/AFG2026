@@ -1,34 +1,33 @@
 /// made with help of chatgpt 4.0, prompt: help me create a Flutter service that generates branded estimate PDFs using the pdf package
 library;
 
-import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/services.dart' show rootBundle;
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../../models/client_profile.dart';
 import '../../models/estimate.dart';
 import '../../models/owner_settings.dart';
+import 'client_profile_service.dart';
 import 'owner_settings_service.dart';
 import 'pdf_download_service.dart';
+import 'pdf_layout_helpers.dart';
 
 /// generates and downloads estimate pdfs with company branding and estimate details
 class EstimatePdfService {
   EstimatePdfService._();
 
-  /// generates estimate pdf and downloads it with a sanitized filename
-  static Future<String?> generateAndDownloadEstimatePdf({required Estimate estimate}) async {
-    final bytes = await buildEstimatePdf(estimate: estimate);
-    final part = estimate.estimateNumber.trim().isEmpty ? estimate.id : estimate.estimateNumber.trim();
-    final fileName = 'estimate_${_sanitizeFilePart(part)}.pdf';
-    return downloadPdfBytes(bytes: bytes, fileName: fileName);
-  }
+  /// how long a quoted price is honored, shown as "Valid until" on the PDF
+  static const estimateValidityDays = 30;
 
-  /// builds complete pdf with company header, estimate info, services table, and total
-  static Future<Uint8List> buildEstimatePdf({required Estimate estimate}) async {
+  /// generates estimate pdf and downloads it, named per the owner's
+  /// configured estimate file-name template
+  static Future<String?> generateAndDownloadEstimatePdf(
+      {required Estimate estimate}) async {
+    final bytes = await buildEstimatePdf(estimate: estimate);
+
     OwnerSettings ownerSettings;
     try {
       ownerSettings = await OwnerSettingsService.fetch();
@@ -36,92 +35,167 @@ class EstimatePdfService {
       ownerSettings = OwnerSettings.empty();
     }
 
-    final logoBytes = await _resolveLogoBytes(ownerSettings.logoBase64, ownerSettings.logoUrl);
-    final companyName = ownerSettings.companyName.trim().isEmpty
-        ? 'Business Name'
-        : ownerSettings.companyName.trim();
-    final companyAddress = ownerSettings.address.trim().isEmpty
-        ? 'Business address unavailable'
-        : ownerSettings.address.trim();
+    ClientProfile? client;
+    try {
+      client = await ClientProfileService.fetchBySignupId(estimate.clientId);
+    } catch (_) {
+      client = null;
+    }
 
-    final currency = NumberFormat.currency(symbol: r'$', decimalDigits: 2);
-    final createdDate = DateFormat('yyyy-MM-dd').format(estimate.createdAt);
+    final part = estimate.estimateNumber.trim().isEmpty
+        ? estimate.id
+        : estimate.estimateNumber.trim();
+    final resolved = PdfLayoutHelpers.resolveFileNameTemplate(
+      ownerSettings.estimateFileNameTemplate,
+      {
+        'CompanyName': ownerSettings.companyName.trim().isEmpty
+            ? 'Business'
+            : ownerSettings.companyName.trim(),
+        'EstimateNumber': part,
+        'ClientName': client?.fullName.trim().isEmpty ?? true
+            ? estimate.clientId
+            : client!.fullName.trim(),
+        'Date': DateFormat('yyyy-MM-dd').format(estimate.createdAt),
+      },
+    );
+    final fileName = '${PdfLayoutHelpers.sanitizeFilePart(resolved)}.pdf';
+    return downloadPdfBytes(bytes: bytes, fileName: fileName);
+  }
+
+  /// builds complete pdf with company header, client info, estimate details,
+  /// services table, and total
+  static Future<Uint8List> buildEstimatePdf(
+      {required Estimate estimate}) async {
+    OwnerSettings ownerSettings;
+    try {
+      ownerSettings = await OwnerSettingsService.fetch();
+    } catch (_) {
+      ownerSettings = OwnerSettings.empty();
+    }
+
+    ClientProfile? client;
+    try {
+      client = await ClientProfileService.fetchBySignupId(estimate.clientId);
+    } catch (_) {
+      client = null;
+    }
+
+    final logoBytes = await PdfLayoutHelpers.resolveLogoBytes(
+        ownerSettings.logoBase64, ownerSettings.logoUrl);
+    final currency = PdfLayoutHelpers.currency;
+    final createdDate = DateFormat('MMM d, yyyy').format(estimate.createdAt);
+    final validUntil = DateFormat('MMM d, yyyy').format(
+        estimate.createdAt.add(const Duration(days: estimateValidityDays)));
+
+    final watermarkText = estimate.isApproved
+        ? 'APPROVED'
+        : estimate.isDenied
+            ? 'DECLINED'
+            : null;
+    final watermarkColor = estimate.isApproved
+        ? const PdfColor(0.1, 0.5, 0.2, 0.25)
+        : const PdfColor(0.7, 0.1, 0.1, 0.28);
+
+    final depositPercent = estimate.depositPercent;
+    final depositAmount =
+        depositPercent != null ? estimate.total * depositPercent / 100 : null;
 
     final pdf = pw.Document();
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.letter,
-        margin: const pw.EdgeInsets.all(28),
+        pageTheme: PdfLayoutHelpers.pageTheme(
+            watermarkText: watermarkText, watermarkColor: watermarkColor),
+        footer: (context) =>
+            PdfLayoutHelpers.footer(context, ownerSettings: ownerSettings),
         build: (context) => <pw.Widget>[
+          PdfLayoutHelpers.buildLetterhead(
+              ownerSettings: ownerSettings, logoBytes: logoBytes),
+          pw.SizedBox(height: 18),
+          pw.Text(
+            'ESTIMATE',
+            style: pw.TextStyle(
+                fontSize: 22,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfLayoutHelpers.accentColor),
+          ),
+          pw.SizedBox(height: 12),
           pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              if (logoBytes != null)
-                pw.Container(
-                  width: 80,
-                  height: 80,
-                  margin: const pw.EdgeInsets.only(right: 16),
-                  child: pw.Image(pw.MemoryImage(logoBytes), fit: pw.BoxFit.contain),
-                ),
+              pw.Expanded(
+                  child: PdfLayoutHelpers.buildBillTo(
+                      client: client, fallbackClientId: estimate.clientId)),
               pw.Expanded(
                 child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
-                    pw.Text(
-                      companyName,
-                      style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-                    ),
-                    pw.SizedBox(height: 4),
-                    pw.Text(companyAddress, style: const pw.TextStyle(fontSize: 11)),
+                    pw.Text('Estimate #: ${estimate.estimateNumber}'),
+                    pw.Text('Issued: $createdDate'),
+                    pw.Text('Valid until: $validUntil'),
+                    pw.Text('Status: ${_capitalizeStatus(estimate.status)}'),
                   ],
                 ),
               ),
             ],
           ),
-          pw.SizedBox(height: 20),
-          pw.Text(
-            'ESTIMATE',
-            style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.SizedBox(height: 8),
-          pw.Text('Estimate #: ${estimate.estimateNumber}'),
-          pw.Text('Client ID: ${estimate.clientId}'),
-          pw.Text('Created: $createdDate'),
-          pw.Text('Status: ${_capitalizeStatus(estimate.status)}'),
-          pw.SizedBox(height: 16),
-          pw.TableHelper.fromTextArray(
+          pw.SizedBox(height: 18),
+          PdfLayoutHelpers.buildItemsTable(
             headers: const <String>['Line Item', 'Amount'],
             data: estimate.services.map((item) {
               final lines = <String>[item.name];
               if (item.description.isNotEmpty) lines.add(item.description);
               if (item.isPerUnit) {
-                lines.add('${item.quantity} ${item.unit ?? 'unit'} x ${currency.format(item.unitPrice!)}');
+                lines.add(
+                    '${item.quantity} ${item.unit ?? 'unit'} x ${currency.format(item.unitPrice!)}');
               }
               return <String>[lines.join('\n'), currency.format(item.price)];
             }).toList(),
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFEAEAEA)),
-            cellAlignments: {
-              0: pw.Alignment.centerLeft,
-              1: pw.Alignment.centerRight,
-            },
           ),
           pw.SizedBox(height: 14),
           pw.Align(
             alignment: pw.Alignment.centerRight,
-            child: pw.Text(
-              'Total: ${currency.format(estimate.total)}',
-              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            child: pw.Container(
+              padding:
+                  const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(
+                    color: PdfLayoutHelpers.accentColor, width: 1),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text(
+                    'Total: ${currency.format(estimate.total)}',
+                    style: pw.TextStyle(
+                        fontSize: 14, fontWeight: pw.FontWeight.bold),
+                  ),
+                  if (depositAmount != null) ...[
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      'Deposit due to begin work (${depositPercent!.toStringAsFixed(0)}%): '
+                      '${currency.format(depositAmount)}',
+                      style: const pw.TextStyle(fontSize: 11),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
           if (estimate.notes.trim().isNotEmpty) ...[
             pw.SizedBox(height: 16),
-            pw.Text('Notes', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.Text('Notes',
+                style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfLayoutHelpers.accentColor)),
             pw.Text(estimate.notes.trim()),
           ],
           if (estimate.terms.trim().isNotEmpty) ...[
             pw.SizedBox(height: 12),
-            pw.Text('Terms', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.Text('Terms',
+                style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfLayoutHelpers.accentColor)),
             pw.Text(estimate.terms.trim()),
           ],
         ],
@@ -131,47 +205,10 @@ class EstimatePdfService {
     return pdf.save();
   }
 
-  /// resolve logo bytes from base64, url, or local asset fallback
-  static Future<Uint8List?> _resolveLogoBytes(String? logoBase64, String? logoUrl) async {
-    if (logoBase64 != null && logoBase64.isNotEmpty) {
-      try {
-        return base64Decode(logoBase64);
-      } catch (_) {
-        // fall through
-      }
-    }
-
-    final remoteUrl = logoUrl?.trim() ?? '';
-    if (remoteUrl.isNotEmpty) {
-      try {
-        final response = await http.get(Uri.parse(remoteUrl)).timeout(const Duration(seconds: 15));
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          return response.bodyBytes;
-        }
-      } catch (_) {
-        // fall through
-      }
-    }
-
-    try {
-      final localAsset = await rootBundle.load('assets/logos/logo.png');
-      return localAsset.buffer.asUint8List();
-    } catch (_) {
-      return null;
-    }
-  }
-
   /// capitalize first letter of status string
   static String _capitalizeStatus(String status) {
     final s = status.trim();
     if (s.isEmpty) return 'Pending';
     return '${s[0].toUpperCase()}${s.substring(1)}';
-  }
-/// remove special characters from filename for safe file storage
-  
-  static String _sanitizeFilePart(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return 'document';
-    return trimmed.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
   }
 }

@@ -16,12 +16,14 @@ class EstimateService {
   static final DocumentReference<Map<String, dynamic>> _ownerSettingsDoc =
       _firestore.collection('owner_settings').doc('default');
 
-  static String _formatEstimateNumber(int n) => 'EST-${n.toString().padLeft(4, '0')}';
+  static String _formatEstimateNumber(int n) =>
+      'EST-${n.toString().padLeft(4, '0')}';
 
   /// preview the next estimate number without consuming it (used to prefill the create form)
   static Future<String> peekNextEstimateNumber() async {
     final snapshot = await _ownerSettingsDoc.get();
-    final current = (snapshot.data()?['next_estimate_number'] as num?)?.toInt() ?? 1;
+    final current =
+        (snapshot.data()?['next_estimate_number'] as num?)?.toInt() ?? 1;
     return _formatEstimateNumber(current);
   }
 
@@ -29,7 +31,8 @@ class EstimateService {
   static Future<String> consumeNextEstimateNumber() {
     return _firestore.runTransaction<String>((transaction) async {
       final snapshot = await transaction.get(_ownerSettingsDoc);
-      final current = (snapshot.data()?['next_estimate_number'] as num?)?.toInt() ?? 1;
+      final current =
+          (snapshot.data()?['next_estimate_number'] as num?)?.toInt() ?? 1;
       transaction.set(
         _ownerSettingsDoc,
         {'next_estimate_number': current + 1},
@@ -40,23 +43,28 @@ class EstimateService {
   }
 
   /// listen to real-time estimate updates, filtered by role and clientId
-  static Stream<List<Estimate>> watchEstimates({required String role, String? clientId}) {
+  static Stream<List<Estimate>> watchEstimates(
+      {required String role, String? clientId}) {
     Query<Map<String, dynamic>> query = _collection;
     if (role == 'client' && clientId != null && clientId.trim().isNotEmpty) {
       query = query.where('clientId', isEqualTo: clientId.trim());
     }
 
     return query.snapshots().map((snapshot) {
-      final estimates = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return Estimate.fromMap({...data, 'id': doc.id});
-      }).where((e) => role == 'owner' || !e.isArchived).toList();
+      final estimates = snapshot.docs
+          .map((doc) {
+            final data = doc.data();
+            return Estimate.fromMap({...data, 'id': doc.id});
+          })
+          .where((e) => role == 'owner' || !e.isArchived)
+          .toList();
       estimates.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return estimates;
     });
   }
-/// archive an estimate to hide it from active lists
-  
+
+  /// archive an estimate to hide it from active lists
+
   static Future<void> archiveEstimate(String estimateId) async {
     await _collection.doc(estimateId).set(
       {'archived': true, 'updatedAt': DateTime.now()},
@@ -89,17 +97,20 @@ class EstimateService {
 
     await _collection.doc(normalizedId).delete();
   }
-/// create a new estimate with services and auto-calculated total
-  
+
+  /// create a new estimate with services and auto-calculated total
+
   static Future<String> createEstimate({
     required String estimateNumber,
     required String clientId,
     required List<InvoiceServiceItem> services,
     String notes = '',
     String terms = '',
+    double? depositPercent,
   }) async {
     final now = DateTime.now();
-    final total = services.fold<double>(0, (runningTotal, item) => runningTotal + item.price);
+    final total = services.fold<double>(
+        0, (runningTotal, item) => runningTotal + item.price);
     final doc = _collection.doc();
 
     final estimate = Estimate(
@@ -115,6 +126,7 @@ class EstimateService {
       revisionNumber: 1,
       notes: notes.trim(),
       terms: terms.trim(),
+      depositPercent: depositPercent,
     );
 
     await doc.set(estimate.toMap());
@@ -136,7 +148,8 @@ class EstimateService {
       },
       SetOptions(merge: true),
     );
-  /// revise estimate with new services and increase revision number for re-sending
+
+    /// revise estimate with new services and increase revision number for re-sending
   }
 
   static Future<void> reviseAndResendEstimate({
@@ -146,7 +159,8 @@ class EstimateService {
     String? terms,
   }) async {
     final now = DateTime.now();
-    final total = services.fold<double>(0, (runningTotal, item) => runningTotal + item.price);
+    final total = services.fold<double>(
+        0, (runningTotal, item) => runningTotal + item.price);
     final currentSnapshot = EstimateVersionSnapshot(
       version: estimate.revisionNumber,
       services: estimate.services,
@@ -173,7 +187,8 @@ class EstimateService {
         'terms': (terms ?? estimate.terms).trim(),
       },
       SetOptions(merge: true),
-  /// update estimate status to pending, approved, rejected, etc
+
+      /// update estimate status to pending, approved, rejected, etc
     );
   }
 
@@ -186,7 +201,11 @@ class EstimateService {
     required String terms,
   }) async {
     await _collection.doc(estimateId).set(
-      {'notes': notes.trim(), 'terms': terms.trim(), 'updatedAt': DateTime.now()},
+      {
+        'notes': notes.trim(),
+        'terms': terms.trim(),
+        'updatedAt': DateTime.now()
+      },
       SetOptions(merge: true),
     );
   }
@@ -211,14 +230,16 @@ class EstimateService {
     );
   }
 
-  static Future<void> updateStatus({required String estimateId, required String status}) async {
+  static Future<void> updateStatus(
+      {required String estimateId, required String status}) async {
     await _collection.doc(estimateId).set(
       {
         'status': status,
         'updatedAt': DateTime.now(),
       },
       SetOptions(merge: true),
-  /// mark estimate as converted to invoice with the linked invoice id
+
+      /// mark estimate as converted to invoice with the linked invoice id
     );
   }
 
@@ -233,7 +254,8 @@ class EstimateService {
         'convertedAt': DateTime.now(),
         'updatedAt': DateTime.now(),
       },
-  /// fetch a single estimate by id
+
+      /// fetch a single estimate by id
       SetOptions(merge: true),
     );
   }
@@ -243,7 +265,8 @@ class EstimateService {
     if (normalizedId.isEmpty) return null;
     final snapshot = await _collection.doc(normalizedId).get();
     final data = snapshot.data();
-  /// mark estimate as scheduled to a work order
+
+    /// mark estimate as scheduled to a work order
     if (!snapshot.exists || data == null) return null;
     return Estimate.fromMap({...data, 'id': snapshot.id});
   }

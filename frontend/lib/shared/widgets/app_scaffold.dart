@@ -1036,6 +1036,10 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
   late final TextEditingController _companyNameController;
   late final TextEditingController _addressController;
   late final TextEditingController _nextEstimateNumberController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _emailController;
+  late final TextEditingController _estimateFileNameTemplateController;
+  late final TextEditingController _invoiceFileNameTemplateController;
   final ImagePicker _picker = ImagePicker();
   bool _isSaving = false;
   bool _isPickingLogo = false;
@@ -1053,6 +1057,14 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
         TextEditingController(text: widget.initialSettings.address);
     _nextEstimateNumberController = TextEditingController(
         text: widget.initialSettings.nextEstimateNumber.toString());
+    _phoneController =
+        TextEditingController(text: widget.initialSettings.phone);
+    _emailController =
+        TextEditingController(text: widget.initialSettings.email);
+    _estimateFileNameTemplateController = TextEditingController(
+        text: widget.initialSettings.estimateFileNameTemplate);
+    _invoiceFileNameTemplateController = TextEditingController(
+        text: widget.initialSettings.invoiceFileNameTemplate);
     _logoBase64 = widget.initialSettings.logoBase64;
   }
 
@@ -1061,6 +1073,10 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
     _companyNameController.dispose();
     _addressController.dispose();
     _nextEstimateNumberController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    _estimateFileNameTemplateController.dispose();
+    _invoiceFileNameTemplateController.dispose();
     super.dispose();
   }
 
@@ -1105,6 +1121,16 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
         nextEstimateNumber:
             int.tryParse(_nextEstimateNumberController.text.trim()) ??
                 widget.initialSettings.nextEstimateNumber,
+        phone: _phoneController.text.trim(),
+        email: _emailController.text.trim(),
+        estimateFileNameTemplate:
+            _estimateFileNameTemplateController.text.trim().isEmpty
+                ? 'estimate_{EstimateNumber}'
+                : _estimateFileNameTemplateController.text.trim(),
+        invoiceFileNameTemplate:
+            _invoiceFileNameTemplateController.text.trim().isEmpty
+                ? 'invoice_{InvoiceNumber}'
+                : _invoiceFileNameTemplateController.text.trim(),
       );
       final saved = await OwnerSettingsService.save(settings);
       if (!mounted) return;
@@ -1150,6 +1176,39 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
                   validator: (value) => (value == null || value.trim().isEmpty)
                       ? 'Business address is required'
                       : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                      labelText: 'Business phone (optional)'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                      labelText: 'Business email (optional)'),
+                ),
+                const SizedBox(height: 12),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _estimateFileNameTemplateController,
+                  decoration: const InputDecoration(
+                    labelText: 'Estimate file name',
+                    helperText:
+                        'Placeholders: {CompanyName}, {EstimateNumber}, {ClientName}, {Date}',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _invoiceFileNameTemplateController,
+                  decoration: const InputDecoration(
+                    labelText: 'Invoice file name',
+                    helperText:
+                        'Placeholders: {CompanyName}, {InvoiceNumber}, {ClientName}, {Date}',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(

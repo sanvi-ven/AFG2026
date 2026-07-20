@@ -30,6 +30,7 @@ class Estimate {
     this.ownerApprovedAt,
     this.notes = '',
     this.terms = '',
+    this.depositPercent,
   });
 
   final String id;
@@ -51,14 +52,20 @@ class Estimate {
   final DateTime? resentAt;
   final EstimateVersionSnapshot? originalVersion;
   final bool isArchived;
+
   /// true when the owner approved on the client's behalf (e.g. phone/text confirmation)
   final bool approvedByOwner;
+
   /// 'phone' or 'text' — how the owner confirmed the client's approval
   final String? ownerApprovalMethod;
   final String? ownerApprovalNote;
   final DateTime? ownerApprovedAt;
   final String notes;
   final String terms;
+
+  /// percentage (0-100) of the total due upfront to begin work; null means
+  /// no deposit is required for this estimate
+  final double? depositPercent;
 
   bool get isPending => status == InvoiceStatus.pending;
   bool get isApproved => status == InvoiceStatus.approved;
@@ -128,6 +135,7 @@ class Estimate {
       ownerApprovedAt: readOptionalDate(map['ownerApprovedAt']),
       notes: (map['notes'] as String? ?? '').trim(),
       terms: (map['terms'] as String? ?? '').trim(),
+      depositPercent: (map['depositPercent'] as num?)?.toDouble(),
     );
   }
 
@@ -158,6 +166,7 @@ class Estimate {
       'ownerApprovedAt': ownerApprovedAt,
       'notes': notes,
       'terms': terms,
+      'depositPercent': depositPercent,
     };
   }
 }

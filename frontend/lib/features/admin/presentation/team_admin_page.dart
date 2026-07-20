@@ -16,6 +16,7 @@ import '../../../models/job_completion_form.dart';
 import '../../../models/scheduled_work.dart';
 import '../../../models/team.dart';
 import '../../../models/time_entry.dart';
+import '../../../shared/utils/time_entry_pay_format.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
 /// owner-only admin hub: employee roster, teams, invite codes,
@@ -527,7 +528,7 @@ class _TimeEntriesTab extends StatelessWidget {
                 final subtitleLines = [
                   '${entry.date} · ${entry.clockInAt == null ? '—' : DateFormat('h:mm a').format(entry.clockInAt!)}'
                       ' – ${entry.clockOutAt == null ? 'in progress' : DateFormat('h:mm a').format(entry.clockOutAt!)}',
-                  if (entry.wageOverride != null) '\$${entry.wageOverride!.toStringAsFixed(2)}/hr (override)',
+                  formatEntryPay(entry, employee),
                   if (entry.notes.isNotEmpty) entry.notes,
                 ];
 
