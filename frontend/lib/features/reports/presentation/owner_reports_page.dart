@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/router/app_router.dart';
+import '../../../core/services/broken_report_service.dart';
 import '../../../core/services/client_profile_service.dart';
 import '../../../core/services/employee_profile_service.dart';
+import '../../../core/services/equipment_reservation_service.dart';
+import '../../../core/services/equipment_service.dart';
 import '../../../core/services/estimate_service.dart';
 import '../../../core/services/expense_service.dart';
 import '../../../core/services/invoice_service.dart';
@@ -13,8 +16,11 @@ import '../../../core/services/reporting_service.dart';
 import '../../../core/services/scheduled_work_service.dart';
 import '../../../core/services/team_service.dart';
 import '../../../core/services/time_entry_service.dart';
+import '../../../models/broken_report.dart';
 import '../../../models/client_profile.dart';
 import '../../../models/employee_profile.dart';
+import '../../../models/equipment.dart';
+import '../../../models/equipment_reservation.dart';
 import '../../../models/estimate.dart';
 import '../../../models/expense.dart';
 import '../../../models/invoice.dart';
@@ -198,7 +204,7 @@ class _ReportsTabs extends StatelessWidget {
     );
 
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Column(
         children: [
           const Material(
@@ -210,6 +216,7 @@ class _ReportsTabs extends StatelessWidget {
                 Tab(text: 'Completed Jobs'),
                 Tab(text: 'Employee Payout'),
                 Tab(text: 'Expenses'),
+                Tab(text: 'Equipment'),
               ],
             ),
           ),
@@ -238,6 +245,7 @@ class _ReportsTabs extends StatelessWidget {
                 ),
                 _EmployeePayoutTab(rows: payoutRows),
                 _ExpensesTab(expenses: expenses),
+                const _EquipmentReportsTab(),
               ],
             ),
           ),
@@ -728,5 +736,157 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
         ),
       ],
     );
+  }
+}
+
+/// Equipment usage reporting: two bar charts derived entirely from data already
+/// written by the equipment feature — most-requested (by reservation count) and
+/// most-broken (by broken-report count). No new collections or writes. Broken
+/// reports carry only an equipmentId, so equipment items are streamed once to
+/// resolve ids to display names.
+class _EquipmentReportsTab extends StatelessWidget {
+  const _EquipmentReportsTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<EquipmentItem>>(
+      stream: EquipmentService.watchAll(includeArchived: true),
+      builder: (context, equipmentSnapshot) {
+        return StreamBuilder<List<EquipmentReservation>>(
+          stream: EquipmentReservationService.watchAllReservations(),
+          builder: (context, reservationSnapshot) {
+            return StreamBuilder<List<BrokenReport>>(
+              stream: BrokenReportService.watchAllReports(),
+              builder: (context, brokenSnapshot) {
+                final loading = !equipmentSnapshot.hasData ||
+                    !reservationSnapshot.hasData ||
+                    !brokenSnapshot.hasData;
+                if (loading) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final equipment = equipmentSnapshot.data!;
+                final reservations = reservationSnapshot.data!;
+                final broken = brokenSnapshot.data!;
+
+                final nameForId = {for (final item in equipment) item.id: item.name};
+
+                // most requested: active (non-cancelled) reservations grouped
+                // by denormalized name — a cancelled reservation isn't real
+                // demand and shouldn't count toward "most requested."
+                final requestCounts = <String, int>{};
+                for (final reservation in reservations.where((r) => r.isActive)) {
+                  final name = reservation.equipmentName.trim().isEmpty
+                      ? 'Unknown'
+                      : reservation.equipmentName.trim();
+                  requestCounts[name] = (requestCounts[name] ?? 0) + 1;
+                }
+
+                // most broken: reports grouped by resolved equipment name
+                final brokenCounts = <String, int>{};
+                for (final report in broken) {
+                  final name = nameForId[report.equipmentId] ?? 'Unknown';
+                  brokenCounts[name] = (brokenCounts[name] ?? 0) + 1;
+                }
+
+                return ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    Text('Most Requested Equipment', style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 4),
+                    const Text('By number of reservations'),
+                    const SizedBox(height: 12),
+                    _CountBarChart(
+                      entries: _topEntries(requestCounts, 8),
+                      emptyMessage: 'No equipment reservations yet.',
+                    ),
+                    const SizedBox(height: 24),
+                    Text('Most Broken Equipment', style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 4),
+                    const Text('By number of broken reports (all time)'),
+                    const SizedBox(height: 12),
+                    _CountBarChart(
+                      entries: _topEntries(brokenCounts, 8),
+                      emptyMessage: 'No broken reports yet.',
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  static List<MapEntry<String, int>> _topEntries(Map<String, int> counts, int limit) {
+    final entries = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return entries.take(limit).toList();
+  }
+}
+
+/// integer-count bar chart matching the dashboard's revenue chart conventions
+/// (primary-color rods, index-based bottom labels, hidden top/right titles).
+class _CountBarChart extends StatelessWidget {
+  const _CountBarChart({required this.entries, required this.emptyMessage});
+
+  final List<MapEntry<String, int>> entries;
+  final String emptyMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 220,
+      child: entries.isEmpty
+          ? Center(child: Text(emptyMessage))
+          : BarChart(
+              BarChartData(
+                barGroups: [
+                  for (var i = 0; i < entries.length; i++)
+                    BarChartGroupData(
+                      x: i,
+                      barRods: [
+                        BarChartRodData(
+                          toY: entries[i].value.toDouble(),
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 18,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ],
+                    ),
+                ],
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 28,
+                      getTitlesWidget: (value, meta) {
+                        final index = value.toInt();
+                        if (index < 0 || index >= entries.length) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            _shortLabel(entries[index].key),
+                            style: const TextStyle(fontSize: 10),
+                            textAlign: TextAlign.center,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                borderData: FlBorderData(show: false),
+                gridData: const FlGridData(show: true, drawVerticalLine: false),
+              ),
+            ),
+    );
+  }
+
+  static String _shortLabel(String name) {
+    if (name.length <= 10) return name;
+    return '${name.substring(0, 9)}…';
   }
 }

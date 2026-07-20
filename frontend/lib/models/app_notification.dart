@@ -69,6 +69,8 @@ class AppNotification {
 class NotificationType {
   static const appointmentReminder = 'appointmentReminder';
   static const invoiceOverdue = 'invoiceOverdue';
+  static const serviceDue = 'serviceDue';
+  static const lowStock = 'lowStock';
 }
 
 /// constant recipientId used for owner-targeted notifications (the owner has
