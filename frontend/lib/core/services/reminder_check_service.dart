@@ -1,10 +1,14 @@
 import 'dart:async';
 
+import 'package:intl/intl.dart';
+
 import '../../models/app_notification.dart';
 import '../../models/client_profile.dart';
+import '../../models/equipment.dart' show equipmentServiceDueLeadTime;
 import '../../models/invoice.dart';
 import 'client_profile_service.dart';
 import 'comms_service.dart';
+import 'equipment_service.dart';
 import 'invoice_service.dart';
 import 'local_notification_service.dart';
 import 'notification_service.dart';
@@ -21,6 +25,14 @@ class ReminderCheckService {
 
   static const _appointmentLookahead = Duration(hours: 48);
   static const _invoiceOverdueAfter = Duration(days: 7);
+  static const _serviceDueLeadTime = equipmentServiceDueLeadTime;
+
+  /// re-entrancy guard: DashboardPage remounts (and re-triggers this scan)
+  /// every time a user navigates back to the Dashboard tab, since AppScaffold
+  /// uses pushReplacementNamed. Rapid tab-switching could otherwise overlap
+  /// two scans that both read a notified-flag as unset before either write
+  /// lands, double-firing a notification.
+  static bool _isRunning = false;
 
   static ClientProfile? _findClient(List<ClientProfile> clients, String clientId) {
     for (final client in clients) {
@@ -30,8 +42,16 @@ class ReminderCheckService {
   }
 
   static Future<void> checkAndCreateReminders() async {
-    await _checkAppointmentReminders();
-    await _checkInvoiceReminders();
+    if (_isRunning) return;
+    _isRunning = true;
+    try {
+      await _checkAppointmentReminders();
+      await _checkInvoiceReminders();
+      await _checkServiceDueSoon();
+      await _checkLowStock();
+    } finally {
+      _isRunning = false;
+    }
   }
 
   static Future<void> _checkAppointmentReminders() async {
@@ -135,6 +155,76 @@ class ReminderCheckService {
         body: '$clientName — ${invoice.invoiceNumber}',
       );
       await InvoiceService.markReminderSent(invoice.id);
+    }
+  }
+
+  /// scan Equipment units whose next-service date falls within the lead time
+  /// (or is already past) and alert the owner once per due window. Dedupe uses
+  /// the unit's serviceDueNotifiedAt stamp; snoozed units are skipped until the
+  /// snooze passes.
+  static Future<void> _checkServiceDueSoon() async {
+    final items = await EquipmentService.watchAll().first;
+    final now = DateTime.now();
+    final cutoff = now.add(_serviceDueLeadTime);
+
+    for (final item in items) {
+      if (!item.isEquipment || item.isArchived) continue;
+      for (final unit in item.units) {
+        final due = unit.nextServiceDueDate;
+        if (due == null) continue;
+        final snoozedUntil = unit.serviceDueSnoozedUntil;
+        if (snoozedUntil != null && snoozedUntil.isAfter(now)) continue;
+        if (unit.serviceDueNotifiedAt != null) continue;
+        if (due.isAfter(cutoff)) continue;
+
+        await NotificationService.create(
+          recipientRole: 'owner',
+          recipientId: ownerNotificationRecipientId,
+          type: NotificationType.serviceDue,
+          title: 'Service due soon',
+          body: '${item.name} (unit #${unit.unitNumber}) is due for service '
+              'on ${DateFormat('MMM d').format(due)}.',
+          relatedId: item.id,
+        );
+        await LocalNotificationService.showMessageNotification(
+          id: '${item.id}_${unit.unitNumber}'.hashCode,
+          title: 'Service due soon',
+          body: '${item.name} — unit #${unit.unitNumber}',
+        );
+        await EquipmentService.stampUnitServiceDueNotified(
+          equipmentId: item.id,
+          unitNumber: unit.unitNumber,
+        );
+      }
+    }
+  }
+
+  /// scan Supply items that are at/below their low-stock threshold (or manually
+  /// flagged) and alert the owner once per low-stock episode. Dedupe uses the
+  /// item's lowStockNotifiedAt stamp, which restock/flag changes clear again
+  /// once the item is no longer low.
+  static Future<void> _checkLowStock() async {
+    final items = await EquipmentService.watchAll().first;
+
+    for (final item in items) {
+      if (!item.isSupply || item.isArchived) continue;
+      if (!item.isLowStock) continue;
+      if (item.lowStockNotifiedAt != null) continue;
+
+      await NotificationService.create(
+        recipientRole: 'owner',
+        recipientId: ownerNotificationRecipientId,
+        type: NotificationType.lowStock,
+        title: 'Running low: ${item.name}',
+        body: 'Only ${item.quantity} ${item.unitOfMeasure} left.'.trim(),
+        relatedId: item.id,
+      );
+      await LocalNotificationService.showMessageNotification(
+        id: 'lowstock_${item.id}'.hashCode,
+        title: 'Running low: ${item.name}',
+        body: 'Only ${item.quantity} ${item.unitOfMeasure} left.'.trim(),
+      );
+      await EquipmentService.stampLowStockNotified(item.id);
     }
   }
 }

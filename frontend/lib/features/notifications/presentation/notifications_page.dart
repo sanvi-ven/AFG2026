@@ -30,6 +30,22 @@ class NotificationsPage extends StatelessWidget {
     final relatedId = notification.relatedId;
     if (relatedId == null || relatedId.isEmpty) return;
 
+    // equipment notifications deep-link to the equipment detail page, which
+    // reads its target from an 'equipmentId' argument (see AppRouter).
+    if (notification.type == NotificationType.serviceDue ||
+        notification.type == NotificationType.lowStock) {
+      Navigator.pushNamed(
+        context,
+        AppRouter.equipmentDetail,
+        arguments: {
+          'role': role,
+          'authToken': authToken,
+          'equipmentId': relatedId,
+        },
+      );
+      return;
+    }
+
     final route = notification.type == NotificationType.invoiceOverdue ? AppRouter.invoices : AppRouter.appointments;
     Navigator.pushNamed(
       context,
