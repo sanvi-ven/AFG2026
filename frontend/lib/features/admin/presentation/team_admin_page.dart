@@ -6,6 +6,7 @@ import '../../../core/services/client_profile_service.dart';
 import '../../../core/services/employee_profile_service.dart';
 import '../../../core/services/invite_code_service.dart';
 import '../../../core/services/job_completion_service.dart';
+import '../../../core/services/reporting_service.dart';
 import '../../../core/services/scheduled_work_service.dart';
 import '../../../core/services/team_service.dart';
 import '../../../core/services/time_entry_service.dart';
@@ -18,6 +19,7 @@ import '../../../models/team.dart';
 import '../../../models/time_entry.dart';
 import '../../../shared/utils/time_entry_pay_format.dart';
 import '../../../shared/widgets/app_scaffold.dart';
+import '../../../shared/widgets/csv_export_buttons.dart';
 
 /// owner-only admin hub: employee roster, teams, invite codes,
 /// submitted job completion reports, and time entry review
@@ -519,10 +521,35 @@ class _TimeEntriesTab extends StatelessWidget {
             if (entries.isEmpty) {
               return const Padding(padding: EdgeInsets.all(16), child: Text('No time entries in the last 30 days.'));
             }
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: entries.length,
-              itemBuilder: (context, index) {
+
+            final exportRows = <List<Object?>>[
+              ['Employee', 'Date', 'Clock In', 'Clock Out', 'Hours', 'Rate', 'Payout', 'Notes', 'Paid'],
+              for (final entry in entries)
+                [
+                  employees[entry.employeeId]?.fullName ?? entry.employeeId,
+                  entry.date,
+                  entry.clockInAt,
+                  entry.clockOutAt,
+                  ReportingService.hoursForEntry(entry),
+                  ReportingService.effectiveRateForEntry(entry, employees[entry.employeeId]),
+                  ReportingService.payoutForEntry(entry, employees[entry.employeeId]),
+                  entry.notes,
+                  entry.isPaid ? 'Yes' : 'No',
+                ],
+            ];
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: ExportButtons(rows: exportRows, fileNamePrefix: 'time_entries'),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: entries.length,
+                    itemBuilder: (context, index) {
                 final entry = entries[index];
                 final employee = employees[entry.employeeId];
                 final subtitleLines = [
@@ -551,7 +578,10 @@ class _TimeEntriesTab extends StatelessWidget {
                         : null,
                   ),
                 );
-              },
+                    },
+                  ),
+                ),
+              ],
             );
           },
         );
