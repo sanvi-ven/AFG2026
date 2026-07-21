@@ -63,6 +63,22 @@ class EquipmentReservationService {
     });
   }
 
+  /// all reservations linked to one job ([workId]), soonest first — powers the
+  /// job detail page's Equipment section.
+  static Stream<List<EquipmentReservation>> watchForWork(String workId) {
+    return _collection
+        .where('workId', isEqualTo: workId)
+        .snapshots()
+        .map((snapshot) {
+      final reservations = snapshot.docs
+          .map((doc) =>
+              EquipmentReservation.fromMap({...doc.data(), 'id': doc.id}))
+          .toList();
+      reservations.sort((a, b) => a.startTime.compareTo(b.startTime));
+      return reservations;
+    });
+  }
+
   /// reserve [quantity] free units of [equipment] for the [startTime]–[endTime]
   /// window, auto-approved. Picks the lowest-numbered active units that have no
   /// overlapping active reservation that same day, then batch-creates one
@@ -82,6 +98,8 @@ class EquipmentReservationService {
     required DateTime endTime,
     required String employeeId,
     required String employeeName,
+    String workId = '',
+    String jobAddress = '',
   }) async {
     if (quantity < 1) {
       throw Exception('Quantity must be at least 1.');
@@ -157,6 +175,8 @@ class EquipmentReservationService {
         endTime: endTime,
         employeeId: employeeId,
         employeeName: employeeName,
+        workId: workId,
+        jobAddress: jobAddress,
         createdAt: now,
       );
       batch.set(_collection.doc(id), reservation.toMap());

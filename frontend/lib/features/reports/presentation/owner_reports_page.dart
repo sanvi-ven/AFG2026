@@ -29,6 +29,7 @@ import '../../../models/scheduled_work.dart';
 import '../../../models/team.dart';
 import '../../../models/time_entry.dart';
 import '../../../shared/widgets/app_scaffold.dart';
+import '../../../shared/widgets/csv_export_buttons.dart';
 
 enum _ReportRange { thisWeek, thisMonth, allTime }
 
@@ -473,32 +474,59 @@ class _CompletedJobsTab extends StatelessWidget {
       );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columns: const [
-          DataColumn(label: Text('Job')),
-          DataColumn(label: Text('Client')),
-          DataColumn(label: Text('Date')),
-          DataColumn(label: Text('Duration')),
-          DataColumn(label: Text('Team')),
-          DataColumn(label: Text('Income')),
+    String durationLabel(Duration? duration) =>
+        duration == null ? '—' : '${duration.inHours}h ${duration.inMinutes.remainder(60)}m';
+    String teamLabel(String? teamId) =>
+        teamId == null ? 'Unassigned' : (teamNameFor[teamId] ?? teamId);
+
+    final exportRows = <List<Object?>>[
+      ['Job', 'Client', 'Date', 'Duration', 'Team', 'Income'],
+      for (final row in rows)
+        [
+          row.estimateNumber,
+          row.clientName,
+          row.date,
+          durationLabel(row.duration),
+          teamLabel(row.teamId),
+          row.income,
         ],
-        rows: [
-          for (final row in rows)
-            DataRow(cells: [
-              DataCell(Text(row.estimateNumber)),
-              DataCell(Text(row.clientName)),
-              DataCell(Text(_dateFormat.format(row.date))),
-              DataCell(Text(row.duration == null
-                  ? '—'
-                  : '${row.duration!.inHours}h ${row.duration!.inMinutes.remainder(60)}m')),
-              DataCell(Text(row.teamId == null ? 'Unassigned' : (teamNameFor[row.teamId] ?? row.teamId!))),
-              DataCell(Text(_currency.format(row.income))),
-            ]),
-        ],
-      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: ExportButtons(rows: exportRows, fileNamePrefix: 'completed_jobs'),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columns: const [
+                DataColumn(label: Text('Job')),
+                DataColumn(label: Text('Client')),
+                DataColumn(label: Text('Date')),
+                DataColumn(label: Text('Duration')),
+                DataColumn(label: Text('Team')),
+                DataColumn(label: Text('Income')),
+              ],
+              rows: [
+                for (final row in rows)
+                  DataRow(cells: [
+                    DataCell(Text(row.estimateNumber)),
+                    DataCell(Text(row.clientName)),
+                    DataCell(Text(_dateFormat.format(row.date))),
+                    DataCell(Text(durationLabel(row.duration))),
+                    DataCell(Text(teamLabel(row.teamId))),
+                    DataCell(Text(_currency.format(row.income))),
+                  ]),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -518,26 +546,43 @@ class _EmployeePayoutTab extends StatelessWidget {
       );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columns: const [
-          DataColumn(label: Text('Employee')),
-          DataColumn(label: Text('Hours')),
-          DataColumn(label: Text('Rate')),
-          DataColumn(label: Text('Payout')),
-        ],
-        rows: [
-          for (final row in rows)
-            DataRow(cells: [
-              DataCell(Text(row.name)),
-              DataCell(Text(row.hours.toStringAsFixed(1))),
-              DataCell(Text(row.rate == 0 ? '—' : '${_currency.format(row.rate)}/hr')),
-              DataCell(Text(_currency.format(row.payout))),
-            ]),
-        ],
-      ),
+    final exportRows = <List<Object?>>[
+      ['Employee', 'Hours', 'Rate', 'Payout'],
+      for (final row in rows)
+        [row.name, row.hours, row.rate, row.payout],
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: ExportButtons(rows: exportRows, fileNamePrefix: 'employee_payout'),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columns: const [
+                DataColumn(label: Text('Employee')),
+                DataColumn(label: Text('Hours')),
+                DataColumn(label: Text('Rate')),
+                DataColumn(label: Text('Payout')),
+              ],
+              rows: [
+                for (final row in rows)
+                  DataRow(cells: [
+                    DataCell(Text(row.name)),
+                    DataCell(Text(row.hours.toStringAsFixed(1))),
+                    DataCell(Text(row.rate == 0 ? '—' : '${_currency.format(row.rate)}/hr')),
+                    DataCell(Text(_currency.format(row.payout))),
+                  ]),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -579,6 +624,22 @@ class _ExpensesTabState extends State<_ExpensesTab> {
   Widget build(BuildContext context) {
     final total = ReportingService.totalExpenses(widget.expenses);
 
+    final exportRows = <List<Object?>>[
+      ['Date', 'Description', 'Category', 'Amount'],
+      for (final expense in widget.expenses)
+        [
+          // expense.date is a date-only concept, but its stored value can
+          // carry an incidental time-of-day (e.g. defaulted from
+          // DateTime.now() when the picker wasn't touched) — truncate so the
+          // CSV column is consistently date-only rather than mixing formats
+          // row to row depending on how each expense happened to be entered.
+          DateTime(expense.date.year, expense.date.month, expense.date.day),
+          expense.description,
+          ExpenseCategory.displayLabel(expense.category),
+          expense.amount,
+        ],
+    ];
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -592,6 +653,11 @@ class _ExpensesTabState extends State<_ExpensesTab> {
               label: const Text('Add Expense'),
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ExportButtons(rows: exportRows, fileNamePrefix: 'expenses'),
         ),
         const SizedBox(height: 16),
         if (widget.expenses.isEmpty)

@@ -24,6 +24,8 @@ class EquipmentReservation {
     this.cancelReason = '',
     this.checkedOutAt,
     this.returnedAt,
+    this.workId = '',
+    this.jobAddress = '',
     required this.createdAt,
   });
 
@@ -51,9 +53,21 @@ class EquipmentReservation {
   /// stamped when the unit is returned (Phase 5 UI)
   final DateTime? returnedAt;
 
+  /// optional link back to the ScheduledWork this unit is going out with.
+  /// Empty means "not linked to a job" — matching the codebase's optional-FK
+  /// convention (e.g. ScheduledWork.teamId).
+  final String workId;
+
+  /// denormalized job address, so the equipment-side row can show job context
+  /// without a lookup — same rationale as [equipmentName].
+  final String jobAddress;
+
   final DateTime createdAt;
 
   bool get isActive => !isCancelled;
+
+  /// true when this reservation is tied to a specific job.
+  bool get isLinkedToJob => workId.isNotEmpty;
 
   /// true when this reservation's window intersects [otherStart]–[otherEnd].
   /// Touching edges (one ends exactly as the other starts) do not overlap.
@@ -90,6 +104,8 @@ class EquipmentReservation {
       cancelReason: (map['cancelReason'] as String? ?? '').trim(),
       checkedOutAt: readNullableDate(map['checkedOutAt']),
       returnedAt: readNullableDate(map['returnedAt']),
+      workId: (map['workId'] as String? ?? '').trim(),
+      jobAddress: (map['jobAddress'] as String? ?? '').trim(),
       createdAt: readDate(map['createdAt']),
     );
   }
@@ -111,6 +127,8 @@ class EquipmentReservation {
       'cancelReason': cancelReason,
       'checkedOutAt': checkedOutAt,
       'returnedAt': returnedAt,
+      'workId': workId,
+      'jobAddress': jobAddress,
       'createdAt': createdAt,
     };
   }
