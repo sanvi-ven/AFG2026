@@ -263,6 +263,11 @@ class ScheduledWorkService {
       {
         'teamId': teamId,
         'employeeIds': <String>[],
+        // routeOrder is only meaningful within the bucket (team, or
+        // individual-assignment) it was set in — reassigning to a different
+        // bucket must drop it, or it silently jumps the job to the front of
+        // whatever unrelated sequence happens to share that number.
+        'routeOrder': null,
         'updatedAt': DateTime.now(),
       },
       SetOptions(merge: true),
@@ -277,6 +282,8 @@ class ScheduledWorkService {
       {
         'teamId': null,
         'employeeIds': employeeIds,
+        // see assignTeam's comment — routeOrder doesn't carry across buckets.
+        'routeOrder': null,
         'updatedAt': DateTime.now(),
       },
       SetOptions(merge: true),
@@ -301,6 +308,18 @@ class ScheduledWorkService {
       },
       SetOptions(merge: true),
     );
+  }
+
+  /// owner action: persist a manual route sequence for a set of jobs, stamping
+  /// `routeOrder` 0..n-1 on each id in the order given. callers pass a team's
+  /// full job list for the day in the new desired order; the whole write is one
+  /// batch so the sequence lands atomically.
+  static Future<void> reorderJobs({required List<String> workIdsInOrder}) async {
+    final batch = _firestore.batch();
+    for (var i = 0; i < workIdsInOrder.length; i++) {
+      batch.set(_collection.doc(workIdsInOrder[i]), {'routeOrder': i}, SetOptions(merge: true));
+    }
+    await batch.commit();
   }
 
   /// mark scheduled work as invoiced and link to invoice id

@@ -5,6 +5,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/scheduled_work_service.dart';
 import '../../../core/state/employee_session.dart';
 import '../../../models/scheduled_work.dart';
+import '../../../shared/utils/route_order.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/get_directions_button.dart';
 
@@ -160,10 +161,15 @@ class _TodaysRouteTabState extends State<_TodaysRouteTab> {
                 return _EmptyState(message: "Failed to load this day's route: ${snapshot.error}");
               }
 
-              final jobs = snapshot.data ?? const <ScheduledWork>[];
-              if (jobs.isEmpty) {
+              final rawJobs = snapshot.data ?? const <ScheduledWork>[];
+              if (rawJobs.isEmpty) {
                 return const _EmptyState(message: 'No jobs scheduled for you on this day.');
               }
+              // read-only: show the exact sequence the owner set. rawJobs can
+              // mix this employee's team jobs with jobs individually assigned
+              // to them (two different routeOrder buckets), so bucket-scope
+              // the sort rather than comparing routeOrder across buckets.
+              final jobs = sortJobsAcrossBuckets(rawJobs);
 
               return ListView.builder(
                 padding: const EdgeInsets.all(16),
