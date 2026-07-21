@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/services/client_profile_service.dart';
+import '../../../core/services/estimate_service.dart';
 import '../../../core/services/scheduled_work_service.dart';
 import '../../../core/services/team_service.dart';
+import '../../../models/estimate.dart';
 import '../../../models/scheduled_work.dart';
 import '../../../models/team.dart';
 import '../../../shared/widgets/get_directions_button.dart';
@@ -68,6 +71,41 @@ class _JobManagerTabState extends State<JobManagerTab> {
     }
   }
 
+  /// schedule an approved-but-unscheduled estimate dropped onto a calendar
+  /// cell — same underlying calls as the Estimates tab's "Schedule Work"
+  /// button for a single, non-recurring occurrence with no checklist
+  /// template (drag-and-drop is a fast single-drop action; a checklist can
+  /// still be attached afterward from the job detail page).
+  Future<void> _scheduleEstimateAt(Estimate estimate, DateTime day, int hour) async {
+    final scheduledDateTime = DateTime(day.year, day.month, day.day, hour);
+    try {
+      final client = await ClientProfileService.fetchBySignupId(estimate.clientId);
+      final workId = await ScheduledWorkService.createScheduledWork(
+        estimateId: estimate.id,
+        estimateNumber: estimate.estimateNumber,
+        clientId: estimate.clientId,
+        services: estimate.services,
+        total: estimate.total,
+        scheduledDate: scheduledDateTime,
+        address: client?.address ?? '',
+        phoneNumber: client?.phoneNumber ?? '',
+      );
+      await EstimateService.markScheduled(estimateId: estimate.id, scheduledWorkId: workId);
+      if (mounted) {
+        final formatted = DateFormat('MMM d, h:mm a').format(scheduledDateTime);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${estimate.estimateNumber} scheduled for $formatted.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to schedule: $error')),
+        );
+      }
+    }
+  }
+
   void _showJobDetails(ScheduledWork job) {
     showModalBottomSheet<void>(
       context: context,
@@ -120,6 +158,7 @@ class _JobManagerTabState extends State<JobManagerTab> {
                   onPrevious: () => _shiftWeek(-7),
                   onNext: () => _shiftWeek(7),
                 ),
+                const _NeedsSchedulingPanel(),
                 if (teams.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -176,8 +215,14 @@ class _JobManagerTabState extends State<JobManagerTab> {
                                     width: _dayColWidth,
                                     jobsByHour: bucketed[d]!,
                                     outsideHoursJobs: outsideHours[d]!,
-                                    onDrop: (job, hour) =>
-                                        _rescheduleJob(job, _weekStart.add(Duration(days: d)), hour),
+                                    onDrop: (data, hour) {
+                                      final day = _weekStart.add(Duration(days: d));
+                                      if (data is ScheduledWork) {
+                                        _rescheduleJob(data, day, hour);
+                                      } else if (data is Estimate) {
+                                        _scheduleEstimateAt(data, day, hour);
+                                      }
+                                    },
                                     onTapJob: _showJobDetails,
                                   ),
                               ],
@@ -300,7 +345,7 @@ class _DayColumn extends StatelessWidget {
   final double width;
   final Map<int, List<ScheduledWork>> jobsByHour;
   final List<ScheduledWork> outsideHoursJobs;
-  final void Function(ScheduledWork job, int hour) onDrop;
+  final void Function(Object data, int hour) onDrop;
   final ValueChanged<ScheduledWork> onTapJob;
 
   @override
@@ -314,7 +359,7 @@ class _DayColumn extends StatelessWidget {
             _HourCell(
               height: rowHeight,
               jobs: jobsByHour[hour] ?? const <ScheduledWork>[],
-              onAccept: (job) => onDrop(job, hour),
+              onAccept: (data) => onDrop(data, hour),
               onTapJob: onTapJob,
             ),
           if (outsideHoursJobs.isNotEmpty) _OutsideHoursRow(jobs: outsideHoursJobs, onTapJob: onTapJob),
@@ -329,12 +374,12 @@ class _HourCell extends StatelessWidget {
 
   final double height;
   final List<ScheduledWork> jobs;
-  final ValueChanged<ScheduledWork> onAccept;
+  final ValueChanged<Object> onAccept;
   final ValueChanged<ScheduledWork> onTapJob;
 
   @override
   Widget build(BuildContext context) {
-    return DragTarget<ScheduledWork>(
+    return DragTarget<Object>(
       onAcceptWithDetails: (details) => onAccept(details.data),
       builder: (context, candidateData, rejectedData) {
         // Every cell stays exactly `height` tall so the grid lines up with the
@@ -460,6 +505,98 @@ class _JobChip extends StatelessWidget {
       ),
       childWhenDragging: Opacity(opacity: 0.3, child: chip),
       child: GestureDetector(onTap: onTap, child: chip),
+    );
+  }
+}
+
+/// horizontally-scrollable strip of approved-but-unscheduled estimates that
+/// can be long-press-dragged onto a calendar cell to schedule them (see
+/// _JobManagerTabState._scheduleEstimateAt). Hidden entirely when empty.
+class _NeedsSchedulingPanel extends StatelessWidget {
+  const _NeedsSchedulingPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Estimate>>(
+      stream: EstimateService.watchEstimates(role: 'owner'),
+      builder: (context, snapshot) {
+        final needsScheduling = (snapshot.data ?? const <Estimate>[])
+            .where((estimate) => estimate.isApproved && !estimate.isScheduled)
+            .toList();
+        if (needsScheduling.isEmpty) return const SizedBox.shrink();
+
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Needs Scheduling — drag onto the calendar',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                height: 56,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    for (final estimate in needsScheduling)
+                      _NeedsSchedulingChip(estimate: estimate),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _NeedsSchedulingChip extends StatelessWidget {
+  const _NeedsSchedulingChip({required this.estimate});
+
+  final Estimate estimate;
+
+  @override
+  Widget build(BuildContext context) {
+    final chip = Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.tertiaryContainer,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            estimate.estimateNumber,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+          Text(
+            '\$${estimate.total.toStringAsFixed(0)}',
+            style: const TextStyle(fontSize: 11),
+          ),
+        ],
+      ),
+    );
+
+    return LongPressDraggable<Estimate>(
+      data: estimate,
+      feedback: Material(
+        elevation: 4,
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(width: 130, child: chip),
+      ),
+      childWhenDragging: Opacity(opacity: 0.3, child: chip),
+      child: chip,
     );
   }
 }

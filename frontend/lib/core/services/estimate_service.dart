@@ -210,6 +210,33 @@ class EstimateService {
     );
   }
 
+  /// owner action: edit a still-pending estimate's services/notes/terms/deposit
+  /// in place — unlike [reviseAndResendEstimate], this does not bump
+  /// revisionNumber or snapshot originalVersion, since the client hasn't seen
+  /// or acted on the estimate yet. Only valid while status is still pending;
+  /// callers should gate on estimate.isPending before offering this action.
+  static Future<void> updateEstimate({
+    required String estimateId,
+    required List<InvoiceServiceItem> services,
+    required String notes,
+    required String terms,
+    double? depositPercent,
+  }) async {
+    final total = services.fold<double>(
+        0, (runningTotal, item) => runningTotal + item.price);
+    await _collection.doc(estimateId).set(
+      {
+        'services': services.map((item) => item.toMap()).toList(),
+        'total': total,
+        'notes': notes.trim(),
+        'terms': terms.trim(),
+        'depositPercent': depositPercent,
+        'updatedAt': DateTime.now(),
+      },
+      SetOptions(merge: true),
+    );
+  }
+
   /// owner action: approve a pending estimate on the client's behalf after
   /// getting confirmation by phone or text outside the app
   static Future<void> approveByOwner({

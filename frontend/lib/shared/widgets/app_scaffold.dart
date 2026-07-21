@@ -16,6 +16,7 @@ import '../../core/services/employee_profile_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/owner_settings_service.dart';
 import '../../core/services/session_persistence_service.dart';
+import '../../core/services/sidebar_preference_service.dart';
 import '../../core/state/client_session.dart';
 import '../../core/state/employee_session.dart';
 import '../../core/state/owner_session.dart';
@@ -89,48 +90,42 @@ class AppScaffold extends StatelessWidget {
                   child: Column(
                     children: [
                       Expanded(
-                        child: NavigationRail(
-                          selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
-                          onDestinationSelected: onDestinationSelected,
-                          labelType: NavigationRailLabelType.all,
-                          destinations: [
-                            for (final item in items)
-                              NavigationRailDestination(
-                                icon: item.route == AppRouter.dashboard
-                                    ? const AppLogo(
-                                        size: 20, fallbackIcon: Icons.dashboard)
-                                    : Icon(item.icon),
-                                selectedIcon: item.route == AppRouter.dashboard
-                                    ? const AppLogo(
-                                        size: 22, fallbackIcon: Icons.dashboard)
-                                    : Icon(item.icon),
-                                label: Text(item.label),
+                        child: role == 'owner'
+                            ? _OwnerGroupedSidebar(
+                                items: items,
+                                selectedRoute: selectedRoute,
+                                onSelectRoute: (route) => onDestinationSelected(
+                                    items.indexWhere((i) => i.route == route)),
+                              )
+                            : NavigationRail(
+                                selectedIndex:
+                                    selectedIndex < 0 ? 0 : selectedIndex,
+                                onDestinationSelected: onDestinationSelected,
+                                labelType: NavigationRailLabelType.all,
+                                destinations: [
+                                  for (final item in items)
+                                    NavigationRailDestination(
+                                      icon: item.route == AppRouter.dashboard
+                                          ? const AppLogo(
+                                              size: 20,
+                                              fallbackIcon: Icons.dashboard)
+                                          : Icon(item.icon),
+                                      selectedIcon: item.route ==
+                                              AppRouter.dashboard
+                                          ? const AppLogo(
+                                              size: 22,
+                                              fallbackIcon: Icons.dashboard)
+                                          : Icon(item.icon),
+                                      label: Text(item.label),
+                                    ),
+                                ],
                               ),
-                          ],
-                        ),
                       ),
                       if (showSettings) ...[
                         const Divider(height: 1),
                         ListTile(
                           leading: const Icon(Icons.settings_outlined),
                           title: const Text('Settings'),
-                          subtitle: showClientSettings
-                              ? ValueListenableBuilder<ClientProfile?>(
-                                  valueListenable: ClientSession.profile,
-                                  builder: (context, profile, _) {
-                                    return Text(profile?.email ??
-                                        'Update your profile');
-                                  },
-                                )
-                              : showEmployeeSettings
-                                  ? ValueListenableBuilder<EmployeeProfile?>(
-                                      valueListenable: EmployeeSession.profile,
-                                      builder: (context, profile, _) {
-                                        return Text(profile?.email ??
-                                            'Update your profile');
-                                      },
-                                    )
-                                  : const Text('Update business details'),
                           onTap: () => _openSettingsDialog(context),
                         ),
                       ],
@@ -396,6 +391,196 @@ class AppScaffold extends StatelessWidget {
     }
 
     return 1.0; // Full size for wider screens
+  }
+}
+
+/// a collapsible category in the owner sidebar
+class _SidebarGroup {
+  const _SidebarGroup({
+    required this.key,
+    required this.label,
+    required this.icon,
+    required this.routes,
+  });
+
+  final String key;
+  final String label;
+  final IconData icon;
+  final Set<String> routes;
+}
+
+/// owner sidebar's collapsible categories, in the order their header should
+/// appear (each rendered at the position of its first member route)
+const _ownerSidebarGroups = <_SidebarGroup>[
+  _SidebarGroup(
+    key: 'workflow',
+    label: 'Workflow',
+    icon: Icons.work_outline,
+    routes: {
+      AppRouter.requests,
+      AppRouter.estimates,
+      AppRouter.appointments,
+      AppRouter.invoices,
+    },
+  ),
+  _SidebarGroup(
+    key: 'contacts',
+    label: 'Contacts',
+    icon: Icons.people_alt_outlined,
+    routes: {AppRouter.messages, AppRouter.clients},
+  ),
+];
+
+/// owner-only wide-layout sidebar: same nav items as [NavigationRail] used
+/// elsewhere, but related routes are folded under collapsible group headers
+/// (see [_ownerSidebarGroups]) to cut down the owner's flat item count.
+class _OwnerGroupedSidebar extends StatefulWidget {
+  const _OwnerGroupedSidebar({
+    required this.items,
+    required this.selectedRoute,
+    required this.onSelectRoute,
+  });
+
+  final List<_NavItem> items;
+  final String selectedRoute;
+  final void Function(String route) onSelectRoute;
+
+  @override
+  State<_OwnerGroupedSidebar> createState() => _OwnerGroupedSidebarState();
+}
+
+class _OwnerGroupedSidebarState extends State<_OwnerGroupedSidebar> {
+  late final Map<String, bool> _expanded = {
+    for (final group in _ownerSidebarGroups)
+      group.key: group.routes.contains(widget.selectedRoute),
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    for (final group in _ownerSidebarGroups) {
+      final stored = await SidebarPreferenceService.getGroupExpanded(group.key);
+      if (stored == null || !mounted) continue;
+      setState(() => _expanded[group.key] =
+          stored || group.routes.contains(widget.selectedRoute));
+    }
+  }
+
+  void _toggleGroup(String key) {
+    final next = !(_expanded[key] ?? false);
+    setState(() => _expanded[key] = next);
+    SidebarPreferenceService.setGroupExpanded(key, next);
+  }
+
+  _SidebarGroup? _groupForRoute(String route) {
+    for (final group in _ownerSidebarGroups) {
+      if (group.routes.contains(route)) return group;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    final insertedGroupKeys = <String>{};
+
+    for (final item in widget.items) {
+      final group = _groupForRoute(item.route);
+      if (group != null) {
+        if (insertedGroupKeys.contains(group.key)) continue;
+        insertedGroupKeys.add(group.key);
+        final expanded = _expanded[group.key] ?? false;
+        rows.add(_GroupHeaderTile(
+          label: group.label,
+          icon: group.icon,
+          expanded: expanded,
+          onTap: () => _toggleGroup(group.key),
+        ));
+        if (expanded) {
+          for (final groupedItem
+              in widget.items.where((i) => group.routes.contains(i.route))) {
+            rows.add(_SidebarRow(
+              item: groupedItem,
+              selected: groupedItem.route == widget.selectedRoute,
+              indent: true,
+              onTap: () => widget.onSelectRoute(groupedItem.route),
+            ));
+          }
+        }
+        continue;
+      }
+      rows.add(_SidebarRow(
+        item: item,
+        selected: item.route == widget.selectedRoute,
+        onTap: () => widget.onSelectRoute(item.route),
+      ));
+    }
+
+    return ListView(children: rows);
+  }
+}
+
+class _SidebarRow extends StatelessWidget {
+  const _SidebarRow({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+    this.indent = false,
+  });
+
+  final _NavItem item;
+  final bool selected;
+  final bool indent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(left: indent ? 16 : 0),
+      child: ListTile(
+        dense: true,
+        selected: selected,
+        selectedTileColor: Theme.of(context).colorScheme.secondaryContainer,
+        leading: item.route == AppRouter.dashboard
+            ? const AppLogo(size: 20, fallbackIcon: Icons.dashboard)
+            : Icon(item.icon),
+        title: Text(item.label, style: const TextStyle(fontSize: 13)),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _GroupHeaderTile extends StatelessWidget {
+  const _GroupHeaderTile({
+    required this.label,
+    required this.icon,
+    required this.expanded,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      leading: Icon(icon),
+      title: Text(label, style: const TextStyle(fontSize: 13)),
+      trailing: AnimatedRotation(
+        turns: expanded ? 0.5 : 0,
+        duration: const Duration(milliseconds: 150),
+        child: const Icon(Icons.expand_more),
+      ),
+      onTap: onTap,
+    );
   }
 }
 

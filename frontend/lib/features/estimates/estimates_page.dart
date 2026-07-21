@@ -72,6 +72,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
   String? _downloadingEstimatePdfId;
   String? _requestingChangesEstimateId;
   String? _revisingEstimateId;
+  String? _editingEstimateId;
   String? _archivingEstimateId;
   String? _deletingEstimateId;
   Timer? _clientSearchDebounce;
@@ -459,6 +460,44 @@ class _EstimatesPageState extends State<EstimatesPage> {
     } finally {
       if (mounted) {
         setState(() => _revisingEstimateId = null);
+      }
+    }
+  }
+
+  Future<void> _editEstimate(Estimate estimate) async {
+    final result = await showDialog<_EditEstimateResult>(
+      context: context,
+      builder: (_) => _EditPendingEstimateDialog(estimate: estimate),
+    );
+    if (result == null) {
+      return;
+    }
+
+    setState(() => _editingEstimateId = estimate.id);
+    try {
+      await EstimateService.updateEstimate(
+        estimateId: estimate.id,
+        services: result.services,
+        notes: result.notes,
+        terms: result.terms,
+        depositPercent: result.depositPercent,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Estimate updated.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update estimate: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _editingEstimateId = null);
       }
     }
   }
@@ -914,6 +953,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
                           isRequestingChanges:
                               _requestingChangesEstimateId == estimate.id,
                           isRevising: _revisingEstimateId == estimate.id,
+                          isEditing: _editingEstimateId == estimate.id,
                           isArchiving: _archivingEstimateId == estimate.id,
                           isDeleting: _deletingEstimateId == estimate.id,
                           onApprove: () => _setEstimateStatus(
@@ -928,6 +968,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
                               _downloadEstimatePdf(estimate),
                           onReviseAndResend: () =>
                               _reviseAndResendEstimate(estimate),
+                          onEdit: () => _editEstimate(estimate),
                           onArchive: widget.role == 'owner'
                               ? () => _archiveEstimate(estimate)
                               : null,
@@ -1203,6 +1244,7 @@ class _EstimateCard extends StatelessWidget {
     required this.isDownloadingEstimatePdf,
     required this.isRequestingChanges,
     required this.isRevising,
+    required this.isEditing,
     required this.onApprove,
     required this.onRequestChanges,
     required this.onConvert,
@@ -1210,6 +1252,7 @@ class _EstimateCard extends StatelessWidget {
     required this.onScheduleWork,
     required this.onDownloadEstimatePdf,
     required this.onReviseAndResend,
+    required this.onEdit,
     required this.onViewInAppointments,
     required this.onOwnerApprove,
     required this.isArchiving,
@@ -1227,6 +1270,7 @@ class _EstimateCard extends StatelessWidget {
   final bool isDownloadingEstimatePdf;
   final bool isRequestingChanges;
   final bool isRevising;
+  final bool isEditing;
   final bool isArchiving;
   final bool isDeleting;
   final VoidCallback onApprove;
@@ -1236,6 +1280,7 @@ class _EstimateCard extends StatelessWidget {
   final VoidCallback onScheduleWork;
   final VoidCallback onDownloadEstimatePdf;
   final VoidCallback onReviseAndResend;
+  final VoidCallback onEdit;
   final VoidCallback onViewInAppointments;
   final VoidCallback onOwnerApprove;
   final VoidCallback? onArchive;
@@ -1651,10 +1696,30 @@ class _EstimateCard extends StatelessWidget {
                         label: const Text('Schedule Work'),
                       ),
                   ] else if (estimate.isPending) ...[
-                    FilledButton.icon(
-                      onPressed: onOwnerApprove,
-                      icon: const Icon(Icons.phone_in_talk_outlined),
-                      label: const Text('Approve (Phone/Text Confirmed)'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: isEditing ? null : onEdit,
+                            icon: isEditing
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2))
+                                : const Icon(Icons.edit_outlined),
+                            label: const Text('Edit'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: onOwnerApprove,
+                            icon: const Icon(Icons.phone_in_talk_outlined),
+                            label: const Text('Approve (Phone/Text)'),
+                          ),
+                        ),
+                      ],
                     ),
                   ] else
                     FilledButton.icon(
@@ -2086,6 +2151,201 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Re-send Estimate'),
+        ),
+      ],
+    );
+  }
+}
+
+/// result of [_EditPendingEstimateDialog]: everything needed for
+/// EstimateService.updateEstimate
+class _EditEstimateResult {
+  const _EditEstimateResult({
+    required this.services,
+    required this.notes,
+    required this.terms,
+    required this.depositPercent,
+  });
+
+  final List<InvoiceServiceItem> services;
+  final String notes;
+  final String terms;
+  final double? depositPercent;
+}
+
+/// owner-only editor for a still-pending estimate (not yet approved/denied
+/// by the client): services, notes, terms, and deposit — everything
+/// EstimateService.updateEstimate can change. Reuses the same
+/// _ServiceRowController/_ServiceRowEditor building blocks as the create
+/// form and _ReviseEstimateDialog.
+class _EditPendingEstimateDialog extends StatefulWidget {
+  const _EditPendingEstimateDialog({required this.estimate});
+
+  final Estimate estimate;
+
+  @override
+  State<_EditPendingEstimateDialog> createState() =>
+      _EditPendingEstimateDialogState();
+}
+
+class _EditPendingEstimateDialogState
+    extends State<_EditPendingEstimateDialog> {
+  final List<_ServiceRowController> _rows = [];
+  late final _notesController =
+      TextEditingController(text: widget.estimate.notes);
+  late final _termsController =
+      TextEditingController(text: widget.estimate.terms);
+  late final _depositPercentController = TextEditingController(
+      text: widget.estimate.depositPercent?.toStringAsFixed(0) ?? '');
+  late bool _requireDeposit = widget.estimate.depositPercent != null;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.estimate.services.isEmpty) {
+      _rows.add(_ServiceRowController());
+    } else {
+      for (final item in widget.estimate.services) {
+        _rows.add(_ServiceRowController.fromItem(item));
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final row in _rows) {
+      row.dispose();
+    }
+    _notesController.dispose();
+    _termsController.dispose();
+    _depositPercentController.dispose();
+    super.dispose();
+  }
+
+  void _addRow() {
+    setState(() => _rows.add(_ServiceRowController()));
+  }
+
+  void _removeRow(int index) {
+    if (_rows.length == 1) return;
+    setState(() {
+      final row = _rows.removeAt(index);
+      row.dispose();
+    });
+  }
+
+  void _submit() {
+    final parsed = <InvoiceServiceItem>[];
+    for (final row in _rows) {
+      final item = row.toServiceItem();
+      if (item == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Each service must have a name and price > 0.')),
+        );
+        return;
+      }
+      parsed.add(item);
+    }
+
+    setState(() => _isSaving = true);
+    Navigator.of(context).pop(_EditEstimateResult(
+      services: parsed,
+      notes: _notesController.text,
+      terms: _termsController.text,
+      depositPercent: _requireDeposit
+          ? double.tryParse(_depositPercentController.text.trim())
+          : null,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Edit ${widget.estimate.estimateNumber}'),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: StreamBuilder<List<CommonService>>(
+            stream: ServiceCatalogService.watchAllServices(),
+            builder: (context, snapshot) {
+              final catalog = snapshot.data ?? const <CommonService>[];
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < _rows.length; i++)
+                    _ServiceRowEditor(
+                      key: ObjectKey(_rows[i]),
+                      row: _rows[i],
+                      onRemove: () => _removeRow(i),
+                      catalog: catalog,
+                    ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _isSaving ? null : _addRow,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add service'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _notesController,
+                    maxLines: 3,
+                    minLines: 2,
+                    decoration: const InputDecoration(
+                        labelText: 'Notes (optional)',
+                        border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _termsController,
+                    maxLines: 3,
+                    minLines: 2,
+                    decoration: const InputDecoration(
+                        labelText: 'Terms (optional)',
+                        border: OutlineInputBorder()),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    value: _requireDeposit,
+                    onChanged: (value) =>
+                        setState(() => _requireDeposit = value ?? false),
+                    title: const Text('Require a deposit to begin work'),
+                  ),
+                  if (_requireDeposit)
+                    TextField(
+                      controller: _depositPercentController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Deposit percentage',
+                        border: OutlineInputBorder(),
+                        suffixText: '%',
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isSaving ? null : _submit,
+          child: _isSaving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Save'),
         ),
       ],
     );
