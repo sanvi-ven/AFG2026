@@ -179,14 +179,12 @@ class _CatalogTabState extends State<_CatalogTab> {
                   onChanged: (value) => setState(() => _query = value),
                 ),
               ),
-              if (_isOwner) ...[
-                const SizedBox(width: 10),
-                FilledButton.icon(
-                  onPressed: _openCreateForm,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add'),
-                ),
-              ],
+              const SizedBox(width: 10),
+              FilledButton.icon(
+                onPressed: _openCreateForm,
+                icon: const Icon(Icons.add),
+                label: const Text('Add'),
+              ),
             ],
           ),
           const SizedBox(height: 10),
