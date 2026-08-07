@@ -14,12 +14,14 @@ import '../../../models/equipment_reservation.dart';
 import '../../../models/service_record.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
-/// detail view of a catalog item, visible to both roles. Renders the photo
-/// gallery + header + badges (Phase 1), and — for Equipment — a per-unit status
-/// grid whose chips open a bottom sheet for mark-broken / log-repair /
-/// mark-fixed actions (Phase 2). Owner-only: edit, archive/restore, adjust unit
-/// count (Equipment), and restock (Supply). Reservation section (Phase 3) and
-/// service badges (Phase 4) slot into the section [ListView] later.
+/// detail view of a catalog item, visible to both roles with full parity:
+/// edit, archive/restore, adjust unit count (Equipment), restock (Supply),
+/// and cancel any reservation are available to owner and employee alike.
+/// Renders the photo gallery + header + badges (Phase 1), and — for
+/// Equipment — a per-unit status grid whose chips open a bottom sheet for
+/// mark-broken / log-repair / mark-fixed actions (Phase 2). Reservation
+/// section (Phase 3) and service badges (Phase 4) slot into the section
+/// [ListView] later.
 class EquipmentDetailPage extends StatelessWidget {
   const EquipmentDetailPage({
     required this.role,
@@ -135,7 +137,7 @@ class EquipmentDetailPage extends StatelessWidget {
               const SizedBox(height: 16),
               _buildHeader(context, item),
               const SizedBox(height: 16),
-              if (_isOwner) _buildOwnerActions(context, item),
+              _buildCatalogActions(context, item),
               if (item.isEquipment) ...[
                 const SizedBox(height: 24),
                 _buildUnitSection(context, item),
@@ -225,7 +227,7 @@ class EquipmentDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildOwnerActions(BuildContext context, EquipmentItem item) {
+  Widget _buildCatalogActions(BuildContext context, EquipmentItem item) {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -316,7 +318,7 @@ class EquipmentDetailPage extends StatelessWidget {
               for (final reservation in reservations)
                 _ReservationRow(
                   reservation: reservation,
-                  canCancel: _isOwner && reservation.isActive,
+                  canCancel: reservation.isActive,
                   onCancel: () => _cancelReservation(context, reservation),
                 ),
           ],

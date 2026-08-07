@@ -104,6 +104,13 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Owner business settings (company name, address, logo, file-name
+    // templates, etc). Had no rule at all here, same gap as the collections
+    // above — fell through to default-deny for every role.
+    match /owner_settings/{document=**} {
+      allow read, write: if true;
+    }
+
     // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;

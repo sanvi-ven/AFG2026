@@ -8,8 +8,9 @@ import 'equipment_schedule_tab.dart';
 import 'my_equipment_tab.dart';
 
 /// Equipment area shell: a [DefaultTabController] with a "Catalog" tab (search /
-/// filter / sort / list, plus owner-only "+ Add") and a role-conditional second
-/// tab — "Schedule" for owners, "My Equipment" for employees.
+/// filter / sort / list / add / show-archived — full parity between owner and
+/// employee) and a role-conditional second tab — "Schedule" for owners,
+/// "My Equipment" for employees.
 class EquipmentCatalogPage extends StatelessWidget {
   const EquipmentCatalogPage({required this.role, this.authToken, super.key});
 
@@ -61,7 +62,8 @@ class EquipmentCatalogPage extends StatelessWidget {
 }
 
 /// the browsable catalog list with search, type filter, show-archived, sort,
-/// and (owner-only) add. Client-side filter/sort; tap a card to open detail.
+/// and add — available to owner and employee alike. Client-side filter/sort;
+/// tap a card to open detail.
 class _CatalogTab extends StatefulWidget {
   const _CatalogTab({required this.role, this.authToken});
 
@@ -78,8 +80,6 @@ class _CatalogTabState extends State<_CatalogTab> {
   String? _typeFilter; // null = All
   String _sortBy = 'nameAsc';
   bool _showArchived = false;
-
-  bool get _isOwner => widget.role == 'owner';
 
   @override
   void dispose() {
@@ -211,13 +211,12 @@ class _CatalogTabState extends State<_CatalogTab> {
                       onSelected: (_) =>
                           setState(() => _typeFilter = EquipmentType.supply),
                     ),
-                    if (_isOwner)
-                      FilterChip(
-                        label: const Text('Show archived'),
-                        selected: _showArchived,
-                        onSelected: (value) =>
-                            setState(() => _showArchived = value),
-                      ),
+                    FilterChip(
+                      label: const Text('Show archived'),
+                      selected: _showArchived,
+                      onSelected: (value) =>
+                          setState(() => _showArchived = value),
+                    ),
                   ],
                 ),
               ),
