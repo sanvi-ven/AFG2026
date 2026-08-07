@@ -24,8 +24,17 @@ class ReminderCheckService {
   ReminderCheckService._();
 
   static const _appointmentLookahead = Duration(hours: 48);
-  static const _invoiceOverdueAfter = Duration(days: 7);
+  static const invoiceOverdueAfter = Duration(days: 7);
   static const _serviceDueLeadTime = equipmentServiceDueLeadTime;
+
+  /// an unpaid invoice counts as overdue once it's been sent and gone
+  /// [invoiceOverdueAfter] without payment, measured from its last reminder
+  /// (or its creation date if no reminder has gone out yet).
+  static bool isInvoiceOverdue(Invoice invoice) {
+    if (!invoice.isApproved) return false;
+    final since = invoice.lastReminderSentAt ?? invoice.createdAt;
+    return DateTime.now().difference(since) >= invoiceOverdueAfter;
+  }
 
   /// re-entrancy guard: DashboardPage remounts (and re-triggers this scan)
   /// every time a user navigates back to the Dashboard tab, since AppScaffold
@@ -109,8 +118,8 @@ class ReminderCheckService {
       if (invoice.isArchived || invoice.status != InvoiceStatus.sent) continue;
       final lastSent = invoice.lastReminderSentAt;
       final dueForReminder = lastSent == null
-          ? now.difference(invoice.createdAt) >= _invoiceOverdueAfter
-          : now.difference(lastSent) >= _invoiceOverdueAfter;
+          ? now.difference(invoice.createdAt) >= invoiceOverdueAfter
+          : now.difference(lastSent) >= invoiceOverdueAfter;
       if (!dueForReminder) continue;
 
       final clients = await ClientProfileService.watchAllProfiles().first;

@@ -10,6 +10,7 @@ import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../models/client_profile.dart';
 import '../../../models/owner_settings.dart';
+import 'owner_dashboard_stats.dart';
 
 /// main dashboard page for authenticated users with role-based navigation
 class DashboardPage extends StatefulWidget {
@@ -91,7 +92,9 @@ class _DashboardPageState extends State<DashboardPage> {
               },
             ),
           const SizedBox(height: 12),
-          if (widget.role == 'employee') ...[
+          if (widget.role == 'owner')
+            OwnerDashboardStats(authToken: widget.authToken)
+          else if (widget.role == 'employee') ...[
             _linkCard(
               context,
               title: 'My Jobs',
@@ -105,23 +108,15 @@ class _DashboardPageState extends State<DashboardPage> {
               route: AppRouter.myHours,
             ),
           ] else ...[
-            if (widget.role == 'owner')
-              _linkCard(context,
-                  title: 'Requests',
-                  subtitle: 'Triage incoming work requests',
-                  route: AppRouter.requests),
-            if (widget.role == 'client') _requestWorkCard(context),
+            _requestWorkCard(context),
             _linkCard(context,
                 title: 'Estimates',
                 subtitle: 'Create and review quotes for clients',
                 route: AppRouter.estimates),
             _linkCard(
               context,
-              title:
-                  widget.role == 'client' ? 'Book Appointment' : 'Appointments',
-              subtitle: widget.role == 'client'
-                  ? 'Pick an available slot from the bookings calendar'
-                  : 'View and manage upcoming bookings',
+              title: 'Book Appointment',
+              subtitle: 'Pick an available slot from the bookings calendar',
               route: AppRouter.appointments,
             ),
             _linkCard(context,
@@ -132,16 +127,6 @@ class _DashboardPageState extends State<DashboardPage> {
                 title: 'Messages',
                 subtitle: 'Messages between you and the business owner',
                 route: AppRouter.messages),
-            if (widget.role == 'owner') ...[
-              _linkCard(context,
-                  title: 'Reports',
-                  subtitle: 'Revenue, payroll, expenses, and job profitability',
-                  route: AppRouter.reports),
-              _linkCard(context,
-                  title: "Today's Route",
-                  subtitle: "See every team's jobs scheduled for today",
-                  route: AppRouter.todaysRoute),
-            ],
           ],
         ],
       ),
