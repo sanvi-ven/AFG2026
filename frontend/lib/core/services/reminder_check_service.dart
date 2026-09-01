@@ -101,9 +101,8 @@ class ReminderCheckService {
       if (client != null && client.email.trim().isNotEmpty) {
         unawaited(CommsService.sendEmail(
           to: client.email.trim(),
-          subject: 'Upcoming appointment reminder',
-          htmlBody: '<p>Hi $clientName,</p>'
-              '<p>This is a reminder that your appointment for Estimate #${job.estimateNumber} is coming up soon.</p>',
+          template: 'appointment-reminder',
+          params: {'client_name': clientName, 'estimate_number': job.estimateNumber},
         ));
       }
       await ScheduledWorkService.markReminderSent(job.id);
@@ -145,10 +144,12 @@ class ReminderCheckService {
       if (client != null && client.email.trim().isNotEmpty) {
         unawaited(CommsService.sendEmail(
           to: client.email.trim(),
-          subject: 'Invoice ${invoice.invoiceNumber} — payment reminder',
-          htmlBody: '<p>Hi $clientName,</p>'
-              '<p>This is a reminder that invoice ${invoice.invoiceNumber} for '
-              '\$${invoice.total.toStringAsFixed(2)} is still outstanding.</p>',
+          template: 'invoice-reminder',
+          params: {
+            'client_name': clientName,
+            'invoice_number': invoice.invoiceNumber,
+            'total': invoice.total.toStringAsFixed(2),
+          },
         ));
       }
       if (client != null && client.phoneNumber.trim().isNotEmpty) {

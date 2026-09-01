@@ -86,13 +86,17 @@ service cloud.firestore {
     // Estimates: client can additionally approve or request changes on
     // their own estimate (the only two writes the client UI ever performs —
     // EstimateService.updateStatus / .requestChanges), never touching
-    // total/services/clientId.
+    // total/services/clientId. Restricting the field set alone isn't
+    // enough — also pin `status` to the two values those two actions can
+    // actually set, so a client can't write some other status value the
+    // rest of the app doesn't expect via the raw SDK.
     match /estimates/{document=**} {
       allow read: if isStaff() || isOwnClient(resource.data.clientId);
       allow create, delete: if isStaff();
       allow update: if isStaff() ||
         (isOwnClient(resource.data.clientId) &&
-         onlyChanged(['status', 'changeRequestMessage', 'changeRequestedAt', 'updatedAt']));
+         onlyChanged(['status', 'changeRequestMessage', 'changeRequestedAt', 'updatedAt']) &&
+         request.resource.data.status in ['approved', 'changes_requested']);
     }
 
     // Two-way client/owner messaging. A client can only read their own
@@ -123,13 +127,21 @@ service cloud.firestore {
 
     // Employee clock in/out. Today nothing stops one employee's session
     // from editing another's hours — this is new write-integrity
-    // protection, not just codifying existing behavior. Owner has full
-    // access for review/wage overrides.
+    // protection, not just codifying existing behavior. Field-restricting
+    // an employee's own write matters here specifically: without it,
+    // matching on employeeId alone would still let an employee set
+    // wageOverride/isPaid/notes on their own doc — fields TimeEntryService.
+    // updateEntry ("owner action") is supposed to be the only way to touch.
+    // Owner has full, unrestricted access for review/wage overrides.
     match /time_entries/{document=**} {
       allow read: if isOwner() || isOwnEmployee(resource.data.employeeId);
-      allow create: if isOwner() || isOwnEmployee(request.resource.data.employeeId);
+      allow create: if isOwner() ||
+        (isOwnEmployee(request.resource.data.employeeId) &&
+         request.resource.data.keys().hasOnly(
+           ['id', 'employeeId', 'date', 'clockInAt', 'clockOutAt', 'createdAt', 'updatedAt']));
       allow update: if isOwner() ||
-        (isOwnEmployee(resource.data.employeeId) && isOwnEmployee(request.resource.data.employeeId));
+        (isOwnEmployee(resource.data.employeeId) && isOwnEmployee(request.resource.data.employeeId) &&
+         onlyChanged(['clockInAt', 'clockOutAt', 'updatedAt']));
       allow delete: if isOwner();
     }
 

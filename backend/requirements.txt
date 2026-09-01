@@ -4,8 +4,9 @@ firebase-admin==6.8.0
 pydantic-settings==2.10.1
 email-validator==2.2.0
 python-dotenv==1.1.1
-resend>=2.32.2
-cloudinary>=1.44.0
-twilio>=9.10.9
+resend==2.42.0
+cloudinary==1.46.2
+twilio==9.11.0
 python-multipart==0.0.20
 slowapi==0.1.9
+Pillow==12.3.0

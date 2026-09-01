@@ -1,17 +1,20 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Job completion photos. Same trust model as firestore.rules: this app
-    // has no real Firebase Auth session for owner/client/employee today, so
-    // this is permissive by necessity rather than checking an unverifiable role.
-    // Still open, but no longer an arbitrary-file-dump target: writes must be
-    // a reasonably-sized image. request.resource is null on delete, so that's
-    // split out separately.
+    // Not actually provisioned today (zero buckets exist on this project —
+    // see CLAUDE.md) so this file is currently inert, but kept correct for
+    // whenever it is. Real Firebase Auth exists as of 2026-09-01 — write
+    // access is staff-only now, matching firestore.rules' equivalent
+    // collections, instead of the pre-auth "permissive by necessity" design
+    // this file predates. Read stays public: job photos are already
+    // viewable through the app without restriction elsewhere.
     match /job_photos/{workId}/{phase}/{fileName} {
       allow read: if true;
-      allow create, update: if request.resource.size < 10 * 1024 * 1024
-                             && request.resource.contentType.matches('image/.*');
-      allow delete: if true;
+      allow create, update: if request.auth != null &&
+                             request.auth.token.role in ['owner', 'employee'] &&
+                             request.resource.size < 10 * 1024 * 1024 &&
+                             request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null && request.auth.token.role in ['owner', 'employee'];
     }
 
     match /{allPaths=**} {

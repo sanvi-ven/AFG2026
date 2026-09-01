@@ -11,5 +11,11 @@ class SmsService:
             raise RuntimeError("Twilio settings are not configured")
 
         client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
-        client.messages.create(to=to, from_=settings.twilio_from_number, body=body)
+        try:
+            client.messages.create(to=to, from_=settings.twilio_from_number, body=body)
+        except Exception as exc:
+            # never surface the raw Twilio exception to a caller — it can
+            # include account-identifying details. RuntimeError here is what
+            # the /sms route already knows how to turn into a clean 503.
+            raise RuntimeError("Failed to send SMS.") from exc
         return True

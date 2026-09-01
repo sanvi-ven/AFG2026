@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
@@ -22,7 +23,11 @@ class JobPhotoUploadService {
     return '${stamp}_$suffix.jpg';
   }
 
-  static Future<String?> _uploadBytes({required List<int> bytes, required String folder}) async {
+  static Future<String?> _uploadBytes({
+    required List<int> bytes,
+    required String folder,
+    bool requireAuth = true,
+  }) async {
     final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/v1/photos/upload');
     final request = http.MultipartRequest('POST', uri)
       ..fields['folder'] = folder
@@ -31,6 +36,13 @@ class JobPhotoUploadService {
         bytes,
         filename: _uniqueFileName(),
       ));
+
+    if (requireAuth) {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+    }
 
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
@@ -73,7 +85,7 @@ class JobPhotoUploadService {
     if (picked == null) return null;
 
     final bytes = await picked.readAsBytes();
-    return _uploadBytes(bytes: bytes, folder: 'request_photos/$requestId');
+    return _uploadBytes(bytes: bytes, folder: 'request_photos/$requestId', requireAuth: false);
   }
 
   /// prompt the user to take a photo, then upload it under

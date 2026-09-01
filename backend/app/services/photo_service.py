@@ -28,5 +28,11 @@ class PhotoService:
 
     def upload_photo(self, file_bytes: bytes, folder: str) -> str:
         _ensure_configured()
-        result = cloudinary.uploader.upload(file_bytes, folder=folder, resource_type="image")
+        try:
+            result = cloudinary.uploader.upload(file_bytes, folder=folder, resource_type="image")
+        except Exception as exc:
+            # never surface the raw Cloudinary exception to a caller.
+            # RuntimeError here is what /photos/upload already knows how to
+            # turn into a clean 503.
+            raise RuntimeError("Failed to upload photo.") from exc
         return result["secure_url"]

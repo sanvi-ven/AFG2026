@@ -142,9 +142,8 @@ class _RequestFormPageState extends State<RequestFormPage> {
     if (clientEmail.isNotEmpty) {
       unawaited(CommsService.sendEmail(
         to: clientEmail,
-        subject: 'We received your request',
-        htmlBody: '<p>Hi $name,</p>'
-            '<p>Thanks for reaching out — we received your request and will follow up with a quote soon.</p>',
+        template: 'request-confirmation',
+        params: {'name': name},
       ));
     }
 
@@ -154,8 +153,8 @@ class _RequestFormPageState extends State<RequestFormPage> {
       if (ownerEmail.isNotEmpty) {
         unawaited(CommsService.sendEmail(
           to: ownerEmail,
-          subject: 'New work request from $name',
-          htmlBody: '<p>New request from $name ($clientEmail).</p><p>$description</p>',
+          template: 'owner-new-lead',
+          params: {'name': name, 'client_email': clientEmail, 'description': description},
         ));
       }
     } catch (_) {

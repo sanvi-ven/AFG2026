@@ -6,15 +6,20 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.middleware import MaxBodySizeMiddleware
 from app.core.rate_limit import limiter
 
 
 def create_application() -> FastAPI:
     """create the fastapi app with cors middleware and routes"""
-    app = FastAPI(title=settings.app_name)
+    # no interactive docs in production — this API has exactly one real
+    # frontend, and a live Swagger "try it out" UI just hands anyone a
+    # point-and-click way to probe /comms and /photos.
+    app = FastAPI(title=settings.app_name, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
+    app.add_middleware(MaxBodySizeMiddleware)
     app.add_middleware(
         CORSMiddleware,
         # explicit origins only — "*" combined with credentials used to let any
