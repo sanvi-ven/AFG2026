@@ -53,28 +53,34 @@ class _MessagesPageState extends State<MessagesPage>
         });
       }
     }
-    _clientDirectorySub =
-        ClientProfileService.watchAllProfiles().listen((profiles) {
-      if (!mounted) {
-        return;
-      }
+    // full client directory only feeds the owner's broadcast-recipient
+    // picker and thread-name lookup — a client session's own inbox never
+    // reads _knownClients, and doesn't have access to read other clients'
+    // profiles once Firestore rules are scoped by role.
+    if (widget.role == 'owner') {
+      _clientDirectorySub =
+          ClientProfileService.watchAllProfiles().listen((profiles) {
+        if (!mounted) {
+          return;
+        }
 
-      final profileIds = profiles.map((item) => item.signupId).toSet();
+        final profileIds = profiles.map((item) => item.signupId).toSet();
 
-      setState(() {
-        _knownClients = profiles;
-        _isLoadingClientSuggestions = false;
-        _selectedRecipients
-            .removeWhere((item) => !profileIds.contains(item.signupId));
-        _clientSuggestions = ClientProfileService.searchProfiles(
-          profiles: profiles,
-          query: _clientIdsController.text,
-          limit: 8,
-          excludeSignupIds:
-              _selectedRecipients.map((item) => item.signupId).toSet(),
-        );
+        setState(() {
+          _knownClients = profiles;
+          _isLoadingClientSuggestions = false;
+          _selectedRecipients
+              .removeWhere((item) => !profileIds.contains(item.signupId));
+          _clientSuggestions = ClientProfileService.searchProfiles(
+            profiles: profiles,
+            query: _clientIdsController.text,
+            limit: 8,
+            excludeSignupIds:
+                _selectedRecipients.map((item) => item.signupId).toSet(),
+          );
+        });
       });
-    });
+    }
   }
 
   @override

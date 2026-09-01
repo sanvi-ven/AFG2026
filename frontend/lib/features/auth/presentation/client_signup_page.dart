@@ -134,6 +134,13 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
       final savedProfile = ClientProfile.fromMap(response);
       ClientSession.setProfile(savedProfile);
 
+      // completeSignup just set the role/profile_id custom claims
+      // server-side — the token fetched above predates that, so Firestore
+      // would keep using it (no role claim) until its own next refresh.
+      // Force one more refresh now so the dashboard's first reads/writes
+      // already carry the new claims instead of hitting permission-denied.
+      final freshToken = await credential.user!.getIdToken(true);
+
       if (!mounted) {
         return;
       }
@@ -141,7 +148,7 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
       Navigator.pushReplacementNamed(
         context,
         AppRouter.dashboard,
-        arguments: {'role': 'client', 'authToken': idToken},
+        arguments: {'role': 'client', 'authToken': freshToken},
       );
     } on FirebaseAuthException catch (error) {
       if (!mounted) {

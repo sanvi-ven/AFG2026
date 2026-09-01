@@ -87,11 +87,6 @@ def complete_signup(
                 detail="That invite code is invalid or no longer active.",
             )
 
-    # only this route can grant a role — the client sends what it wants but
-    # every branch above either checks it against something server-side owns
-    # (the owner allowlist, a real invite code) or is the open "client" case
-    auth.set_custom_user_claims(uid, {"role": payload.role})
-
     first_name = payload.first_name.strip()
     last_name = payload.last_name.strip()
     phone_number = payload.phone_number.strip()
@@ -125,6 +120,17 @@ def complete_signup(
         # owner has no separate profile collection — the users record above
         # (email, display name, role) is the whole of their identity
         record = {"id": uid}
+
+    # only this route can grant a role — the client sends what it wants but
+    # every branch above either checks it against something server-side owns
+    # (the owner allowlist, a real invite code) or is the open "client" case.
+    # client/employee also get `profile_id`, the client_signups/employee_signups
+    # doc id just created — Firestore rules use it to scope a session to its
+    # own records, since those collections are keyed by client id, not uid.
+    claims = {"role": payload.role}
+    if payload.role in ("client", "employee"):
+        claims["profile_id"] = record["id"]
+    auth.set_custom_user_claims(uid, claims)
 
     return SignupProfileResponse(
         id=record["id"],
@@ -167,7 +173,7 @@ def claim_account(request: Request, payload: ClaimAccountRequest) -> SignupProfi
             detail="An account with that email address already exists.",
         ) from exc
 
-    auth.set_custom_user_claims(user_record.uid, {"role": "client"})
+    auth.set_custom_user_claims(user_record.uid, {"role": "client", "profile_id": profile["id"]})
 
     updated = client_repo.update(profile["id"], {
         "uid": user_record.uid,

@@ -102,44 +102,58 @@ class _EstimatesPageState extends State<EstimatesPage> {
     if (widget.initialClientId != null) {
       _clientIdController.text = widget.initialClientId!;
     }
-    _catalogSub = ServiceCatalogService.watchAllServices().listen((services) {
-      if (!mounted) return;
-      setState(() => _knownCatalog = services);
-    });
-    _clientsSub = ClientProfileService.watchAllProfiles().listen((profiles) {
-      if (!mounted) {
-        return;
-      }
-
-      final selectedId = _selectedClient?.signupId;
-      final query = _clientIdController.text.trim();
-      setState(() {
-        _knownClients = profiles;
-        _isLoadingClientSuggestions = false;
-
-        if (selectedId != null &&
-            !profiles.any((profile) => profile.signupId == selectedId)) {
-          _selectedClient = null;
-        }
-
-        _clientSuggestions = ClientProfileService.searchProfiles(
-          profiles: profiles.where((profile) => !profile.archived).toList(),
-          query: query,
-          limit: 8,
-        );
-
-        if (!_appliedInitialClient && widget.initialClientId != null) {
-          _appliedInitialClient = true;
-          final match = profiles
-              .where((profile) => profile.signupId == widget.initialClientId)
-              .toList();
-          if (match.isNotEmpty) {
-            _selectedClient = match.first;
-            _clientSuggestions = const [];
-          }
-        }
+    // catalog and the full client directory only feed the owner's estimate
+    // composer (client picker, service picker) — a client session's list of
+    // its own estimates never uses either, and doesn't have access to read
+    // them once Firestore rules are scoped by role.
+    if (widget.role == 'owner') {
+      _catalogSub = ServiceCatalogService.watchAllServices().listen((services) {
+        if (!mounted) return;
+        setState(() => _knownCatalog = services);
       });
-    });
+      _clientsSub = ClientProfileService.watchAllProfiles().listen((profiles) {
+        if (!mounted) {
+          return;
+        }
+
+        final selectedId = _selectedClient?.signupId;
+        final query = _clientIdController.text.trim();
+        setState(() {
+          _knownClients = profiles;
+          _isLoadingClientSuggestions = false;
+
+          if (selectedId != null &&
+              !profiles.any((profile) => profile.signupId == selectedId)) {
+            _selectedClient = null;
+          }
+
+          _clientSuggestions = ClientProfileService.searchProfiles(
+            profiles: profiles.where((profile) => !profile.archived).toList(),
+            query: query,
+            limit: 8,
+          );
+
+          if (!_appliedInitialClient && widget.initialClientId != null) {
+            _appliedInitialClient = true;
+            final match = profiles
+                .where((profile) => profile.signupId == widget.initialClientId)
+                .toList();
+            if (match.isNotEmpty) {
+              _selectedClient = match.first;
+              _clientSuggestions = const [];
+            }
+          }
+        });
+      });
+    } else if (widget.role == 'client') {
+      // sort-by-client display-name lookup only ever needs to resolve the
+      // signed-in client's own name — no directory subscription needed.
+      final ownProfile = ClientSession.profile.value;
+      if (ownProfile != null) {
+        _knownClients = [ownProfile];
+      }
+      _isLoadingClientSuggestions = false;
+    }
   }
 
   @override

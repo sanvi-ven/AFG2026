@@ -31,6 +31,9 @@ class TeamAdminPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (role != 'owner') {
+      return const SizedBox.shrink();
+    }
     return DefaultTabController(
       length: 5,
       child: AppScaffold(

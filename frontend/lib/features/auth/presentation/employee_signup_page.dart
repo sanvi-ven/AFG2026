@@ -76,12 +76,19 @@ class _EmployeeSignupPageState extends State<EmployeeSignupPage> {
       final savedProfile = EmployeeProfile.fromMap(response);
       EmployeeSession.setProfile(savedProfile);
 
+      // completeSignup just set the role/profile_id custom claims
+      // server-side — the token fetched above predates that, so Firestore
+      // would keep using it (no role claim) until its own next refresh.
+      // Force one more refresh now so the dashboard's first reads/writes
+      // already carry the new claims instead of hitting permission-denied.
+      final freshToken = await credential.user!.getIdToken(true);
+
       if (!mounted) return;
 
       Navigator.pushReplacementNamed(
         context,
         AppRouter.dashboard,
-        arguments: {'role': 'employee', 'authToken': idToken},
+        arguments: {'role': 'employee', 'authToken': freshToken},
       );
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;

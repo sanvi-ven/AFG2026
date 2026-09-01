@@ -189,7 +189,13 @@ class _InvoicesPageState extends State<InvoicesPage> {
             )
           else
             StreamBuilder<List<ClientProfile>>(
-              stream: ClientProfileService.watchAllProfiles(),
+              // owner needs the full directory for "sort by client" names;
+              // a client session only ever needs to resolve its own name,
+              // and doesn't have access to read the rest once Firestore
+              // rules are scoped by role.
+              stream: widget.role == 'owner'
+                  ? ClientProfileService.watchAllProfiles()
+                  : Stream.value(profile != null ? [profile] : const <ClientProfile>[]),
               builder: (context, clientsSnapshot) {
                 final clients = clientsSnapshot.data ?? const <ClientProfile>[];
 

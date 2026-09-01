@@ -33,8 +33,13 @@ class _DashboardPageState extends State<DashboardPage> {
         ? OwnerSettingsService.fetch().catchError((_) => OwnerSettings.empty())
         : Future.value(OwnerSettings.empty());
     // fire-and-forget: not a real background job, just a pragmatic trigger
-    // point so reminders get generated roughly whenever anyone opens the app
-    unawaited(ReminderCheckService.checkAndCreateReminders());
+    // point so reminders get generated roughly whenever the owner opens the
+    // app. Owner-only — it scans every client's invoices/appointments across
+    // the whole business, which a client/employee session has no access to
+    // read once Firestore rules are scoped by role.
+    if (widget.role == 'owner') {
+      unawaited(ReminderCheckService.checkAndCreateReminders());
+    }
   }
 
   @override

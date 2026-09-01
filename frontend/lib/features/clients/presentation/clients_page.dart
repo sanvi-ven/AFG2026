@@ -128,6 +128,9 @@ class _ClientsPageState extends State<ClientsPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.role != 'owner') {
+      return const SizedBox.shrink();
+    }
     return AppScaffold(
       title: 'Clients',
       role: widget.role,

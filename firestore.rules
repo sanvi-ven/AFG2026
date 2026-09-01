@@ -1,133 +1,198 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow public (unauthenticated) reads on specific collections
+
+    // client_signups/employee_signups are the only collections with a real
+    // Firebase uid field (added 2026-09-01). Every other collection scopes
+    // "whose record is this" by the OLD auto-generated doc id from one of
+    // those two collections — carried on the caller's own token as the
+    // `profile_id` custom claim (set alongside `role` at signup/claim time),
+    // since rewriting every document + query to use uid instead would be a
+    // much larger, riskier change for no real benefit.
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function role() {
+      return request.auth.token.role;
+    }
+    function isOwner() {
+      return isSignedIn() && role() == 'owner';
+    }
+    function isStaff() {
+      return isSignedIn() && role() in ['owner', 'employee'];
+    }
+    function profileId() {
+      return request.auth.token.profile_id;
+    }
+    function isOwnClient(id) {
+      return isSignedIn() && role() == 'client' && id == profileId();
+    }
+    function isOwnEmployee(id) {
+      return isSignedIn() && role() == 'employee' && id == profileId();
+    }
+    function onlyChanged(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
     match /client_signups/{document=**} {
-      // Allow signup creation (including Firebase email/password users)
-      allow create: if validateSignupData() && canCreateOwnSignup();
-      // Allow authenticated users to read their own profile — by uid (real
-      // Firebase Auth accounts, added 2026-09-01 migration) or by email
-      // (kept for anything still only matched on email). Owner/employee (now
-      // real, claim-verified roles as of the same migration) keep full
-      // access — the app's Team/Clients/Messages/etc. pages all depend on
-      // reading every client, and before this migration that "worked" only
-      // because nobody was ever really authenticated so everyone fell
-      // through to the anyone-can-read rule below; the owner signing in for
-      // real must not make that access disappear.
-      allow read, update, delete: if request.auth != null &&
-        (resource.data.uid == request.auth.uid ||
-         resource.data.email == request.auth.token.email ||
-         request.auth.token.role in ['owner', 'employee']);
-      // Allow reads by anyone (for autocomplete)
-      allow read: if request.auth == null;
-      // Owner-side archive/edit/delete (from the Clients page) has no real
-      // authenticated session to check either, same as the other collections below.
-      allow update, delete: if request.auth == null;
+      // Real self-signup no longer writes this collection directly (it goes
+      // through the backend's /auth/complete-signup via the Admin SDK, which
+      // bypasses rules entirely) — the only remaining client-side create
+      // path is the owner/employee "quick add client" (dummy, no-login) flow.
+      allow create: if validateSignupData() && isStaff();
+      allow read, delete: if isStaff() ||
+        (isSignedIn() && (resource.data.uid == request.auth.uid ||
+                           resource.data.email == request.auth.token.email));
+      allow update: if isStaff() ||
+        (isSignedIn() && resource.data.uid == request.auth.uid &&
+         onlyChanged(['first_name', 'last_name', 'firstName', 'lastName',
+                      'phone_number', 'phoneNumber', 'address']));
     }
 
-    // Estimates and invoices previously had no rule at all here, which fell
-    // through to default-deny for every role, owner included.
-    match /estimates/{document=**} {
-      allow read, write: if true;
-    }
-
-    match /invoices/{document=**} {
-      allow read, write: if true;
-    }
-
-    // client_messages previously had no explicit rule at all here, which fell
-    // through to default-deny for every role, owner and client alike.
-    match /client_messages/{document=**} {
-      allow read, write: if true;
-    }
-
-    // Employee accounts, gated the same way client_signups is: no real
-    // Firebase Auth session exists in this app today (see owner/client login
-    // flows), so this mirrors the client_signups trust model rather than
-    // pretending to check a role that can't actually be verified here.
     match /employee_signups/{document=**} {
-      allow read, write: if true;
+      // Only ever created server-side via /auth/complete-signup (Admin SDK
+      // bypasses rules) — no client-side create path exists.
+      allow create: if false;
+      allow read, delete: if isOwner() ||
+        (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow update: if isOwner() ||
+        (isSignedIn() && resource.data.uid == request.auth.uid &&
+         onlyChanged(['first_name', 'last_name', 'firstName', 'lastName',
+                      'phone_number', 'phoneNumber', 'address']));
     }
 
-    // Invite codes must be readable pre-"login" so employee signup can
-    // validate a code before an account exists.
+    // Employee signup validates the invite code server-side now (via
+    // /auth/complete-signup) — the frontend no longer reads this directly.
     match /invite_codes/{document=**} {
-      allow read, write: if true;
+      allow read, write: if isOwner();
     }
 
     match /teams/{document=**} {
-      allow read, write: if true;
+      allow read, write: if isStaff();
     }
 
-    // Jobs (scheduled work orders). Previously had no rule at all here,
-    // which fell through to default-deny for every role, owner included.
+    // Jobs (scheduled work orders). No client-reachable write path exists
+    // today — client view is read-only, scoped to their own jobs.
     match /scheduled_work/{document=**} {
-      allow read, write: if true;
+      allow read: if isStaff() || isOwnClient(resource.data.clientId);
+      allow write: if isStaff();
     }
 
-    match /time_entries/{document=**} {
-      allow read, write: if true;
+    match /invoices/{document=**} {
+      allow read: if isStaff() || isOwnClient(resource.data.clientId);
+      allow write: if isStaff();
     }
 
-    // Employee day-by-day work-availability markers (all-day, or a specific
-    // start/end time window), one doc per employee per day. Same open trust
-    // model as the rest of this app — no real Firebase Auth session exists
-    // to gate on.
-    match /employee_availability/{document=**} {
-      allow read, write: if true;
+    // Estimates: client can additionally approve or request changes on
+    // their own estimate (the only two writes the client UI ever performs —
+    // EstimateService.updateStatus / .requestChanges), never touching
+    // total/services/clientId.
+    match /estimates/{document=**} {
+      allow read: if isStaff() || isOwnClient(resource.data.clientId);
+      allow create, delete: if isStaff();
+      allow update: if isStaff() ||
+        (isOwnClient(resource.data.clientId) &&
+         onlyChanged(['status', 'changeRequestMessage', 'changeRequestedAt', 'updatedAt']));
     }
 
-    match /job_completion_forms/{document=**} {
-      allow read, write: if true;
+    // Two-way client/owner messaging. A client can only read their own
+    // thread, and can only create a reply into their own thread as
+    // themselves — today's client had no server-side check on either
+    // targetClientId or senderRole, so this closes a real spoofing gap
+    // (writing into another client's thread, or impersonating an owner
+    // broadcast).
+    match /client_messages/{document=**} {
+      allow read: if isStaff() || isOwnClient(resource.data.targetClientId);
+      allow create: if isStaff() ||
+        (isOwnClient(request.resource.data.targetClientId) &&
+         request.resource.data.senderRole == 'client');
+      allow update, delete: if isStaff();
     }
 
-    match /expenses/{document=**} {
-      allow read, write: if true;
-    }
-
-    match /service_catalog/{document=**} {
-      allow read, write: if true;
-    }
-
+    // Only reminder_check_service.dart ever creates a notification, and
+    // that's now owner-only (see dashboard_page.dart). A recipient (client
+    // or employee) can read their own notifications and flip isRead on
+    // them, nothing else.
     match /notifications/{document=**} {
-      allow read, write: if true;
+      allow read: if isOwner() || (isSignedIn() && resource.data.recipientId == profileId());
+      allow create: if isOwner();
+      allow update: if isOwner() ||
+        (isSignedIn() && resource.data.recipientId == profileId() && onlyChanged(['isRead']));
+      allow delete: if isOwner();
     }
 
-    match /requests/{document=**} {
-      allow read, write: if true;
+    // Employee clock in/out. Today nothing stops one employee's session
+    // from editing another's hours — this is new write-integrity
+    // protection, not just codifying existing behavior. Owner has full
+    // access for review/wage overrides.
+    match /time_entries/{document=**} {
+      allow read: if isOwner() || isOwnEmployee(resource.data.employeeId);
+      allow create: if isOwner() || isOwnEmployee(request.resource.data.employeeId);
+      allow update: if isOwner() ||
+        (isOwnEmployee(resource.data.employeeId) && isOwnEmployee(request.resource.data.employeeId));
+      allow delete: if isOwner();
     }
 
-    match /checklist_templates/{document=**} {
-      allow read, write: if true;
+    // Employee day-by-day availability markers. Same write-integrity
+    // reasoning as time_entries — an employee shouldn't be able to mark a
+    // coworker available/unavailable on their behalf.
+    match /employee_availability/{document=**} {
+      allow read: if isOwner() || isOwnEmployee(resource.data.employeeId);
+      allow create: if isOwner() || isOwnEmployee(request.resource.data.employeeId);
+      allow update: if isOwner() ||
+        (isOwnEmployee(resource.data.employeeId) && isOwnEmployee(request.resource.data.employeeId));
+      allow delete: if isOwner() || isOwnEmployee(resource.data.employeeId);
     }
 
-    // Equipment catalog (durable items with embedded units + consumable
-    // supplies). Same open trust model as the collections above — this app has
-    // no real Firebase Auth session to gate on.
+    // Collaborative staff-shared data — zero ownership checks anywhere in
+    // the app for any of these today, and equipment_catalog_page.dart's own
+    // doc comment states "full parity between owner and employee" is the
+    // intended design, so this codifies existing behavior rather than
+    // introducing new restrictions.
+    match /job_completion_forms/{document=**} {
+      allow read, write: if isStaff();
+    }
     match /equipment/{document=**} {
-      allow read, write: if true;
+      allow read, write: if isStaff();
     }
-
-    // Broken-equipment incident reports (with embedded repair attempts).
-    match /broken_reports/{document=**} {
-      allow read, write: if true;
-    }
-
-    // Auto-approved equipment reservations (per-unit, per-day time windows).
     match /equipment_reservations/{document=**} {
-      allow read, write: if true;
+      allow read, write: if isStaff();
     }
-
-    // Service/maintenance records logged against Equipment units.
+    match /broken_reports/{document=**} {
+      allow read, write: if isStaff();
+    }
     match /service_records/{document=**} {
-      allow read, write: if true;
+      allow read, write: if isStaff();
     }
 
-    // Owner business settings (company name, address, logo, file-name
-    // templates, etc). Had no rule at all here, same gap as the collections
-    // above — fell through to default-deny for every role.
+    // Owner-only administrative data. No employee submission path exists
+    // for expenses in the frontend today; service_catalog/checklist_templates
+    // are only ever read by owner-facing UI.
+    match /expenses/{document=**} {
+      allow read, write: if isOwner();
+    }
+    match /service_catalog/{document=**} {
+      allow read, write: if isOwner();
+    }
+    match /checklist_templates/{document=**} {
+      allow read, write: if isOwner();
+    }
+
+    // Public lead intake — brand-new leads submit this before any account
+    // exists. No authenticated "my requests" client view exists in the app
+    // today, so only staff read/manage the inbox.
+    match /requests/{document=**} {
+      allow create: if validateRequestData();
+      allow read, update, delete: if isStaff();
+    }
+
+    // Single global business-config doc (company name/address/logo, PDF
+    // templates). Read must stay public: the pre-auth lead form reads the
+    // owner's notification email, and both owner- and client-facing PDF
+    // generation read branding with no auth gate on the download button.
     match /owner_settings/{document=**} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isOwner();
     }
 
     // Deny all other access by default
@@ -148,9 +213,9 @@ function validateSignupData() {
          data.address is string;
 }
 
-function canCreateOwnSignup() {
-  return request.auth == null ||
-         (request.auth.token.email is string &&
-          request.resource.data.email is string &&
-          request.resource.data.email == request.auth.token.email);
+function validateRequestData() {
+  let data = request.resource.data;
+  return data.name is string && data.email is string &&
+         data.phone is string && data.address is string &&
+         data.description is string;
 }
