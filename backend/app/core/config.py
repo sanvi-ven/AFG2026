@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,10 +8,14 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     firebase_project_id: str = "afg2026a"
     google_service_account_path: str = "service-account.json"
-    google_calendar_scopes: str = "https://www.googleapis.com/auth/calendar"
-    google_booking_calendar_id: str = "immc17289@gmail.com"
     use_mock_firestore: bool = False
     dev_auth_bypass: bool = False
+
+    # CORS allowlist — comma-separated in the env var, e.g.
+    # "https://anchor-orpin.vercel.app,https://your-custom-domain.com".
+    # Local dev origins (localhost/127.0.0.1, any port) are always allowed
+    # separately via allow_origin_regex in main.py, so they don't belong here.
+    allowed_origins_raw: str = "https://anchor-orpin.vercel.app"
 
     resend_api_key: str = ""
     resend_from_email: str = ""
@@ -24,6 +29,25 @@ class Settings(BaseSettings):
     twilio_from_number: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.allowed_origins_raw.split(",") if origin.strip()]
+
+    @model_validator(mode="after")
+    def _forbid_dev_bypass_against_real_firestore(self) -> "Settings":
+        # dev_auth_bypass exists only so local dev can hit the API without a
+        # real Firebase token when there's no real Firestore behind it either
+        # (USE_MOCK_FIRESTORE=true). The two must never be enabled together —
+        # that combination means fake auth tokens granting access to real
+        # business data, which is exactly the gap this check exists to close.
+        if self.dev_auth_bypass and not self.use_mock_firestore:
+            raise RuntimeError(
+                "DEV_AUTH_BYPASS=true is not allowed while USE_MOCK_FIRESTORE=false. "
+                "Refusing to start: this combination would let anyone in with a "
+                "fake 'dev-owner'/'dev-employee'/'dev-client' token against real data."
+            )
+        return self
 
 
 settings = Settings()

@@ -49,7 +49,3 @@ cd frontend
 flutter pub get
 flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 ```
-
-### To Test the Accounts:
-Ryan's Account: prendergastryanj@gmail.com	12345678
-Business Account Password: 12345
