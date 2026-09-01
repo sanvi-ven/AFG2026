@@ -1,11 +1,11 @@
 //made with help of chatgpt 4.0: to create a login page scaffold & how to call backedend api to login client
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/router/app_router.dart';
-import '../../../core/services/client_auth_service.dart';
-import '../../../core/services/employee_auth_service.dart';
-import '../../../core/services/session_persistence_service.dart';
+import '../../../core/services/client_profile_service.dart';
+import '../../../core/services/employee_profile_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../core/state/employee_session.dart';
 import '../../../shared/widgets/app_logo.dart';
@@ -59,42 +59,49 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      if (_selectedRole == 'employee') {
-        final profile = await EmployeeAuthService.login(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-        );
-        EmployeeSession.setProfile(profile);
-        await SessionPersistenceService.saveEmployeeSession(profile);
-
-        if (!mounted) return;
-        Navigator.pushReplacementNamed(
-          context,
-          AppRouter.dashboard,
-          arguments: {'role': 'employee', 'authToken': 'dev-employee'},
-        );
-        return;
-      }
-
-      final profile = await ClientAuthService.login(
+      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      ClientSession.setProfile(profile);
-      await SessionPersistenceService.saveClientSession(profile);
+      final user = credential.user!;
+      final tokenResult = await user.getIdTokenResult(true);
+      final role = tokenResult.claims?['role'] as String?;
 
-      if (!mounted) {
+      if (role != _selectedRole) {
+        await FirebaseAuth.instance.signOut();
+        if (!mounted) return;
+        setState(() {
+          _error = role == null
+              ? 'This account has not finished signing up.'
+              : "That account is registered as ${role == 'employee' ? 'an employee' : 'a client'}, not ${_selectedRole == 'employee' ? 'an employee' : 'a client'}.";
+        });
         return;
       }
 
+      if (role == 'employee') {
+        final profile = await EmployeeProfileService.fetchByUid(user.uid);
+        if (profile == null) throw Exception('Employee profile not found.');
+        EmployeeSession.setProfile(profile);
+      } else {
+        final profile = await ClientProfileService.fetchByUid(user.uid);
+        if (profile == null) throw Exception('Client profile not found.');
+        ClientSession.setProfile(profile);
+      }
+
+      final authToken = await user.getIdToken();
+      if (!mounted) return;
       Navigator.pushReplacementNamed(
         context,
         AppRouter.dashboard,
-        arguments: {
-          'role': 'client',
-          'authToken': 'dev-client',
-        },
+        arguments: {'role': role, 'authToken': authToken},
       );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = error.message ?? 'Could not sign in.';
+      });
     } catch (error) {
       if (!mounted) {
         return;
@@ -106,6 +113,24 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) {
         setState(() => _isSubmitting = false);
       }
+    }
+  }
+
+  Future<void> _forgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = 'Enter your email above first, then tap "Forgot password?" again.');
+      return;
+    }
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Password reset email sent to $email.')),
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message ?? 'Could not send reset email.');
     }
   }
 
@@ -194,7 +219,12 @@ class _LoginPageState extends State<LoginPage> {
                           )
                         : const Text('Log in'),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _isSubmitting ? null : _forgotPassword,
+                    child: const Text('Forgot password?'),
+                  ),
+                  const SizedBox(height: 4),
                   OutlinedButton(
                     onPressed: _goToSignup,
                     child: Text(_selectedRole == 'employee' ? 'Create Employee Profile' : 'Create Client Profile'),

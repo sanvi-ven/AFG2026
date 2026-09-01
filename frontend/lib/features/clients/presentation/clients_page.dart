@@ -163,6 +163,9 @@ class _ClientsPageState extends State<ClientsPage> {
             child: StreamBuilder<List<ClientProfile>>(
               stream: ClientProfileService.watchAllProfiles(),
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(child: Text('Failed to load clients: ${snapshot.error}'));
+                }
                 final allProfiles = snapshot.data ?? const <ClientProfile>[];
                 final query = _query.trim();
                 final matched = query.isEmpty

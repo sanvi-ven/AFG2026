@@ -3,13 +3,15 @@ library;
 
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'core/config/app_config.dart';
 import 'core/router/app_router.dart';
+import 'core/services/client_profile_service.dart';
+import 'core/services/employee_profile_service.dart';
 import 'core/services/local_notification_service.dart';
 import 'core/services/message_service.dart';
-import 'core/services/session_persistence_service.dart';
 import 'core/state/client_session.dart';
 import 'core/state/employee_session.dart';
 import 'core/state/owner_session.dart';
@@ -225,7 +227,10 @@ class _OwnerNotificationListenerState extends State<_OwnerNotificationListener> 
   Widget build(BuildContext context) => widget.child;
 }
 
-/// gate to show dashboard or session restore based on persist stored session
+/// gate to show the dashboard or login based on real Firebase Auth state.
+/// Firebase's SDK persists the signed-in user itself across app restarts —
+/// this just reacts to whatever authStateChanges() reports, reading the
+/// role custom claim off a fresh ID token and loading the matching profile.
 class _SessionGate extends StatefulWidget {
   const _SessionGate();
 
@@ -234,57 +239,71 @@ class _SessionGate extends StatefulWidget {
 }
 
 class _SessionGateState extends State<_SessionGate> {
-  // flag for session loading state
+  StreamSubscription<User?>? _authSubscription;
   bool _loaded = false;
-  // restored session from persisted storage
-  RestoredSession? _session;
+  String? _role;
+  String? _authToken;
 
   @override
   void initState() {
     super.initState();
-    // attempt to restore session from local storage
-    _loadSession();
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen(_onAuthStateChanged);
   }
 
-  Future<void> _loadSession() async {
-    // load persisted session from storage
-    final session = await SessionPersistenceService.loadSession();
-    // restore profile to session state if available
-    if (session?.role == 'client' && session?.profile != null) {
-      ClientSession.setProfile(session!.profile!);
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _onAuthStateChanged(User? user) async {
+    if (user == null) {
+      ClientSession.clear();
+      EmployeeSession.clear();
+      OwnerSession.clear();
+      if (mounted) {
+        setState(() {
+          _role = null;
+          _authToken = null;
+          _loaded = true;
+        });
+      }
+      return;
     }
-    if (session?.role == 'employee' && session?.employeeProfile != null) {
-      EmployeeSession.setProfile(session!.employeeProfile!);
+
+    final tokenResult = await user.getIdTokenResult();
+    final role = tokenResult.claims?['role'] as String?;
+
+    switch (role) {
+      case 'client':
+        final profile = await ClientProfileService.fetchByUid(user.uid);
+        if (profile != null) ClientSession.setProfile(profile);
+      case 'employee':
+        final profile = await EmployeeProfileService.fetchByUid(user.uid);
+        if (profile != null) EmployeeSession.setProfile(profile);
+      case 'owner':
+        OwnerSession.setSignedIn();
+      default:
+        // signed in but never finished signup (no role claim) — clean slate
+        await FirebaseAuth.instance.signOut();
     }
-    if (session?.role == 'owner') {
-      OwnerSession.setSignedIn();
-    }
-    // update ui once session loading completes
-    if (mounted) {
-      setState(() {
-        _session = session;
-        _loaded = true;
-      });
-    }
+
+    if (!mounted) return;
+    setState(() {
+      _role = role;
+      _authToken = tokenResult.token;
+      _loaded = true;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // show loading spinner while session loads
+    // show loading spinner while the auth state resolves
     if (!_loaded) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final session = _session;
-    // show dashboard if session exists, otherwise show login
-    if (session != null) {
-      return DashboardPage(
-        role: session.role,
-        authToken: session.role == 'owner'
-            ? 'dev-owner'
-            : session.role == 'employee'
-                ? 'dev-employee'
-                : 'dev-client',
-      );
+    if (_role != null && _authToken != null) {
+      return DashboardPage(role: _role!, authToken: _authToken);
     }
     return const LoginPage();
   }

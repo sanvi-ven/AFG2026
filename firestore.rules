@@ -5,8 +5,19 @@ service cloud.firestore {
     match /client_signups/{document=**} {
       // Allow signup creation (including Firebase email/password users)
       allow create: if validateSignupData() && canCreateOwnSignup();
-      // Allow authenticated users to read their own profile
-      allow read, update, delete: if request.auth != null && resource.data.email == request.auth.token.email;
+      // Allow authenticated users to read their own profile — by uid (real
+      // Firebase Auth accounts, added 2026-09-01 migration) or by email
+      // (kept for anything still only matched on email). Owner/employee (now
+      // real, claim-verified roles as of the same migration) keep full
+      // access — the app's Team/Clients/Messages/etc. pages all depend on
+      // reading every client, and before this migration that "worked" only
+      // because nobody was ever really authenticated so everyone fell
+      // through to the anyone-can-read rule below; the owner signing in for
+      // real must not make that access disappear.
+      allow read, update, delete: if request.auth != null &&
+        (resource.data.uid == request.auth.uid ||
+         resource.data.email == request.auth.token.email ||
+         request.auth.token.role in ['owner', 'employee']);
       // Allow reads by anyone (for autocomplete)
       allow read: if request.auth == null;
       // Owner-side archive/edit/delete (from the Clients page) has no real

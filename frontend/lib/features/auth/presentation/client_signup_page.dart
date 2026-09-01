@@ -2,12 +2,14 @@
 
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/services/address_autocomplete_service.dart';
-import '../../../core/services/client_auth_service.dart';
+import '../../../core/services/auth_api_service.dart';
 import '../../../core/state/client_session.dart';
+import '../../../models/client_profile.dart';
 import '../../../shared/widgets/app_logo.dart';
 
 /// signup page for new client registration with address autocomplete
@@ -114,15 +116,22 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
     });
 
     try {
-      final password = _passwordController.text;
-      final savedProfile = await ClientAuthService.signUp(
-        email: _emailController.text.trim(),
+      final email = _emailController.text.trim();
+      final credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: _passwordController.text,
+      );
+      final idToken = await credential.user!.getIdToken(true);
+
+      final response = await AuthApiService.completeSignup(
+        idToken: idToken!,
+        role: 'client',
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
         address: _addressController.text.trim(),
-        password: password,
       );
+      final savedProfile = ClientProfile.fromMap(response);
       ClientSession.setProfile(savedProfile);
 
       if (!mounted) {
@@ -132,8 +141,15 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
       Navigator.pushReplacementNamed(
         context,
         AppRouter.dashboard,
-        arguments: {'role': 'client', 'authToken': 'dev-client'},
+        arguments: {'role': 'client', 'authToken': idToken},
       );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = error.message ?? 'Could not create your account.';
+      });
     } catch (error) {
       if (!mounted) {
         return;

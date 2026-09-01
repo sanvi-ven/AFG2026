@@ -4,18 +4,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/router/app_router.dart';
 import '../../core/services/address_autocomplete_service.dart';
-import '../../core/services/client_auth_service.dart';
 import '../../core/services/client_profile_service.dart';
-import '../../core/services/employee_auth_service.dart';
 import '../../core/services/employee_profile_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/owner_settings_service.dart';
-import '../../core/services/session_persistence_service.dart';
 import '../../core/services/sidebar_preference_service.dart';
 import '../../core/state/client_session.dart';
 import '../../core/state/employee_session.dart';
@@ -658,9 +656,10 @@ Future<void> _confirmLogout(BuildContext context) async {
   );
   if (confirmed != true || !context.mounted) return;
 
+  await FirebaseAuth.instance.signOut();
   ClientSession.clear();
+  EmployeeSession.clear();
   OwnerSession.clear();
-  await SessionPersistenceService.clearSession();
   if (!context.mounted) return;
 
   Navigator.of(context)
@@ -758,11 +757,14 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
           _confirmNewPasswordController.text.isNotEmpty;
 
       if (shouldChangePassword) {
-        await ClientAuthService.changePassword(
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null) throw Exception('You are not signed in.');
+        final credential = EmailAuthProvider.credential(
           email: widget.initialProfile.email,
-          oldPassword: _oldPasswordController.text,
-          newPassword: _newPasswordController.text,
+          password: _oldPasswordController.text,
         );
+        await user.reauthenticateWithCredential(credential);
+        await user.updatePassword(_newPasswordController.text);
       }
 
       final nextProfile = widget.initialProfile.copyWith(
@@ -773,7 +775,6 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
       );
       final updated = await ClientProfileService.save(nextProfile);
       ClientSession.setProfile(updated);
-      await SessionPersistenceService.saveClientSession(updated);
       if (!mounted) {
         return;
       }
@@ -1038,11 +1039,14 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
           _confirmNewPasswordController.text.isNotEmpty;
 
       if (shouldChangePassword) {
-        await EmployeeAuthService.changePassword(
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null) throw Exception('You are not signed in.');
+        final credential = EmailAuthProvider.credential(
           email: widget.initialProfile.email,
-          oldPassword: _oldPasswordController.text,
-          newPassword: _newPasswordController.text,
+          password: _oldPasswordController.text,
         );
+        await user.reauthenticateWithCredential(credential);
+        await user.updatePassword(_newPasswordController.text);
       }
 
       final nextProfile = widget.initialProfile.copyWith(
@@ -1052,7 +1056,6 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
       );
       final updated = await EmployeeProfileService.save(nextProfile);
       EmployeeSession.setProfile(updated);
-      await SessionPersistenceService.saveEmployeeSession(updated);
       if (!mounted) {
         return;
       }

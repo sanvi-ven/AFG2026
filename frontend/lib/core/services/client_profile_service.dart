@@ -122,65 +122,35 @@ class ClientProfileService {
     return saved ?? profile.copyWith(signupId: normalizedId, email: normalizedEmail);
   }
 
-  /// fetch the password hash for a client email
-  static Future<String?> fetchPasswordHash(String email) async {
-    final normalizedEmail = normalizeEmail(email);
-    final query = await _signupsCollection.where('email', isEqualTo: normalizedEmail).limit(1).get();
+  /// look up a client profile by their linked Firebase Auth uid
+  static Future<ClientProfile?> fetchByUid(String uid) async {
+    final normalizedUid = uid.trim();
+    if (normalizedUid.isEmpty) return null;
+
+    final query = await _signupsCollection.where('uid', isEqualTo: normalizedUid).limit(1).get();
     if (query.docs.isEmpty) return null;
-    return query.docs.first.data()['password_hash'] as String?;
+
+    final doc = query.docs.first;
+    return ClientProfile.fromMap(doc.data()).copyWith(signupId: doc.id);
   }
 
-  /// update the password hash for a client email
-  static Future<void> updatePasswordHash({
-    required String email,
-    required String passwordHash,
-  }) async {
-    final normalizedEmail = normalizeEmail(email);
-    final query = await _signupsCollection.where('email', isEqualTo: normalizedEmail).limit(1).get();
-    if (query.docs.isEmpty) throw Exception('Client not found.');
-    await _signupsCollection.doc(query.docs.first.id).update({'password_hash': passwordHash});
-  }
-
-  /// create a new client signup with profile and password hash.
-  /// pass `email: null` for an owner-created "dummy" client with no login —
-  /// a placeholder email is generated so existing email-keyed lookups keep working.
-  static Future<ClientProfile> createSignup({
-    String? email,
+  /// owner action: create a client record for someone who won't use the app
+  /// themselves — no email/password required up front. Gets a placeholder
+  /// email until the account is claimed (see generateClaimCode). Doc id is
+  /// Firestore's own auto-generated id, not a scanned sequential counter —
+  /// computing a "next" id used to mean reading every existing client's full
+  /// record (including their password hash) just to create one new one.
+  static Future<ClientProfile> createDummyClient({
     required String firstName,
     required String lastName,
     required String phoneNumber,
     required String address,
-    String? passwordHash,
   }) async {
-    final normalizedEmail = email == null || email.trim().isEmpty ? null : normalizeEmail(email);
-
-    if (normalizedEmail != null) {
-      // Reject duplicate emails.
-      final existing = await fetchByEmail(normalizedEmail);
-      if (existing != null) {
-        throw Exception('An account with that email address already exists.');
-      }
-    }
-
-    // Determine the next sequential 5-digit client ID.
-    final allDocs = await _signupsCollection.get();
-    int maxSeen = 0;
-    for (final doc in allDocs.docs) {
-      final candidate = doc.id.trim();
-      if (candidate.length == 5) {
-        final parsed = int.tryParse(candidate);
-        if (parsed != null) maxSeen = max(maxSeen, parsed);
-      }
-    }
-    final nextValue = maxSeen + 1;
-    if (nextValue > 99999) {
-      throw Exception('Client signup capacity reached (99999).');
-    }
-    final newId = nextValue.toString().padLeft(5, '0');
-    final resolvedEmail = normalizedEmail ?? 'client.$newId@no-login.internal';
+    final doc = _signupsCollection.doc();
+    final resolvedEmail = 'client.${doc.id}@no-login.internal';
 
     final profile = ClientProfile(
-      signupId: newId,
+      signupId: doc.id,
       email: resolvedEmail,
       firstName: firstName.trim(),
       lastName: lastName.trim(),
@@ -188,30 +158,12 @@ class ClientProfileService {
       address: address.trim(),
     );
 
-    await _signupsCollection.doc(newId).set({
+    await doc.set({
       ...profile.toMap(),
       'created_at': FieldValue.serverTimestamp(),
-      if (passwordHash != null) 'password_hash': passwordHash,
     });
 
     return profile;
-  }
-
-  /// owner action: create a client record for someone who won't use the app
-  /// themselves — no email/password required up front.
-  static Future<ClientProfile> createDummyClient({
-    required String firstName,
-    required String lastName,
-    required String phoneNumber,
-    required String address,
-  }) {
-    return createSignup(
-      email: null,
-      firstName: firstName,
-      lastName: lastName,
-      phoneNumber: phoneNumber,
-      address: address,
-    );
   }
 
   /// change a client's email, rejecting the change if another account already uses it

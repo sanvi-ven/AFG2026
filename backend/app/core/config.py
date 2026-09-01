@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     # separately via allow_origin_regex in main.py, so they don't belong here.
     allowed_origins_raw: str = "https://anchor-orpin.vercel.app"
 
+    # emails allowed to claim the "owner" role on signup — comma-separated.
+    # nobody else can self-assign owner no matter what they send the API.
+    owner_emails_raw: str = "immc17289@gmail.com"
+
     resend_api_key: str = ""
     resend_from_email: str = ""
 
@@ -33,6 +37,10 @@ class Settings(BaseSettings):
     @property
     def allowed_origins(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins_raw.split(",") if origin.strip()]
+
+    @property
+    def owner_emails(self) -> list[str]:
+        return [email.strip().lower() for email in self.owner_emails_raw.split(",") if email.strip()]
 
     @model_validator(mode="after")
     def _forbid_dev_bypass_against_real_firestore(self) -> "Settings":

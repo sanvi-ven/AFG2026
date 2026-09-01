@@ -1,9 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/router/app_router.dart';
-import '../../../core/services/client_auth_service.dart';
-import '../../../core/services/session_persistence_service.dart';
+import '../../../core/services/auth_api_service.dart';
 import '../../../core/state/client_session.dart';
+import '../../../models/client_profile.dart';
 import '../../../shared/widgets/app_logo.dart';
 
 /// lets a client with a code from the business owner turn their dummy
@@ -42,20 +43,32 @@ class _ClaimAccountPageState extends State<ClaimAccountPage> {
     });
 
     try {
-      final profile = await ClientAuthService.claimAccount(
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+      final response = await AuthApiService.claimAccount(
         code: _codeController.text,
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+        email: email,
+        password: password,
       );
+
+      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final idToken = await credential.user!.getIdToken();
+
+      final profile = ClientProfile.fromMap(response);
       ClientSession.setProfile(profile);
-      await SessionPersistenceService.saveClientSession(profile);
 
       if (!mounted) return;
       Navigator.pushReplacementNamed(
         context,
         AppRouter.dashboard,
-        arguments: {'role': 'client', 'authToken': 'dev-client'},
+        arguments: {'role': 'client', 'authToken': idToken},
       );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message ?? 'Could not sign in.');
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString().replaceFirst('Exception: ', ''));

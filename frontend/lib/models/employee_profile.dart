@@ -9,6 +9,7 @@ class EmployeeProfile {
     required this.teamId,
     required this.active,
     this.hourlyRate,
+    this.uid,
   });
 
   final String employeeId;
@@ -19,6 +20,8 @@ class EmployeeProfile {
   final String? teamId;
   final bool active;
   final double? hourlyRate;
+  /// linked Firebase Auth uid
+  final String? uid;
 
   String get greetingName {
     if (firstName.trim().isNotEmpty) {
@@ -63,6 +66,7 @@ class EmployeeProfile {
       teamId: rawTeamId.isEmpty ? null : rawTeamId,
       active: map['active'] as bool? ?? true,
       hourlyRate: (map['hourly_rate'] as num?)?.toDouble(),
+      uid: (map['uid'] as String?)?.trim().isEmpty ?? true ? null : (map['uid'] as String).trim(),
     );
   }
 
@@ -92,6 +96,7 @@ class EmployeeProfile {
     bool? active,
     double? hourlyRate,
     bool clearHourlyRate = false,
+    String? uid,
   }) {
     return EmployeeProfile(
       employeeId: employeeId ?? this.employeeId,
@@ -102,6 +107,7 @@ class EmployeeProfile {
       teamId: clearTeamId ? null : (teamId ?? this.teamId),
       active: active ?? this.active,
       hourlyRate: clearHourlyRate ? null : (hourlyRate ?? this.hourlyRate),
+      uid: uid ?? this.uid,
     );
   }
 }

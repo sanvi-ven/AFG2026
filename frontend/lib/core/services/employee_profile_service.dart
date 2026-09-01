@@ -59,56 +59,16 @@ class EmployeeProfileService {
     return saved ?? profile.copyWith(employeeId: normalizedId, email: normalizedEmail);
   }
 
-  static Future<String?> fetchPasswordHash(String email) async {
-    final normalizedEmail = normalizeEmail(email);
-    final query = await _collection.where('email', isEqualTo: normalizedEmail).limit(1).get();
+  /// look up an employee profile by their linked Firebase Auth uid
+  static Future<EmployeeProfile?> fetchByUid(String uid) async {
+    final normalizedUid = uid.trim();
+    if (normalizedUid.isEmpty) return null;
+
+    final query = await _collection.where('uid', isEqualTo: normalizedUid).limit(1).get();
     if (query.docs.isEmpty) return null;
-    return query.docs.first.data()['password_hash'] as String?;
-  }
 
-  static Future<void> updatePasswordHash({
-    required String email,
-    required String passwordHash,
-  }) async {
-    final normalizedEmail = normalizeEmail(email);
-    final query = await _collection.where('email', isEqualTo: normalizedEmail).limit(1).get();
-    if (query.docs.isEmpty) throw Exception('Employee not found.');
-    await _collection.doc(query.docs.first.id).update({'password_hash': passwordHash});
-  }
-
-  /// create a new employee signup with profile and password hash
-  static Future<EmployeeProfile> createSignup({
-    required String email,
-    required String firstName,
-    required String lastName,
-    required String phoneNumber,
-    String? passwordHash,
-  }) async {
-    final normalizedEmail = normalizeEmail(email);
-
-    final existing = await fetchByEmail(normalizedEmail);
-    if (existing != null) {
-      throw Exception('An account with that email address already exists.');
-    }
-
-    final doc = _collection.doc();
-    final profile = EmployeeProfile(
-      employeeId: doc.id,
-      email: normalizedEmail,
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      phoneNumber: phoneNumber.trim(),
-      teamId: null,
-      active: true,
-    );
-
-    await doc.set({
-      ...profile.toMap(),
-      'created_at': FieldValue.serverTimestamp(),
-      if (passwordHash != null) 'password_hash': passwordHash,
-    });
-
-    return profile;
+    final doc = query.docs.first;
+    return EmployeeProfile.fromMap({...doc.data(), 'id': doc.id});
   }
 
   /// owner action: activate/deactivate an employee account

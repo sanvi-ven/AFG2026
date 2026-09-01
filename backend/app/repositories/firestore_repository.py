@@ -77,6 +77,16 @@ class FirestoreRepository:
         doc = self.db.collection(self.collection_name).document(doc_id).get()
         return doc.to_dict() | {"id": doc_id}
 
+    # fetch a single document by its id
+    def get_by_id(self, doc_id: str) -> Optional[dict]:
+        if self.db is None:
+            return self._memory_store[self.collection_name].get(doc_id)
+
+        doc = self.db.collection(self.collection_name).document(doc_id).get()
+        if not doc.exists:
+            return None
+        return doc.to_dict() | {"id": doc_id}
+
     # find first document matching field value
     def get_one_by_field(self, field_name: str, equals: str) -> Optional[dict]:
         if self.db is None:

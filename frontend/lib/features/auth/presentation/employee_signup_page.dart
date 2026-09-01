@@ -1,9 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/router/app_router.dart';
-import '../../../core/services/employee_auth_service.dart';
-import '../../../core/services/session_persistence_service.dart';
+import '../../../core/services/auth_api_service.dart';
 import '../../../core/state/employee_session.dart';
+import '../../../models/employee_profile.dart';
 import '../../../shared/widgets/app_logo.dart';
 
 /// signup page for new employees, gated by an owner-issued invite code
@@ -57,24 +58,36 @@ class _EmployeeSignupPageState extends State<EmployeeSignupPage> {
     });
 
     try {
-      final savedProfile = await EmployeeAuthService.signUp(
-        email: _emailController.text.trim(),
+      final email = _emailController.text.trim();
+      final credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: _passwordController.text,
+      );
+      final idToken = await credential.user!.getIdToken(true);
+
+      final response = await AuthApiService.completeSignup(
+        idToken: idToken!,
+        role: 'employee',
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
-        password: _passwordController.text,
         inviteCode: _inviteCodeController.text.trim(),
       );
+      final savedProfile = EmployeeProfile.fromMap(response);
       EmployeeSession.setProfile(savedProfile);
-      await SessionPersistenceService.saveEmployeeSession(savedProfile);
 
       if (!mounted) return;
 
       Navigator.pushReplacementNamed(
         context,
         AppRouter.dashboard,
-        arguments: {'role': 'employee', 'authToken': 'dev-employee'},
+        arguments: {'role': 'employee', 'authToken': idToken},
       );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.message ?? 'Could not create your account.';
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() {

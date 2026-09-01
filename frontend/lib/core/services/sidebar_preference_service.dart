@@ -3,8 +3,7 @@ library;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// persists small owner-sidebar UI preferences (e.g. whether a given nav
-/// group is expanded), separate from [SessionPersistenceService] which is
-/// scoped to auth-session data.
+/// group is expanded) — unrelated to auth, which is Firebase Auth's own concern.
 class SidebarPreferenceService {
   SidebarPreferenceService._();
 

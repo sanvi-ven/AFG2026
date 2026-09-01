@@ -22,3 +22,4 @@ service-account.json
 service-account*.json
 **/service-account.json
 **/service-account*.json
+backend/scripts/migration_report.json
