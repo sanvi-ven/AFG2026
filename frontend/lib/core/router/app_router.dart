@@ -11,6 +11,7 @@ import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/owner_signin_page.dart';
 import '../../features/availability/presentation/availability_page.dart';
 import '../../features/clients/presentation/clients_page.dart';
+import '../../features/crew_availability/presentation/crew_availability_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
 import '../../features/equipment/presentation/equipment_catalog_page.dart';
 import '../../features/equipment/presentation/equipment_detail_page.dart';
@@ -94,6 +95,7 @@ class AppRouter {
   static const equipmentCatalog = '/equipment';
   static const equipmentDetail = '/equipment/detail';
   static const equipmentForm = '/equipment/form';
+  static const crewAvailability = '/crew-availability';
 /// generates appropriate page route based on settings and passes role/auth context
   
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
@@ -256,6 +258,11 @@ class AppRouter {
             authToken: authToken,
             existingId: args['existingId'] as String?,
           ),
+          settings: settings,
+        );
+      case crewAvailability:
+        return _NoAnimationPageRoute(
+          builder: (_) => CrewAvailabilityPage(role: role, authToken: authToken),
           settings: settings,
         );
       default:

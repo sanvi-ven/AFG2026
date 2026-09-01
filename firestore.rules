@@ -58,6 +58,14 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Employee day-by-day work-availability markers (all-day, or a specific
+    // start/end time window), one doc per employee per day. Same open trust
+    // model as the rest of this app — no real Firebase Auth session exists
+    // to gate on.
+    match /employee_availability/{document=**} {
+      allow read, write: if true;
+    }
+
     match /job_completion_forms/{document=**} {
       allow read, write: if true;
     }

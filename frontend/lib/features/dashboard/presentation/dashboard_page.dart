@@ -107,6 +107,12 @@ class _DashboardPageState extends State<DashboardPage> {
               subtitle: 'Clock in/out and view your shift history',
               route: AppRouter.myHours,
             ),
+            _linkCard(
+              context,
+              title: 'Crew Availability',
+              subtitle: 'Mark the days you can work',
+              route: AppRouter.crewAvailability,
+            ),
           ] else ...[
             _requestWorkCard(context),
             _linkCard(context,

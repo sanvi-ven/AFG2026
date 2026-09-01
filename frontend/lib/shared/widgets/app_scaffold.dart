@@ -288,6 +288,10 @@ class AppScaffold extends StatelessWidget {
             route: AppRouter.myHours,
             icon: Icons.access_time),
         _NavItem(
+            label: 'Crew Availability',
+            route: AppRouter.crewAvailability,
+            icon: Icons.event_available_outlined),
+        _NavItem(
             label: 'Equipment',
             route: AppRouter.equipmentCatalog,
             icon: Icons.build_outlined),
@@ -347,6 +351,10 @@ class AppScaffold extends StatelessWidget {
             label: 'Team',
             route: AppRouter.teamAdmin,
             icon: Icons.groups_outlined),
+        _NavItem(
+            label: 'Crew Availability',
+            route: AppRouter.crewAvailability,
+            icon: Icons.event_available_outlined),
         _NavItem(
             label: 'Reports',
             route: AppRouter.reports,
