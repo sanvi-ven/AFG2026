@@ -14,7 +14,9 @@ class OwnerSettings {
 
   final String companyName;
   final String address;
-  // Legacy: Firebase Storage URL (kept for possible future use)
+  // Fallback logo source (a hosted URL) for records saved before logos
+  // moved to base64 storage — invoice_pdf_service.dart/estimate_pdf_service.dart
+  // still read this when logoBase64 is unset.
   final String? logoUrl;
   // Primary: base64-encoded logo stored directly in Firestore
   final String? logoBase64;
