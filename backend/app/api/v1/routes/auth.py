@@ -4,7 +4,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, status
 from firebase_admin import auth, firestore
 
 from app.core.config import settings
-from app.core.firebase import initialize_firebase_app
+from app.core.firebase import require_firebase_app
 from app.core.rate_limit import limiter
 from app.models.enums import UserRole
 from app.repositories.firestore_repository import FirestoreRepository
@@ -25,22 +25,12 @@ employee_repo = FirestoreRepository("employee_signups")
 invite_code_repo = FirestoreRepository("invite_codes")
 
 
-def _init_firebase() -> None:
-    try:
-        initialize_firebase_app()
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Firebase admin is not configured. Check service-account.json and FIREBASE_PROJECT_ID.",
-        ) from exc
-
-
 def _verify_token(authorization: Optional[str]) -> dict:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
     token = authorization.split(" ", 1)[1].strip()
 
-    _init_firebase()
+    require_firebase_app()
     try:
         return auth.verify_id_token(token)
     except Exception as exc:
@@ -147,7 +137,7 @@ def complete_signup(
 @router.post("/claim-account", response_model=SignupProfileResponse)
 @limiter.limit("5/minute")
 def claim_account(request: Request, payload: ClaimAccountRequest) -> SignupProfileResponse:
-    _init_firebase()
+    require_firebase_app()
 
     code = payload.code.strip().upper()
     profile = client_repo.get_one_by_field("claim_code", code)

@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException, Request, status
 from firebase_admin import auth
 
-from app.core.firebase import initialize_firebase_app
+from app.core.firebase import require_firebase_app
 from app.core.rate_limit import limiter
 from app.schemas.comms import EmailSendRequest, SendResult, SmsSendRequest
 from app.services.email_service import EmailService
@@ -36,13 +36,7 @@ def _require_owner(authorization: Optional[str]) -> None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
     token = authorization.split(" ", 1)[1].strip()
 
-    try:
-        initialize_firebase_app()
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Firebase admin is not configured. Check service-account.json and FIREBASE_PROJECT_ID.",
-        ) from exc
+    require_firebase_app()
 
     try:
         claims = auth.verify_id_token(token)

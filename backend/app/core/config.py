@@ -13,9 +13,13 @@ class Settings(BaseSettings):
 
     # CORS allowlist — comma-separated in the env var, e.g.
     # "https://anchor-orpin.vercel.app,https://your-custom-domain.com".
-    # Local dev origins (localhost/127.0.0.1, any port) are always allowed
-    # separately via allow_origin_regex in main.py, so they don't belong here.
     allowed_origins_raw: str = "https://anchor-orpin.vercel.app"
+
+    # Additionally allow any localhost/127.0.0.1 origin (any port) — for
+    # running the Flutter web app locally against this backend. Defaults
+    # off, so Cloud Run (which never sets this) stays production-only; set
+    # ALLOW_LOCALHOST_CORS=true in a local .env to develop against it.
+    allow_localhost_cors: bool = False
 
     # emails allowed to claim the "owner" role on signup — comma-separated.
     # nobody else can self-assign owner no matter what they send the API.

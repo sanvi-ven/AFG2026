@@ -26,7 +26,9 @@ def create_application() -> FastAPI:
         # site make credentialed calls to this API; this app authenticates via
         # a Bearer header, not cookies, so credentials were never needed anyway
         allow_origins=list(settings.allowed_origins),
-        allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+        # only set when ALLOW_LOCALHOST_CORS=true (local dev) — Cloud Run
+        # never sets it, so production never allows a localhost origin
+        allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?" if settings.allow_localhost_cors else None,
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
