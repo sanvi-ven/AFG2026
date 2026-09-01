@@ -271,8 +271,21 @@ class _SessionGateState extends State<_SessionGate> {
       return;
     }
 
-    final tokenResult = await user.getIdTokenResult();
-    final role = tokenResult.claims?['role'] as String?;
+    // The role claim is set server-side by /auth/complete-signup, which
+    // runs just after the sign-in event that triggers this listener — so a
+    // brand-new signup can race this check and briefly show no role at all,
+    // which used to sign the user right back out mid-signup even though
+    // account creation had actually succeeded. Retry a few times before
+    // concluding the account is genuinely orphaned (signed in via the SDK
+    // but never completed signup, e.g. an abandoned prior session) rather
+    // than a real signup still finishing.
+    var tokenResult = await user.getIdTokenResult();
+    var role = tokenResult.claims?['role'] as String?;
+    for (var attempt = 0; role == null && attempt < 5; attempt++) {
+      await Future.delayed(const Duration(milliseconds: 600));
+      tokenResult = await user.getIdTokenResult(true);
+      role = tokenResult.claims?['role'] as String?;
+    }
 
     switch (role) {
       case 'client':
