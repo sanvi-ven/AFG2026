@@ -12,6 +12,7 @@ import 'equipment_service.dart';
 import 'invoice_service.dart';
 import 'local_notification_service.dart';
 import 'notification_service.dart';
+import 'owner_settings_service.dart';
 import 'scheduled_work_service.dart';
 
 /// scans for jobs/invoices that need a reminder and creates the
@@ -112,6 +113,14 @@ class ReminderCheckService {
   static Future<void> _checkInvoiceReminders() async {
     final invoices = await InvoiceService.watchInvoices(role: 'owner').first;
     final now = DateTime.now();
+    // fetched once and reused for every overdue invoice below — the SMS
+    // sample registered with Twilio's A2P campaign leads with the business
+    // name and a "Reply STOP" opt-out line, so the real message needs to
+    // match that exactly rather than the bare text it used to send.
+    final ownerSettings = await OwnerSettingsService.fetch();
+    final businessName =
+        ownerSettings.companyName.trim().isEmpty ? 'Your service provider' : ownerSettings.companyName.trim();
+    final businessPhone = ownerSettings.phone.trim();
 
     for (final invoice in invoices) {
       if (invoice.isArchived || invoice.status != InvoiceStatus.sent) continue;
@@ -153,10 +162,12 @@ class ReminderCheckService {
         ));
       }
       if (client != null && client.phoneNumber.trim().isNotEmpty) {
+        final phoneLine = businessPhone.isEmpty ? '' : ' Questions? Call $businessPhone.';
         unawaited(CommsService.sendSms(
           to: client.phoneNumber.trim(),
-          body: 'Reminder: invoice ${invoice.invoiceNumber} for '
-              '\$${invoice.total.toStringAsFixed(2)} is still outstanding.',
+          body: '$businessName: Reminder — invoice ${invoice.invoiceNumber} for '
+              '\$${invoice.total.toStringAsFixed(2)} is still outstanding.$phoneLine '
+              'Reply STOP to opt out.',
         ));
       }
       await LocalNotificationService.showMessageNotification(
