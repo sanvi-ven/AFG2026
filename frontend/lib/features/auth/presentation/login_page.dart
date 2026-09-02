@@ -23,6 +23,7 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isSubmitting = false;
+  bool _isSendingReset = false;
   String? _error;
   String _selectedRole = 'client';
 
@@ -117,11 +118,18 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _forgotPassword() async {
+    if (_isSendingReset) return;
     final email = _emailController.text.trim();
     if (email.isEmpty) {
       setState(() => _error = 'Enter your email above first, then tap "Forgot password?" again.');
       return;
     }
+
+    setState(() {
+      _isSendingReset = true;
+      _error = null;
+    });
+
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
       if (!mounted) return;
@@ -131,6 +139,8 @@ class _LoginPageState extends State<LoginPage> {
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message ?? 'Could not send reset email.');
+    } finally {
+      if (mounted) setState(() => _isSendingReset = false);
     }
   }
 
@@ -221,8 +231,14 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 8),
                   TextButton(
-                    onPressed: _isSubmitting ? null : _forgotPassword,
-                    child: const Text('Forgot password?'),
+                    onPressed: (_isSubmitting || _isSendingReset) ? null : _forgotPassword,
+                    child: _isSendingReset
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Forgot password?'),
                   ),
                   const SizedBox(height: 4),
                   OutlinedButton(
