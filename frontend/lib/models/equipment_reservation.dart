@@ -26,6 +26,7 @@ class EquipmentReservation {
     this.returnedAt,
     this.workId = '',
     this.jobAddress = '',
+    this.basketId = '',
     required this.createdAt,
   });
 
@@ -62,12 +63,20 @@ class EquipmentReservation {
   /// without a lookup — same rationale as [equipmentName].
   final String jobAddress;
 
+  /// optional link back to the EquipmentBasket this reservation was created
+  /// as part of. Empty means "not part of a basket" — a standalone
+  /// reservation, exactly like every reservation before baskets existed.
+  final String basketId;
+
   final DateTime createdAt;
 
   bool get isActive => !isCancelled;
 
   /// true when this reservation is tied to a specific job.
   bool get isLinkedToJob => workId.isNotEmpty;
+
+  /// true when this reservation was created as part of an equipment basket.
+  bool get isInBasket => basketId.isNotEmpty;
 
   /// true when this reservation's window intersects [otherStart]–[otherEnd].
   /// Touching edges (one ends exactly as the other starts) do not overlap.
@@ -106,6 +115,7 @@ class EquipmentReservation {
       returnedAt: readNullableDate(map['returnedAt']),
       workId: (map['workId'] as String? ?? '').trim(),
       jobAddress: (map['jobAddress'] as String? ?? '').trim(),
+      basketId: (map['basketId'] as String? ?? '').trim(),
       createdAt: readDate(map['createdAt']),
     );
   }
@@ -129,6 +139,7 @@ class EquipmentReservation {
       'returnedAt': returnedAt,
       'workId': workId,
       'jobAddress': jobAddress,
+      'basketId': basketId,
       'createdAt': createdAt,
     };
   }

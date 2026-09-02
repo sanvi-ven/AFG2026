@@ -79,6 +79,53 @@ class EquipmentReservationService {
     });
   }
 
+  /// all reservations created as part of one basket, unit-number order —
+  /// used by EquipmentBasketService and the basket display widgets.
+  static Stream<List<EquipmentReservation>> watchForBasket(String basketId) {
+    return _collection
+        .where('basketId', isEqualTo: basketId)
+        .snapshots()
+        .map((snapshot) {
+      final reservations = snapshot.docs
+          .map((doc) =>
+              EquipmentReservation.fromMap({...doc.data(), 'id': doc.id}))
+          .toList();
+      reservations.sort((a, b) => a.unitNumber.compareTo(b.unitNumber));
+      return reservations;
+    });
+  }
+
+  /// the sorted, lowest-numbered-first list of [candidateUnitNumbers] that
+  /// have no overlapping active reservation on [dateKey] within
+  /// [startTime]–[endTime]. Shared by [reserveUnits] and
+  /// EquipmentBasketService, which both need this same one-time
+  /// (non-streaming) conflict check per equipment item.
+  static Future<List<int>> freeUnitNumbersFor({
+    required String equipmentId,
+    required List<int> candidateUnitNumbers,
+    required String dateKey,
+    required DateTime startTime,
+    required DateTime endTime,
+  }) async {
+    final snapshot = await _collection
+        .where('equipmentId', isEqualTo: equipmentId)
+        .where('date', isEqualTo: dateKey)
+        .get();
+    final sameDayActive = snapshot.docs
+        .map((doc) =>
+            EquipmentReservation.fromMap({...doc.data(), 'id': doc.id}))
+        .where((r) => r.isActive)
+        .toList();
+
+    final free = candidateUnitNumbers.where((unitNumber) {
+      final overlapping = sameDayActive.any((r) =>
+          r.unitNumber == unitNumber && r.overlaps(startTime, endTime));
+      return !overlapping;
+    }).toList()
+      ..sort();
+    return free;
+  }
+
   /// reserve [quantity] free units of [equipment] for the [startTime]–[endTime]
   /// window, auto-approved. Picks the lowest-numbered active units that have no
   /// overlapping active reservation that same day, then batch-creates one
@@ -100,6 +147,7 @@ class EquipmentReservationService {
     required String employeeName,
     String workId = '',
     String jobAddress = '',
+    String basketId = '',
   }) async {
     if (quantity < 1) {
       throw Exception('Quantity must be at least 1.');
@@ -131,23 +179,13 @@ class EquipmentReservationService {
         .map((u) => u.unitNumber)
         .toList();
 
-    // one-time read of that day's reservations for this item (not a stream)
-    final snapshot = await _collection
-        .where('equipmentId', isEqualTo: equipment.id)
-        .where('date', isEqualTo: dateKey)
-        .get();
-    final sameDayActive = snapshot.docs
-        .map((doc) =>
-            EquipmentReservation.fromMap({...doc.data(), 'id': doc.id}))
-        .where((r) => r.isActive)
-        .toList();
-
-    final freeUnits = candidateUnitNumbers.where((unitNumber) {
-      final overlapping = sameDayActive.any((r) =>
-          r.unitNumber == unitNumber && r.overlaps(startTime, endTime));
-      return !overlapping;
-    }).toList()
-      ..sort();
+    final freeUnits = await freeUnitNumbersFor(
+      equipmentId: equipment.id,
+      candidateUnitNumbers: candidateUnitNumbers,
+      dateKey: dateKey,
+      startTime: startTime,
+      endTime: endTime,
+    );
 
     if (freeUnits.length < quantity) {
       if (freeUnits.isEmpty) {
@@ -177,6 +215,7 @@ class EquipmentReservationService {
         employeeName: employeeName,
         workId: workId,
         jobAddress: jobAddress,
+        basketId: basketId,
         createdAt: now,
       );
       batch.set(_collection.doc(id), reservation.toMap());
@@ -214,6 +253,33 @@ class EquipmentReservationService {
   static Future<void> markReturned(String id) async {
     await _collection.doc(id).set(
       {'returnedAt': DateTime.now()},
+      SetOptions(merge: true),
+    );
+  }
+
+  // --- batch-write helpers ---------------------------------------------------
+  // Add a write to a caller-owned WriteBatch instead of committing immediately,
+  // so EquipmentBasketService can stamp every reservation in a basket (plus its
+  // own basket doc and any supply-line decrements) as one atomic commit.
+
+  static void addCheckedOutToBatch(WriteBatch batch, String id) {
+    batch.set(_collection.doc(id), {'checkedOutAt': DateTime.now()},
+        SetOptions(merge: true));
+  }
+
+  static void addReturnedToBatch(WriteBatch batch, String id) {
+    batch.set(_collection.doc(id), {'returnedAt': DateTime.now()},
+        SetOptions(merge: true));
+  }
+
+  static void addCancelToBatch(WriteBatch batch, String id, {String reason = ''}) {
+    batch.set(
+      _collection.doc(id),
+      {
+        'isCancelled': true,
+        'cancelledAt': DateTime.now(),
+        'cancelReason': reason.trim(),
+      },
       SetOptions(merge: true),
     );
   }

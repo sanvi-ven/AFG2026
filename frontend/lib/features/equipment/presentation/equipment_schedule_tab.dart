@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/services/equipment_basket_service.dart';
 import '../../../core/services/equipment_reservation_service.dart';
+import '../../../models/equipment_basket.dart';
 import '../../../models/equipment_reservation.dart';
+import 'equipment_basket_card.dart';
 
 /// owner-only schedule view: a day-grouped list of active reservations for a
 /// selected day, with prev/next-day controls and a "Today" reset. Reservations
@@ -81,6 +84,75 @@ class _EquipmentScheduleTabState extends State<EquipmentScheduleTab> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _checkOutBasket(EquipmentBasket basket) async {
+    try {
+      await EquipmentBasketService.checkOutBasket(basket.id);
+      if (!mounted) return;
+      _snack('Basket checked out.');
+    } catch (error) {
+      if (!mounted) return;
+      _snack(error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _returnBasket(EquipmentBasket basket) async {
+    try {
+      await EquipmentBasketService.returnBasket(basket.id);
+      if (!mounted) return;
+      _snack('Basket returned.');
+    } catch (error) {
+      if (!mounted) return;
+      _snack(error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _cancelBasket(EquipmentBasket basket) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel basket'),
+        content: Text(
+            "Cancel ${basket.employeeName}'s basket for ${basket.date}? "
+            'Any item already checked out is left as-is.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Back')),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Cancel basket')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await EquipmentBasketService.cancelBasket(basket.id);
+      if (!mounted) return;
+      _snack('Basket cancelled.');
+    } catch (error) {
+      if (!mounted) return;
+      _snack(error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _checkOutOne(EquipmentReservation reservation) async {
+    try {
+      await EquipmentReservationService.markCheckedOut(reservation.id);
+    } catch (error) {
+      if (!mounted) return;
+      _snack(error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _returnOne(EquipmentReservation reservation) async {
+    try {
+      await EquipmentReservationService.markReturned(reservation.id);
+    } catch (error) {
+      if (!mounted) return;
+      _snack(error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final dayKey = DateFormat('yyyy-MM-dd').format(_selectedDay);
@@ -92,58 +164,96 @@ class _EquipmentScheduleTabState extends State<EquipmentScheduleTab> {
         Expanded(
           child: StreamBuilder<List<EquipmentReservation>>(
             stream: EquipmentReservationService.watchAllReservations(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+            builder: (context, reservationSnapshot) {
+              if (reservationSnapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
-              if (snapshot.hasError) {
+              if (reservationSnapshot.hasError) {
                 return Center(
-                    child: Text('Failed to load schedule: ${snapshot.error}'));
+                    child: Text('Failed to load schedule: ${reservationSnapshot.error}'));
               }
 
-              final all = snapshot.data ?? const <EquipmentReservation>[];
-              final forDay = all
-                  .where((r) => r.isActive && r.date == dayKey)
-                  .toList();
+              final all = reservationSnapshot.data ?? const <EquipmentReservation>[];
+              final forDay =
+                  all.where((r) => r.isActive && r.date == dayKey).toList();
 
-              if (forDay.isEmpty) {
-                return const Center(
-                    child: Text('No reservations for this day.'));
-              }
+              return StreamBuilder<List<EquipmentBasket>>(
+                stream: EquipmentBasketService.watchAllBaskets(),
+                builder: (context, basketSnapshot) {
+                  final basketsForDay = (basketSnapshot.data ?? const <EquipmentBasket>[])
+                      .where((b) => b.isActive && b.date == dayKey)
+                      .toList();
 
-              // group by equipment name, sorted by start time within each group
-              final grouped = <String, List<EquipmentReservation>>{};
-              for (final reservation in forDay) {
-                grouped
-                    .putIfAbsent(reservation.equipmentName, () => [])
-                    .add(reservation);
-              }
-              for (final list in grouped.values) {
-                list.sort((a, b) => a.startTime.compareTo(b.startTime));
-              }
-              final names = grouped.keys.toList()..sort();
+                  final ungrouped =
+                      forDay.where((r) => !r.isInBasket).toList();
 
-              return ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  for (final name in names) ...[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        name.isEmpty ? 'Equipment' : name,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    for (final reservation in grouped[name]!)
-                      _ScheduleRow(
-                        reservation: reservation,
-                        onCancel: () => _cancelReservation(reservation),
-                      ),
-                  ],
-                ],
+                  if (basketsForDay.isEmpty && ungrouped.isEmpty) {
+                    return const Center(
+                        child: Text('No reservations for this day.'));
+                  }
+
+                  // group the ungrouped (non-basket) reservations by equipment
+                  // name, sorted by start time within each group — unchanged
+                  // from before baskets existed.
+                  final grouped = <String, List<EquipmentReservation>>{};
+                  for (final reservation in ungrouped) {
+                    grouped
+                        .putIfAbsent(reservation.equipmentName, () => [])
+                        .add(reservation);
+                  }
+                  for (final list in grouped.values) {
+                    list.sort((a, b) => a.startTime.compareTo(b.startTime));
+                  }
+                  final names = grouped.keys.toList()..sort();
+
+                  return ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      if (basketsForDay.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            'Baskets',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        for (final basket in basketsForDay)
+                          EquipmentBasketCard(
+                            basket: basket,
+                            reservations:
+                                forDay.where((r) => r.basketId == basket.id).toList(),
+                            onCheckOutAll: () => _checkOutBasket(basket),
+                            onReturnAll: () => _returnBasket(basket),
+                            onCancelAll: () => _cancelBasket(basket),
+                            onCheckOutOne: _checkOutOne,
+                            onReturnOne: _returnOne,
+                            onCancelOne: _cancelReservation,
+                          ),
+                        const SizedBox(height: 8),
+                      ],
+                      for (final name in names) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            name.isEmpty ? 'Equipment' : name,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        for (final reservation in grouped[name]!)
+                          _ScheduleRow(
+                            reservation: reservation,
+                            onCancel: () => _cancelReservation(reservation),
+                          ),
+                      ],
+                    ],
+                  );
+                },
               );
             },
           ),

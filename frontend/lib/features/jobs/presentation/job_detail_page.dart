@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/router/app_router.dart';
+import '../../../core/services/equipment_basket_service.dart';
 import '../../../core/services/equipment_reservation_service.dart';
-import '../../../core/services/equipment_service.dart';
 import '../../../core/services/job_completion_service.dart';
 import '../../../core/services/job_photo_upload_service.dart';
 import '../../../core/services/scheduled_work_service.dart';
 import '../../../core/state/employee_session.dart';
-import '../../../models/equipment.dart';
+import '../../../models/equipment_basket.dart';
 import '../../../models/equipment_reservation.dart';
 import '../../../models/job_completion_form.dart';
 import '../../../models/scheduled_work.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/get_directions_button.dart';
+import '../../equipment/presentation/equipment_basket_card.dart';
 
 /// job detail + one-time completion form (start/end time, notes, before/after photos)
 class JobDetailPage extends StatefulWidget {
@@ -349,31 +351,57 @@ class _JobDetailPageState extends State<JobDetailPage> {
             const SizedBox(height: 4),
             StreamBuilder<List<EquipmentReservation>>(
               stream: EquipmentReservationService.watchForWork(job.id),
-              builder: (context, snapshot) {
+              builder: (context, reservationSnapshot) {
                 final reservations =
-                    snapshot.data ?? const <EquipmentReservation>[];
-                if (snapshot.connectionState == ConnectionState.waiting &&
+                    reservationSnapshot.data ?? const <EquipmentReservation>[];
+                if (reservationSnapshot.connectionState == ConnectionState.waiting &&
                     reservations.isEmpty) {
                   return const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12),
                     child: Center(child: CircularProgressIndicator()),
                   );
                 }
-                if (reservations.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text('No equipment assigned to this job yet.'),
-                  );
-                }
-                return Column(
-                  children: [
-                    for (final reservation in reservations)
-                      _JobEquipmentRow(
-                        reservation: reservation,
-                        onCheckOut: () => _markCheckedOut(context, reservation),
-                        onReturn: () => _markReturned(context, reservation),
-                      ),
-                  ],
+
+                return StreamBuilder<List<EquipmentBasket>>(
+                  stream: EquipmentBasketService.watchForWork(job.id),
+                  builder: (context, basketSnapshot) {
+                    final baskets = (basketSnapshot.data ?? const <EquipmentBasket>[])
+                        .where((b) => b.isActive)
+                        .toList();
+                    final ungrouped =
+                        reservations.where((r) => !r.isInBasket).toList();
+
+                    if (baskets.isEmpty && ungrouped.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('No equipment assigned to this job yet.'),
+                      );
+                    }
+
+                    return Column(
+                      children: [
+                        for (final basket in baskets)
+                          EquipmentBasketCard(
+                            basket: basket,
+                            reservations: reservations
+                                .where((r) => r.basketId == basket.id)
+                                .toList(),
+                            initiallyExpanded: true,
+                            onCheckOutAll: () => _checkOutBasket(context, basket),
+                            onReturnAll: () => _returnBasket(context, basket),
+                            onCancelAll: () => _cancelBasket(context, basket),
+                            onCheckOutOne: (r) => _markCheckedOut(context, r),
+                            onReturnOne: (r) => _markReturned(context, r),
+                          ),
+                        for (final reservation in ungrouped)
+                          _JobEquipmentRow(
+                            reservation: reservation,
+                            onCheckOut: () => _markCheckedOut(context, reservation),
+                            onReturn: () => _markReturned(context, reservation),
+                          ),
+                      ],
+                    );
+                  },
                 );
               },
             ),
@@ -381,6 +409,50 @@ class _JobDetailPageState extends State<JobDetailPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _checkOutBasket(BuildContext context, EquipmentBasket basket) async {
+    try {
+      await EquipmentBasketService.checkOutBasket(basket.id);
+      if (context.mounted) _snack(context, 'Basket checked out.');
+    } catch (error) {
+      if (context.mounted) _snack(context, _errorText(error));
+    }
+  }
+
+  Future<void> _returnBasket(BuildContext context, EquipmentBasket basket) async {
+    try {
+      await EquipmentBasketService.returnBasket(basket.id);
+      if (context.mounted) _snack(context, 'Basket returned.');
+    } catch (error) {
+      if (context.mounted) _snack(context, _errorText(error));
+    }
+  }
+
+  Future<void> _cancelBasket(BuildContext context, EquipmentBasket basket) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel basket'),
+        content: const Text(
+            'Cancel this basket? Any item already checked out is left as-is.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Back')),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Cancel basket')),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await EquipmentBasketService.cancelBasket(basket.id);
+      if (context.mounted) _snack(context, 'Basket cancelled.');
+    } catch (error) {
+      if (context.mounted) _snack(context, _errorText(error));
+    }
   }
 
   Future<void> _markCheckedOut(
@@ -408,46 +480,17 @@ class _JobDetailPageState extends State<JobDetailPage> {
   }
 
   Future<void> _assignEquipment(BuildContext context, ScheduledWork job) async {
-    final request = await showDialog<_AssignRequest>(
-      context: context,
-      builder: (_) => _AssignEquipmentDialog(job: job),
+    await Navigator.pushNamed(
+      context,
+      AppRouter.equipmentBasketBuilder,
+      arguments: {
+        'role': widget.role,
+        'authToken': widget.authToken,
+        'workId': job.id,
+        'jobAddress': job.address,
+        'initialDate': job.scheduledDate,
+      },
     );
-    if (request == null || !context.mounted) return;
-
-    try {
-      final actor = _actor();
-      final created = await EquipmentReservationService.reserveUnits(
-        equipment: request.item,
-        quantity: request.quantity,
-        startTime: request.start,
-        endTime: request.end,
-        employeeId: actor.id,
-        employeeName: actor.name,
-        workId: job.id,
-        jobAddress: job.address,
-      );
-      if (!context.mounted) return;
-      final units = created.map((r) => '#${r.unitNumber}').join(', ');
-      _snack(
-          context,
-          created.length == 1
-              ? 'Assigned ${request.item.name} unit $units to this job.'
-              : 'Assigned ${request.item.name} units $units to this job.');
-    } catch (error) {
-      if (!context.mounted) return;
-      _snack(context, _errorText(error));
-    }
-  }
-
-  /// who is acting — the owner is attributed as 'owner'/'Owner'; an employee
-  /// comes from the active session (mirrors EquipmentDetailPage._actor).
-  ({String id, String name}) _actor() {
-    if (widget.role == 'owner') return (id: 'owner', name: 'Owner');
-    final profile = EmployeeSession.profile.value;
-    if (profile != null) {
-      return (id: profile.employeeId, name: profile.fullName);
-    }
-    return (id: 'unknown', name: 'Unknown');
   }
 
   void _snack(BuildContext context, String message) {
@@ -557,245 +600,6 @@ class _JobEquipmentRow extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// the collected inputs from [_AssignEquipmentDialog], handed back to the page
-/// which owns the actual service call + SnackBar.
-class _AssignRequest {
-  const _AssignRequest({
-    required this.item,
-    required this.quantity,
-    required this.start,
-    required this.end,
-  });
-
-  final EquipmentItem item;
-  final int quantity;
-  final DateTime start;
-  final DateTime end;
-}
-
-/// pick an Equipment item + quantity + date/time window for assigning gear to a
-/// job. Adapts EquipmentDetailPage's _ReserveDialog: same manual
-/// showDatePicker/showTimePicker pattern, with an item picker up front and the
-/// window pre-filled from the job's scheduled date (end = start + 4h).
-class _AssignEquipmentDialog extends StatefulWidget {
-  const _AssignEquipmentDialog({required this.job});
-
-  final ScheduledWork job;
-
-  @override
-  State<_AssignEquipmentDialog> createState() => _AssignEquipmentDialogState();
-}
-
-class _AssignEquipmentDialogState extends State<_AssignEquipmentDialog> {
-  EquipmentItem? _item;
-  int _quantity = 1;
-  late DateTime _date;
-  late TimeOfDay _startTime;
-  late TimeOfDay _endTime;
-
-  @override
-  void initState() {
-    super.initState();
-    final scheduled = widget.job.scheduledDate;
-    _date = DateTime(scheduled.year, scheduled.month, scheduled.day);
-    _startTime = TimeOfDay.fromDateTime(scheduled);
-    final naiveEnd = scheduled.add(const Duration(hours: 4));
-    // both start and end always get recombined onto the same _date (the
-    // job's day) in _combine(), so a default that rolls past midnight would
-    // silently become "before start" once re-stamped onto that single date.
-    // Clamp the default to the same calendar day; the user can still pick
-    // any time they want via the pickers.
-    final sameDayEnd = naiveEnd.year == scheduled.year &&
-            naiveEnd.month == scheduled.month &&
-            naiveEnd.day == scheduled.day
-        ? naiveEnd
-        : DateTime(scheduled.year, scheduled.month, scheduled.day, 23, 59);
-    _endTime = TimeOfDay.fromDateTime(sameDayEnd);
-  }
-
-  int _maxQuantity(EquipmentItem item) => item.units
-      .where((u) => u.status == EquipmentUnitStatus.active)
-      .length;
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _date,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-    );
-    if (picked != null) setState(() => _date = picked);
-  }
-
-  Future<void> _pickStart() async {
-    final picked =
-        await showTimePicker(context: context, initialTime: _startTime);
-    if (picked != null) setState(() => _startTime = picked);
-  }
-
-  Future<void> _pickEnd() async {
-    final picked =
-        await showTimePicker(context: context, initialTime: _endTime);
-    if (picked != null) setState(() => _endTime = picked);
-  }
-
-  DateTime _combine(TimeOfDay time) =>
-      DateTime(_date.year, _date.month, _date.day, time.hour, time.minute);
-
-  void _submit() {
-    final item = _item;
-    if (item == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pick an equipment item.')),
-      );
-      return;
-    }
-    final start = _combine(_startTime);
-    final end = _combine(_endTime);
-    if (!start.isBefore(end)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('End time must be after start time.')),
-      );
-      return;
-    }
-    Navigator.of(context).pop(_AssignRequest(
-      item: item,
-      quantity: _quantity,
-      start: start,
-      end: end,
-    ));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dateLabel = DateFormat('MMM d, yyyy').format(_date);
-    return AlertDialog(
-      title: const Text('Assign equipment'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Equipment'),
-            const SizedBox(height: 4),
-            StreamBuilder<List<EquipmentItem>>(
-              stream: EquipmentService.watchAll(),
-              builder: (context, snapshot) {
-                final items = (snapshot.data ?? const <EquipmentItem>[])
-                    .where((item) => item.isEquipment)
-                    .toList()
-                  ..sort((a, b) =>
-                      a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    items.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                if (items.isEmpty) {
-                  return const Text('No equipment items available.');
-                }
-                // drop a stale selection if it's no longer in the list
-                final selected = _item != null &&
-                        items.any((i) => i.id == _item!.id)
-                    ? items.firstWhere((i) => i.id == _item!.id)
-                    : null;
-                return DropdownButton<EquipmentItem>(
-                  isExpanded: true,
-                  value: selected,
-                  hint: const Text('Select equipment'),
-                  items: [
-                    for (final item in items)
-                      DropdownMenuItem(
-                        value: item,
-                        child: Text(item.name,
-                            overflow: TextOverflow.ellipsis),
-                      ),
-                  ],
-                  onChanged: (item) {
-                    setState(() {
-                      _item = item;
-                      final max = item == null ? 1 : _maxQuantity(item);
-                      if (_quantity > max) _quantity = max < 1 ? 1 : max;
-                    });
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            const Text('Quantity'),
-            const SizedBox(height: 4),
-            Builder(builder: (context) {
-              final max = _item == null ? 0 : _maxQuantity(_item!);
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      IconButton.outlined(
-                        onPressed: _quantity > 1
-                            ? () => setState(() => _quantity--)
-                            : null,
-                        icon: const Icon(Icons.remove),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text('$_quantity',
-                            style: Theme.of(context).textTheme.titleLarge),
-                      ),
-                      IconButton.outlined(
-                        onPressed: _quantity < max
-                            ? () => setState(() => _quantity++)
-                            : null,
-                        icon: const Icon(Icons.add),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    _item == null
-                        ? 'Pick an item to see availability'
-                        : '$max unit(s) available',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              );
-            }),
-            const SizedBox(height: 16),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.calendar_today_outlined),
-              title: const Text('Date'),
-              subtitle: Text(dateLabel),
-              onTap: _pickDate,
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.schedule_outlined),
-              title: const Text('Start time'),
-              subtitle: Text(_startTime.format(context)),
-              onTap: _pickStart,
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.schedule_outlined),
-              title: const Text('End time'),
-              subtitle: Text(_endTime.format(context)),
-              onTap: _pickEnd,
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel')),
-        FilledButton(onPressed: _submit, child: const Text('Assign')),
-      ],
     );
   }
 }

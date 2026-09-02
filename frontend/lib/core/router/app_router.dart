@@ -13,9 +13,11 @@ import '../../features/availability/presentation/availability_page.dart';
 import '../../features/clients/presentation/clients_page.dart';
 import '../../features/crew_availability/presentation/crew_availability_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
+import '../../features/equipment/presentation/equipment_basket_builder_page.dart';
 import '../../features/equipment/presentation/equipment_catalog_page.dart';
 import '../../features/equipment/presentation/equipment_detail_page.dart';
 import '../../features/equipment/presentation/equipment_form_page.dart';
+import '../../features/equipment/presentation/equipment_kits_page.dart';
 import '../../features/estimates/estimates_page.dart';
 import '../../features/estimates/presentation/checklist_templates_page.dart';
 import '../../features/estimates/presentation/service_catalog_page.dart';
@@ -95,6 +97,8 @@ class AppRouter {
   static const equipmentCatalog = '/equipment';
   static const equipmentDetail = '/equipment/detail';
   static const equipmentForm = '/equipment/form';
+  static const equipmentBasketBuilder = '/equipment/basket/new';
+  static const equipmentKits = '/equipment/kits';
   static const crewAvailability = '/crew-availability';
 /// generates appropriate page route based on settings and passes role/auth context
   
@@ -258,6 +262,22 @@ class AppRouter {
             authToken: authToken,
             existingId: args['existingId'] as String?,
           ),
+          settings: settings,
+        );
+      case equipmentBasketBuilder:
+        return _NoAnimationPageRoute(
+          builder: (_) => EquipmentBasketBuilderPage(
+            role: role,
+            authToken: authToken,
+            workId: args['workId'] as String?,
+            jobAddress: args['jobAddress'] as String?,
+            initialDate: args['initialDate'] as DateTime?,
+          ),
+          settings: settings,
+        );
+      case equipmentKits:
+        return _NoAnimationPageRoute(
+          builder: (_) => EquipmentKitsPage(role: role, authToken: authToken),
           settings: settings,
         );
       case crewAvailability:

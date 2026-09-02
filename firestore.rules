@@ -170,6 +170,12 @@ service cloud.firestore {
     match /equipment_reservations/{document=**} {
       allow read, write: if isStaff();
     }
+    match /equipment_baskets/{document=**} {
+      allow read, write: if isStaff();
+    }
+    match /equipment_kits/{document=**} {
+      allow read, write: if isStaff();
+    }
     match /broken_reports/{document=**} {
       allow read, write: if isStaff();
     }

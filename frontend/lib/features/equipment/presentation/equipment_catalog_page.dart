@@ -107,6 +107,22 @@ class _CatalogTabState extends State<_CatalogTab> {
     );
   }
 
+  void _openNewBasket() {
+    Navigator.pushNamed(
+      context,
+      AppRouter.equipmentBasketBuilder,
+      arguments: {'role': widget.role, 'authToken': widget.authToken},
+    );
+  }
+
+  void _openKits() {
+    Navigator.pushNamed(
+      context,
+      AppRouter.equipmentKits,
+      arguments: {'role': widget.role, 'authToken': widget.authToken},
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -184,6 +200,22 @@ class _CatalogTabState extends State<_CatalogTab> {
                 onPressed: _openCreateForm,
                 icon: const Icon(Icons.add),
                 label: const Text('Add'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _openNewBasket,
+                icon: const Icon(Icons.shopping_basket_outlined),
+                label: const Text('New basket'),
+              ),
+              const SizedBox(width: 10),
+              OutlinedButton.icon(
+                onPressed: _openKits,
+                icon: const Icon(Icons.list_alt_outlined),
+                label: const Text('Kits'),
               ),
             ],
           ),

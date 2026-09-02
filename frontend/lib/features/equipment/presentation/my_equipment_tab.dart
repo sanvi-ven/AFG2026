@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/services/equipment_basket_service.dart';
 import '../../../core/services/equipment_reservation_service.dart';
 import '../../../core/state/employee_session.dart';
+import '../../../models/equipment_basket.dart';
 import '../../../models/equipment_reservation.dart';
+import 'equipment_basket_card.dart';
 
 /// employee-only view of their own reservations, split into "Current &
 /// Upcoming" (active, ending in the future) and "Past" (active but already
@@ -37,55 +40,166 @@ class MyEquipmentTab extends StatelessWidget {
             final all = snapshot.data ?? const <EquipmentReservation>[];
             final now = DateTime.now();
 
+            // basket-linked reservations show under "Baskets" instead, not
+            // here — see below.
             final currentUpcoming = all
-                .where((r) => r.isActive && r.endTime.isAfter(now))
+                .where((r) => r.isActive && r.endTime.isAfter(now) && !r.isInBasket)
                 .toList()
               ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
             // past: active-but-ended, plus anything cancelled
             final past = all
-                .where((r) => !r.isActive || !r.endTime.isAfter(now))
+                .where((r) => (!r.isActive || !r.endTime.isAfter(now)) && !r.isInBasket)
                 .toList()
               ..sort((a, b) => b.startTime.compareTo(a.startTime));
 
-            return ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Text('Current & Upcoming',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                if (currentUpcoming.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text('No current or upcoming reservations.'),
-                  )
-                else
-                  for (final reservation in currentUpcoming)
-                    _MyReservationRow(reservation: reservation, showActions: true),
-                const SizedBox(height: 24),
-                Text('Past',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                if (past.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text('No past reservations.'),
-                  )
-                else
-                  for (final reservation in past)
-                    _MyReservationRow(reservation: reservation, showActions: false),
-              ],
+            return StreamBuilder<List<EquipmentBasket>>(
+              stream: EquipmentBasketService.watchForEmployee(employeeId),
+              builder: (context, basketSnapshot) {
+                final baskets = basketSnapshot.data ?? const <EquipmentBasket>[];
+
+                return ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    if (baskets.isNotEmpty) ...[
+                      Text('Baskets',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      for (final basket in baskets)
+                        EquipmentBasketCard(
+                          basket: basket,
+                          reservations:
+                              all.where((r) => r.basketId == basket.id).toList(),
+                          onCheckOutAll: () => _checkOutBasket(context, basket),
+                          onReturnAll: () => _returnBasket(context, basket),
+                          onCancelAll: () => _cancelBasket(context, basket),
+                          onCheckOutOne: (r) => _checkOutOne(context, r),
+                          onReturnOne: (r) => _returnOne(context, r),
+                          onCancelOne: (r) => _cancelOne(context, r),
+                        ),
+                      const SizedBox(height: 24),
+                    ],
+                    Text('Current & Upcoming',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    if (currentUpcoming.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('No current or upcoming reservations.'),
+                      )
+                    else
+                      for (final reservation in currentUpcoming)
+                        _MyReservationRow(reservation: reservation, showActions: true),
+                    const SizedBox(height: 24),
+                    Text('Past',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    if (past.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('No past reservations.'),
+                      )
+                    else
+                      for (final reservation in past)
+                        _MyReservationRow(reservation: reservation, showActions: false),
+                  ],
+                );
+              },
             );
           },
         );
       },
     );
+  }
+}
+
+void _snack(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+}
+
+Future<void> _checkOutBasket(BuildContext context, EquipmentBasket basket) async {
+  try {
+    await EquipmentBasketService.checkOutBasket(basket.id);
+    if (context.mounted) _snack(context, 'Basket checked out.');
+  } catch (error) {
+    if (context.mounted) {
+      _snack(context, error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+}
+
+Future<void> _returnBasket(BuildContext context, EquipmentBasket basket) async {
+  try {
+    await EquipmentBasketService.returnBasket(basket.id);
+    if (context.mounted) _snack(context, 'Basket returned.');
+  } catch (error) {
+    if (context.mounted) {
+      _snack(context, error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+}
+
+Future<void> _cancelBasket(BuildContext context, EquipmentBasket basket) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Cancel basket'),
+      content: const Text(
+          'Cancel this basket? Any item already checked out is left as-is.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Back')),
+        FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Cancel basket')),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  try {
+    await EquipmentBasketService.cancelBasket(basket.id);
+    if (context.mounted) _snack(context, 'Basket cancelled.');
+  } catch (error) {
+    if (context.mounted) {
+      _snack(context, error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+}
+
+Future<void> _checkOutOne(BuildContext context, EquipmentReservation reservation) async {
+  try {
+    await EquipmentReservationService.markCheckedOut(reservation.id);
+  } catch (error) {
+    if (context.mounted) {
+      _snack(context, error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+}
+
+Future<void> _returnOne(BuildContext context, EquipmentReservation reservation) async {
+  try {
+    await EquipmentReservationService.markReturned(reservation.id);
+  } catch (error) {
+    if (context.mounted) {
+      _snack(context, error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+}
+
+Future<void> _cancelOne(BuildContext context, EquipmentReservation reservation) async {
+  try {
+    await EquipmentReservationService.cancelReservation(id: reservation.id);
+  } catch (error) {
+    if (context.mounted) {
+      _snack(context, error.toString().replaceFirst('Exception: ', ''));
+    }
   }
 }
 
