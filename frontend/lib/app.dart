@@ -19,6 +19,24 @@ import 'core/theme/app_theme.dart';
 import 'models/message.dart';
 import 'features/auth/presentation/login_page.dart';
 import 'features/dashboard/presentation/dashboard_page.dart';
+import 'features/legal/presentation/legal_document_page.dart';
+
+/// picks the app's very first screen based on the actual URL the browser
+/// loaded, for the one case that needs to work as a real public link
+/// independent of auth state: a legal document (e.g. shared with a
+/// compliance reviewer, an app store listing, or pasted anywhere outside the
+/// app). Every other path falls through to [_SessionGate] as before — this
+/// app's routing otherwise only works via in-app Navigator calls (onGenerateRoute
+/// never runs on a cold load, only on a later push), which is fine for pages
+/// that are only ever reached from inside the app, but wasn't for this one.
+Widget _resolveInitialHome() {
+  final uri = Uri.base;
+  if (uri.path == AppRouter.legalDocument) {
+    final documentId = uri.queryParameters['documentId'] ?? '';
+    return LegalDocumentPage(documentId: documentId);
+  }
+  return const _SessionGate();
+}
 
 /// root widget for the anchor app with theme, routing, and notification listeners
 class AnchorApp extends StatelessWidget {
@@ -50,7 +68,7 @@ class AnchorApp extends StatelessWidget {
       },
       home: useDemoRole
           ? DashboardPage(role: demoRole, authToken: demoToken)
-          : const _SessionGate(),
+          : _resolveInitialHome(),
       onGenerateRoute: AppRouter.onGenerateRoute,
       debugShowCheckedModeBanner: false,
     );
