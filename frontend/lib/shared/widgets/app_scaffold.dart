@@ -22,8 +22,10 @@ import '../../features/notifications/presentation/notifications_page.dart';
 import '../../models/app_notification.dart';
 import '../../models/client_profile.dart';
 import '../../models/employee_profile.dart';
+import '../../models/legal_document.dart';
 import '../../models/owner_settings.dart';
 import 'app_logo.dart';
+import 'legal_link.dart';
 
 /// reusable app scaffold with navigation, sidebar, and header for business app
 class AppScaffold extends StatelessWidget {
@@ -666,6 +668,60 @@ Future<void> _confirmLogout(BuildContext context) async {
       .pushNamedAndRemoveUntil(AppRouter.login, (route) => false);
 }
 
+/// self-service "Request Account Deletion" for a client or employee — doesn't
+/// delete anything itself, just files an in-app notification to the owner
+/// (see the notifications collection's narrow deletionRequest create rule in
+/// firestore.rules) so they can follow up and handle it manually, matching
+/// what the Privacy Policy promises.
+Future<void> _requestAccountDeletion(
+  BuildContext context, {
+  required String roleLabel,
+  required String name,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Request account deletion'),
+      content: const Text(
+        "This notifies the business owner that you'd like your account and personal information "
+        "deleted. It doesn't delete anything automatically — they'll follow up with you to "
+        'confirm and complete the request.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Send request'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+
+  try {
+    await NotificationService.create(
+      recipientRole: 'owner',
+      recipientId: ownerNotificationRecipientId,
+      type: NotificationType.deletionRequest,
+      title: 'Account deletion requested',
+      body: '$name ($roleLabel) has requested their account and data be deleted. '
+          'Contact them to confirm and complete the request.',
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Deletion request sent — the owner will follow up with you.')),
+    );
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to send request: $error')),
+    );
+  }
+}
+
 class _ClientSettingsDialog extends StatefulWidget {
   const _ClientSettingsDialog({required this.initialProfile});
 
@@ -950,6 +1006,33 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
                 const SizedBox(height: 4),
                 Align(
                   alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    children: [
+                      const LegalLink(label: 'Privacy Policy', documentId: LegalDocumentIds.privacyPolicy),
+                      const Text('  ·  '),
+                      const LegalLink(
+                          label: 'Terms of Service', documentId: LegalDocumentIds.termsOfService),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving
+                        ? null
+                        : () => _requestAccountDeletion(
+                              context,
+                              roleLabel: 'client',
+                              name: '${widget.initialProfile.firstName} ${widget.initialProfile.lastName}',
+                            ),
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text('Request Account Deletion'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
                   child: OutlinedButton.icon(
                     onPressed: _isSaving ? null : () => _confirmLogout(context),
                     icon: const Icon(Icons.logout, size: 18),
@@ -1190,6 +1273,35 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
                 const SizedBox(height: 24),
                 const Divider(),
                 const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    children: [
+                      const LegalLink(
+                          label: 'Terms of Service', documentId: LegalDocumentIds.termsOfService),
+                      const Text('  ·  '),
+                      const LegalLink(
+                          label: 'Employee Data Privacy Notice',
+                          documentId: LegalDocumentIds.employeeDataNotice),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving
+                        ? null
+                        : () => _requestAccountDeletion(
+                              context,
+                              roleLabel: 'employee',
+                              name: '${widget.initialProfile.firstName} ${widget.initialProfile.lastName}',
+                            ),
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text('Request Account Deletion'),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: OutlinedButton.icon(
@@ -1496,6 +1608,21 @@ class _OwnerSettingsDialogState extends State<_OwnerSettingsDialog> {
                 const SizedBox(height: 24),
                 const Divider(),
                 const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving || _isPickingLogo
+                        ? null
+                        : () => Navigator.pushNamed(
+                              context,
+                              AppRouter.legalDocumentsAdmin,
+                              arguments: {'role': 'owner'},
+                            ),
+                    icon: const Icon(Icons.gavel_outlined, size: 18),
+                    label: const Text('Manage Legal Documents'),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: OutlinedButton.icon(

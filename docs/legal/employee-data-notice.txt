@@ -1,0 +1,48 @@
+# Employee Data Privacy Notice
+
+Effective date: September 1, 2026
+
+This notice explains what personal information RP Landscaping collects about you as an employee through the Anchor app (the "App"), and how it's used. It works alongside our general Privacy Policy and Terms of Service, which also apply to you.
+
+## Information We Collect About You
+
+- Name, email address, and phone number (provided when you sign up)
+- Your hourly rate (set by RP Landscaping)
+- Clock-in and clock-out timestamps you record in the App
+- Any notes RP Landscaping attaches to your time entries (for example, a wage adjustment note)
+- Job and equipment records you create or are assigned to as part of your work (for example, job-completion photos, equipment reservations)
+
+We do not collect GPS location, device location, or any other location-tracking data when you clock in or out, and we don't collect Social Security numbers or other tax identification information through the App.
+
+## How We Use Your Information
+
+We use this information to schedule your work, calculate hours for payroll, keep business and equipment records, and communicate with you about jobs and appointments.
+
+## Who Can See Your Information
+
+- RP Landscaping's owner can see all of your account and time-tracking information.
+- You can always see your own information in Employee Settings and My Hours.
+- Other employees cannot see your hourly rate, your time entries, or your contact information — those are restricted to you and the owner. Job- and equipment-related records (for example, who's assigned to a job) are visible to other staff as part of normal day-to-day coordination.
+
+## Data Retention
+
+We keep your employment-related records for as long as your account is active and as needed for our payroll and business recordkeeping obligations, which may extend beyond when your employment ends.
+
+## Your Rights
+
+You can update your name, phone number, and password yourself in Employee Settings. You can request that we delete your account and personal information using the "Request Account Deletion" option in Employee Settings, or by contacting us directly — we'll follow up to confirm and complete the request, though some records (such as payroll history) may need to be retained for a period as required by law even after your account is deleted.
+
+## Security
+
+Access to your information is protected by your own account login and by role-based access rules in the App, so only you and the business owner can see your wage and time-tracking data.
+
+## Changes to This Notice
+
+We may update this notice from time to time. If we make material changes, we'll update the effective date above.
+
+## Contact Us
+
+RP Landscaping
+557 Shrewsbury St, Holden, MA 01520
+prendergastlandscaping@gmail.com
+774-559-9448

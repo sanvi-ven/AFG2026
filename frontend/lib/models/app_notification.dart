@@ -71,6 +71,11 @@ class NotificationType {
   static const invoiceOverdue = 'invoiceOverdue';
   static const serviceDue = 'serviceDue';
   static const lowStock = 'lowStock';
+
+  /// self-filed by a client/employee via "Request Account Deletion" — the
+  /// only notification type a non-owner is allowed to create (see
+  /// firestore.rules' notifications create rule).
+  static const deletionRequest = 'deletionRequest';
 }
 
 /// constant recipientId used for owner-targeted notifications (the owner has

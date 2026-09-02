@@ -8,7 +8,9 @@ import '../../../core/services/client_profile_service.dart';
 import '../../../core/services/employee_profile_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../core/state/employee_session.dart';
+import '../../../models/legal_document.dart';
 import '../../../shared/widgets/app_logo.dart';
+import '../../../shared/widgets/legal_link.dart';
 
 /// login page for client email/password authentication
 class LoginPage extends StatefulWidget {
@@ -271,6 +273,17 @@ class _LoginPageState extends State<LoginPage> {
                       style: TextStyle(color: Theme.of(context).colorScheme.error),
                     ),
                   ],
+                  const SizedBox(height: 20),
+                  Center(
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      children: [
+                        const LegalLink(label: 'Privacy Policy', documentId: LegalDocumentIds.privacyPolicy),
+                        const Text('  ·  '),
+                        const LegalLink(label: 'Terms of Service', documentId: LegalDocumentIds.termsOfService),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),

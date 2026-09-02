@@ -119,7 +119,21 @@ service cloud.firestore {
     // them, nothing else.
     match /notifications/{document=**} {
       allow read: if isOwner() || (isSignedIn() && resource.data.recipientId == profileId());
-      allow create: if isOwner();
+      // Owner-authored notifications (reminders, alerts) go through the
+      // isOwner() branch as before. The second branch is narrow by design —
+      // it exists only so a signed-in client/employee can self-file an
+      // account-deletion request notification to the owner (see
+      // "Request Account Deletion" in Client/Employee Settings): it can only
+      // target the owner, only with type 'deletionRequest', and only with
+      // this exact field set, so it can't be repurposed to spoof any other
+      // notification.
+      allow create: if isOwner() ||
+        (isSignedIn() &&
+         request.resource.data.recipientRole == 'owner' &&
+         request.resource.data.recipientId == 'owner' &&
+         request.resource.data.type == 'deletionRequest' &&
+         request.resource.data.keys().hasOnly(
+           ['id', 'recipientRole', 'recipientId', 'type', 'title', 'body', 'relatedId', 'createdAt', 'isRead']));
       allow update: if isOwner() ||
         (isSignedIn() && resource.data.recipientId == profileId() && onlyChanged(['isRead']));
       allow delete: if isOwner();
@@ -209,6 +223,15 @@ service cloud.firestore {
     // owner's notification email, and both owner- and client-facing PDF
     // generation read branding with no auth gate on the download button.
     match /owner_settings/{document=**} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+
+    // Privacy policy / terms of service / employee data notice. Read must
+    // stay public — these are shown pre-auth on signup and the public quote
+    // request form, not just to signed-in accounts. Only the owner can edit
+    // the wording.
+    match /legal_documents/{document=**} {
       allow read: if true;
       allow write: if isOwner();
     }

@@ -25,6 +25,8 @@ import '../../features/invoices/presentation/invoices_page.dart';
 import '../../features/jobs/presentation/employee_jobs_page.dart';
 import '../../features/jobs/presentation/job_detail_page.dart';
 import '../../features/jobs/presentation/todays_route_page.dart';
+import '../../features/legal/presentation/legal_document_page.dart';
+import '../../features/legal/presentation/legal_documents_admin_page.dart';
 import '../../features/messages/presentation/messages_page.dart';
 import '../../features/notifications/presentation/notifications_page.dart';
 import '../../features/reports/presentation/owner_reports_page.dart';
@@ -99,6 +101,9 @@ class AppRouter {
   static const equipmentForm = '/equipment/form';
   static const equipmentBasketBuilder = '/equipment/basket/new';
   static const equipmentKits = '/equipment/kits';
+  static const legalDocument = '/legal/document';
+  static const legalDocumentsAdmin = '/legal/admin';
+  static const legalDocumentEdit = '/legal/admin/edit';
   static const crewAvailability = '/crew-availability';
 /// generates appropriate page route based on settings and passes role/auth context
   
@@ -278,6 +283,28 @@ class AppRouter {
       case equipmentKits:
         return _NoAnimationPageRoute(
           builder: (_) => EquipmentKitsPage(role: role, authToken: authToken),
+          settings: settings,
+        );
+      case legalDocument:
+        return _NoAnimationPageRoute(
+          builder: (_) => LegalDocumentPage(
+            documentId: (args['documentId'] as String?) ?? '',
+          ),
+          settings: settings,
+        );
+      case legalDocumentsAdmin:
+        return _NoAnimationPageRoute(
+          builder: (_) => LegalDocumentsAdminPage(role: role, authToken: authToken),
+          settings: settings,
+        );
+      case legalDocumentEdit:
+        return _NoAnimationPageRoute(
+          builder: (_) => LegalDocumentEditPage(
+            role: role,
+            authToken: authToken,
+            documentId: (args['documentId'] as String?) ?? '',
+            documentTitle: (args['documentTitle'] as String?) ?? '',
+          ),
           settings: settings,
         );
       case crewAvailability:

@@ -7,6 +7,8 @@ import '../../../core/services/comms_service.dart';
 import '../../../core/services/job_photo_upload_service.dart';
 import '../../../core/services/owner_settings_service.dart';
 import '../../../core/services/request_service.dart';
+import '../../../models/legal_document.dart';
+import '../../../shared/widgets/legal_link.dart';
 
 /// standalone "request work" form — reachable both by a public, not-yet-a-client
 /// lead (no [clientId]) and by a logged-in client (pre-filled with their profile)
@@ -302,7 +304,15 @@ class _RequestFormPageState extends State<RequestFormPage> {
                   : const Icon(Icons.add_a_photo_outlined),
               label: const Text('Add Photo'),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
+            Wrap(
+              children: [
+                Text('By submitting, you agree to our ', style: Theme.of(context).textTheme.bodySmall),
+                const LegalLink(label: 'Privacy Policy', documentId: LegalDocumentIds.privacyPolicy),
+                Text('.', style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+            const SizedBox(height: 12),
             FilledButton(
               onPressed: _isSaving ? null : _submit,
               child: _isSaving

@@ -5,7 +5,9 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/auth_api_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../models/client_profile.dart';
+import '../../../models/legal_document.dart';
 import '../../../shared/widgets/app_logo.dart';
+import '../../../shared/widgets/legal_link.dart';
 
 /// lets a client with a code from the business owner turn their dummy
 /// (no-login) account into a real one with an email and password
@@ -23,6 +25,7 @@ class _ClaimAccountPageState extends State<ClaimAccountPage> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isSubmitting = false;
+  bool _agreedToTerms = false;
   String? _error;
 
   @override
@@ -36,6 +39,10 @@ class _ClaimAccountPageState extends State<ClaimAccountPage> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_agreedToTerms) {
+      setState(() => _error = 'Please agree to the Privacy Policy and Terms of Service to continue.');
+      return;
+    }
 
     setState(() {
       _isSubmitting = true;
@@ -145,6 +152,32 @@ class _ClaimAccountPageState extends State<ClaimAccountPage> {
                       if (value != _passwordController.text) return 'Passwords do not match';
                       return null;
                     },
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Checkbox(
+                        value: _agreedToTerms,
+                        onChanged: (value) => setState(() => _agreedToTerms = value ?? false),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Wrap(
+                            children: [
+                              const Text('I agree to the '),
+                              const LegalLink(
+                                  label: 'Privacy Policy', documentId: LegalDocumentIds.privacyPolicy),
+                              const Text(' and '),
+                              const LegalLink(
+                                  label: 'Terms of Service', documentId: LegalDocumentIds.termsOfService),
+                              const Text('.'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),

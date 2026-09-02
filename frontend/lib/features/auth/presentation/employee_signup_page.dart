@@ -5,7 +5,9 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/auth_api_service.dart';
 import '../../../core/state/employee_session.dart';
 import '../../../models/employee_profile.dart';
+import '../../../models/legal_document.dart';
 import '../../../shared/widgets/app_logo.dart';
+import '../../../shared/widgets/legal_link.dart';
 
 /// signup page for new employees, gated by an owner-issued invite code
 class EmployeeSignupPage extends StatefulWidget {
@@ -25,6 +27,7 @@ class _EmployeeSignupPageState extends State<EmployeeSignupPage> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isSubmitting = false;
+  bool _agreedToTerms = false;
   String? _error;
 
   bool _looksLikeEmail(String value) {
@@ -51,6 +54,10 @@ class _EmployeeSignupPageState extends State<EmployeeSignupPage> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_agreedToTerms) {
+      setState(() => _error = 'Please agree to the Terms of Service and Employee Data Privacy Notice to continue.');
+      return;
+    }
 
     setState(() {
       _isSubmitting = true;
@@ -205,6 +212,33 @@ class _EmployeeSignupPageState extends State<EmployeeSignupPage> {
                       if (value != _passwordController.text) return 'Passwords do not match';
                       return null;
                     },
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Checkbox(
+                        value: _agreedToTerms,
+                        onChanged: (value) => setState(() => _agreedToTerms = value ?? false),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Wrap(
+                            children: [
+                              const Text('I agree to the '),
+                              const LegalLink(
+                                  label: 'Terms of Service', documentId: LegalDocumentIds.termsOfService),
+                              const Text(' and '),
+                              const LegalLink(
+                                  label: 'Employee Data Privacy Notice',
+                                  documentId: LegalDocumentIds.employeeDataNotice),
+                              const Text('.'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),

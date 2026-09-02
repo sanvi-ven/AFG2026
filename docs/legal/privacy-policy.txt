@@ -1,0 +1,90 @@
+# Privacy Policy
+
+Effective date: September 1, 2026
+
+RP Landscaping ("RP Landscaping," "we," "us," or "our") operates the Anchor app (the "App") to schedule and manage landscaping work for our clients and crew. This Privacy Policy explains what information we collect through the App, how we use it, who we share it with, and the choices you have.
+
+This policy applies to our clients, our employees, and anyone who submits a quote request through the App before creating an account.
+
+## Information We Collect
+
+**If you create a client account:** first name, last name, email address, phone number, and service address.
+
+**If you create an employee account:** first name, last name, email address, phone number, and (set by RP Landscaping) your hourly rate.
+
+**If you submit a "Request a Quote" form:** your name, email, phone number, service address, a description of the work you're requesting, and any photos you choose to attach — all before any account exists.
+
+**Photos:** we collect before/after photos of completed work, photos of company equipment, and any photos you attach to a quote request. These are photos of properties, job sites, and equipment — we don't ask for or use photos for identification purposes.
+
+**Messages:** the content of any messages you send through the App to RP Landscaping staff, or that staff send to you.
+
+**Employee time records:** clock-in and clock-out timestamps. We do not collect GPS location, device location, or any other tracking data when you clock in or out.
+
+**What we don't collect:** we do not collect or store payment card numbers, bank account details, or any other payment instrument information anywhere in the App. Invoices and estimates are informational records only — payment itself is handled directly between you and RP Landscaping, outside the App.
+
+**Browser storage:** the App does not use tracking or advertising cookies, and we don't run any analytics or ad-tracking software. Your browser stores only your login session (managed by our authentication provider, Firebase) and a small technical preference (whether your sidebar menu is collapsed).
+
+## How We Use Your Information
+
+We use the information above to:
+
+- Create and manage your account
+- Schedule appointments, dispatch crew, and track job progress
+- Prepare and send estimates and invoices
+- Send appointment reminders and payment reminders
+- Respond to quote requests and questions
+- Track employee hours for payroll purposes
+- Keep our records, equipment, and business operations organized
+- Maintain the security of the App and the accounts on it
+
+## How We Share Your Information
+
+We do not sell your personal information, and we do not share it for advertising purposes. We share information only with the service providers who help us run the App, each limited to what they need to do their job:
+
+- **Firebase / Google Cloud (Google LLC)** — hosts our database and handles account sign-in
+- **Resend** — delivers transactional emails (quote confirmations, appointment and invoice reminders)
+- **Twilio** — delivers text message reminders
+- **Cloudinary** — stores and hosts uploaded photos
+- **Vercel** — hosts the App itself
+- **OpenStreetMap Nominatim** — provides address suggestions as you type an address; the partial address text you type is sent to this service to generate suggestions
+
+We may also share information if required by law, to protect the rights and safety of RP Landscaping or others, or in connection with a sale or transfer of the business (in which case we'd tell you first).
+
+## Text Messages and Email
+
+By providing your phone number, you agree that RP Landscaping may text you appointment- and invoice-related reminders using our SMS delivery provider, Twilio. Message frequency varies based on your scheduled jobs and account activity — these are account and service notifications, not recurring marketing messages. Message and data rates may apply. You can opt out at any time by replying STOP to any text, or by contacting us using the information below, and we will remove your number from future messages.
+
+Your mobile phone number and any text-message consent you provide are used only to send you the account and service notifications described above. We do not sell, rent, or share your mobile phone number or SMS opt-in data with any third party for their own marketing or promotional purposes. Twilio processes your number solely to deliver these messages on our behalf and does not use it for its own purposes — see "How We Share Your Information" above for our full list of service providers.
+
+By providing your email address, you agree that RP Landscaping may email you quote confirmations, appointment reminders, and invoice reminders. These are service-related messages, not marketing — we don't send promotional email blasts.
+
+## Data Retention
+
+We keep client and employee account information, job records, estimates, invoices, and messages for as long as your account is active and as needed for our business and legal recordkeeping (for example, financial records). If you ask us to delete your account or data (see "Your Rights and Choices" below), we will delete or de-identify it unless we're legally required to keep certain records (such as financial records) for a longer period.
+
+## Your Rights and Choices
+
+- **Access and correction:** you can view and update most of your account information yourself in Client Settings or Employee Settings within the App.
+- **Request deletion:** you can request that we delete your account and personal information using the "Request Account Deletion" option in your account settings, or by emailing us at the address below. We'll follow up with you to confirm and complete the request. Some information (such as financial records tied to completed work) may need to be retained for a period even after a deletion request, as required by law.
+- **Opt out of texts/email:** see "Text Messages and Email" above.
+
+## Data Security
+
+We take reasonable steps to protect your information, including: requiring a real account and password (managed by Firebase Authentication) to access any personal data in the App; role-based access rules so that clients, employees, and the business owner can only see the data relevant to them; encrypting data in transit; storing API keys and credentials for our service providers in a secured secret-management system rather than in our source code; and validating uploaded photos before they're stored. No method of transmission or storage is 100% secure, but we work to protect your information using reasonable and appropriate safeguards.
+
+## Children's Privacy
+
+The App is intended for use by adults requesting or performing landscaping services and is not directed at children. We do not knowingly collect personal information from children under 13. If you believe a child has provided us with personal information, please contact us and we will delete it.
+
+## Changes to This Policy
+
+We may update this Privacy Policy from time to time. If we make material changes, we'll update the effective date above. Continuing to use the App after a change means you accept the updated policy.
+
+## Contact Us
+
+If you have questions about this Privacy Policy or want to exercise any of the rights described above, contact us at:
+
+RP Landscaping
+557 Shrewsbury St, Holden, MA 01520
+prendergastlandscaping@gmail.com
+774-559-9448
