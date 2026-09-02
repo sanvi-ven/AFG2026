@@ -169,7 +169,8 @@ class _LegalDocumentEditPageState extends State<LegalDocumentEditPage> {
                 children: [
                   Text(
                     'A line starting with "# " is the document title, "## " starts a section '
-                    'heading, "- " starts a bullet item, and a blank line starts a new paragraph.',
+                    'heading, "- " starts a bullet item, "**text**" makes it bold, and a blank '
+                    'line starts a new paragraph.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 12),

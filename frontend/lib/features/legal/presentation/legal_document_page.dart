@@ -63,11 +63,34 @@ class LegalDocumentPage extends StatelessWidget {
   }
 }
 
+/// splits [text] on "**bold**" pairs into plain/bold [TextSpan]s. The only
+/// inline markup [LegalDocumentBody] supports — block-level structure
+/// (headings/bullets/paragraphs) is handled by the caller.
+List<InlineSpan> _parseInlineBold(String text, TextStyle? baseStyle) {
+  final spans = <InlineSpan>[];
+  final pattern = RegExp(r'\*\*(.+?)\*\*');
+  var lastEnd = 0;
+  for (final match in pattern.allMatches(text)) {
+    if (match.start > lastEnd) {
+      spans.add(TextSpan(text: text.substring(lastEnd, match.start), style: baseStyle));
+    }
+    spans.add(TextSpan(
+      text: match.group(1),
+      style: baseStyle?.copyWith(fontWeight: FontWeight.w700),
+    ));
+    lastEnd = match.end;
+  }
+  if (lastEnd < text.length) {
+    spans.add(TextSpan(text: text.substring(lastEnd), style: baseStyle));
+  }
+  return spans;
+}
+
 /// renders [LegalDocument.content]'s small plain-text markup: "# " is the
-/// title, "## " is a section heading, "- " is a bullet item, and a blank
-/// line starts a new paragraph. Deliberately not full markdown — this app
-/// has no markdown package dependency, and legal-document text doesn't need
-/// more than headings/paragraphs/bullets.
+/// title, "## " is a section heading, "- " is a bullet item, "**text**" is
+/// bold, and a blank line starts a new paragraph. Deliberately not full
+/// markdown — this app has no markdown package dependency, and
+/// legal-document text doesn't need more than this.
 class LegalDocumentBody extends StatelessWidget {
   const LegalDocumentBody({required this.content, super.key});
 
@@ -114,7 +137,14 @@ class LegalDocumentBody extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('•  '),
-                      Expanded(child: Text(line.trimLeft().substring(2).trim())),
+                      Expanded(
+                        child: RichText(
+                          text: TextSpan(
+                            children: _parseInlineBold(
+                                line.trimLeft().substring(2).trim(), theme.textTheme.bodyMedium),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -126,7 +156,9 @@ class LegalDocumentBody extends StatelessWidget {
 
       children.add(Padding(
         padding: const EdgeInsets.only(bottom: 10),
-        child: Text(trimmed, style: theme.textTheme.bodyMedium),
+        child: RichText(
+          text: TextSpan(children: _parseInlineBold(trimmed, theme.textTheme.bodyMedium)),
+        ),
       ));
     }
 
