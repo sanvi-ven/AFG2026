@@ -24,6 +24,7 @@ import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/archived_badge.dart';
 import '../../../shared/widgets/google_calendar_booking_button.dart';
 import '../../../shared/widgets/google_calendar_widget.dart';
+import '../../../shared/widgets/quick_add_job_dialog.dart';
 import '../../../shared/widgets/sort_control.dart';
 
 /// page for managing appointments, scheduled work, and calendar bookings
@@ -287,6 +288,15 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     );
   }
 
+  Future<void> _openQuickAddJob() async {
+    final created =
+        await showDialog<bool>(context: context, builder: (_) => const QuickAddJobDialog());
+    if (created == true && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Job added to the schedule.')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final profile = ClientSession.profile.value;
@@ -300,8 +310,19 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
         children: [
-          Text('Upcoming & Past Work',
-              style: Theme.of(context).textTheme.titleMedium),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Upcoming & Past Work',
+                  style: Theme.of(context).textTheme.titleMedium),
+              if (widget.role == 'owner')
+                FilledButton.icon(
+                  onPressed: _openQuickAddJob,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Quick Add Job'),
+                ),
+            ],
+          ),
           const SizedBox(height: 12),
           if (widget.role == 'client' &&
               (clientId == null || clientId.trim().isEmpty))

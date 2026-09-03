@@ -133,6 +133,39 @@ class EstimateService {
     return doc.id;
   }
 
+  /// owner action: create an estimate that's already approved, with no client
+  /// review step — used by the "Quick Add Job" flow for work the owner is
+  /// scheduling directly (already agreed with the client outside the app, or
+  /// approved on the fly). This still creates a real estimate doc so the rest
+  /// of the app (invoice conversion, "View Estimate" links, delete guards)
+  /// works exactly as it does for a normal estimate-approved-by-client.
+  static Future<String> createApprovedEstimate({
+    required String estimateNumber,
+    required String clientId,
+    required List<InvoiceServiceItem> services,
+  }) async {
+    final now = DateTime.now();
+    final total = services.fold<double>(
+        0, (runningTotal, item) => runningTotal + item.price);
+    final doc = _collection.doc();
+
+    final estimate = Estimate(
+      id: doc.id,
+      estimateNumber: estimateNumber.trim(),
+      clientId: clientId.trim(),
+      services: services,
+      total: total,
+      status: InvoiceStatus.approved,
+      createdAt: now,
+      updatedAt: now,
+      convertedToInvoice: false,
+      revisionNumber: 1,
+    );
+
+    await doc.set(estimate.toMap());
+    return doc.id;
+  }
+
   /// request changes on estimate from client with a message
 
   static Future<void> requestChanges({

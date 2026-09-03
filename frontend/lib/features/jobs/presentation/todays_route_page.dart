@@ -8,6 +8,7 @@ import '../../../models/team.dart';
 import '../../../shared/utils/route_order.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/get_directions_button.dart';
+import '../../../shared/widgets/quick_add_job_dialog.dart';
 import 'job_manager_tab.dart';
 
 /// owner-only page: today's cross-team route list, plus a visual drag-and-drop
@@ -29,17 +30,28 @@ class TodaysRoutePage extends StatelessWidget {
       role: role,
       authToken: authToken,
       selectedRoute: AppRouter.todaysRoute,
-      body: const DefaultTabController(
+      body: DefaultTabController(
         length: 2,
         child: Column(
           children: [
-            TabBar(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: () => _openQuickAddJob(context),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Quick Add Job'),
+                ),
+              ),
+            ),
+            const TabBar(
               tabs: [
                 Tab(text: "Today's Route"),
                 Tab(text: 'Job Manager'),
               ],
             ),
-            Expanded(
+            const Expanded(
               child: TabBarView(
                 children: [
                   _TodaysRouteTab(),
@@ -51,6 +63,15 @@ class TodaysRoutePage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _openQuickAddJob(BuildContext context) async {
+    final created =
+        await showDialog<bool>(context: context, builder: (_) => const QuickAddJobDialog());
+    if (created == true && context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Job added to the schedule.')));
+    }
   }
 }
 
