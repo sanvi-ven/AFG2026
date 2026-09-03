@@ -8,10 +8,12 @@ import 'package:intl/intl.dart';
 import '../../core/router/app_router.dart';
 import '../../core/services/checklist_template_service.dart';
 import '../../core/services/client_profile_service.dart';
+import '../../core/services/comms_service.dart';
 import '../../core/services/estimate_pdf_service.dart';
 import '../../core/services/estimate_service.dart';
 import '../../core/services/invoice_pdf_service.dart';
 import '../../core/services/invoice_service.dart';
+import '../../core/services/owner_settings_service.dart';
 import '../../core/services/request_service.dart';
 import '../../core/services/scheduled_work_service.dart';
 import '../../core/services/service_catalog_service.dart';
@@ -62,6 +64,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
   final _termsController = TextEditingController();
   final _depositPercentController = TextEditingController();
   bool _requireDeposit = false;
+  bool _notifyClientBySms = false;
   final List<_ServiceRowController> _serviceRows = [_ServiceRowController()];
   StreamSubscription<List<CommonService>>? _catalogSub;
   List<CommonService> _knownCatalog = const [];
@@ -342,12 +345,23 @@ class _EstimatesPageState extends State<EstimatesPage> {
         return;
       }
 
+      // ?: not attempted (box unchecked), true: sent, false: attempted but failed/no phone on file
+      bool? smsResult;
+      if (_notifyClientBySms) {
+        smsResult = await _sendEstimateReadySms(
+          client: existingClient,
+          estimateNumber: estimateNumber,
+          total: services.fold<double>(0, (sum, item) => sum + item.price),
+        );
+      }
+
       final nextPreview = await EstimateService.peekNextEstimateNumber();
       _clientIdController.clear();
       _notesController.clear();
       _termsController.clear();
       _depositPercentController.clear();
       _requireDeposit = false;
+      _notifyClientBySms = false;
       for (final row in _serviceRows) {
         row.dispose();
       }
@@ -363,8 +377,13 @@ class _EstimatesPageState extends State<EstimatesPage> {
         _clientSuggestions = const [];
       });
 
+      final message = switch (smsResult) {
+        null => 'Estimate sent to client.',
+        true => 'Estimate sent to client. Text notification sent.',
+        false => 'Estimate sent to client. Text notification failed to send.',
+      };
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Estimate sent to client.')),
+        SnackBar(content: Text(message)),
       );
     } catch (error) {
       if (!mounted) {
@@ -378,6 +397,32 @@ class _EstimatesPageState extends State<EstimatesPage> {
         setState(() => _isSubmitting = false);
       }
     }
+  }
+
+  /// texts the client that a new estimate is ready, mirroring the business-name
+  /// lead-in + STOP opt-out format registered with Twilio's A2P campaign for
+  /// this app's other transactional SMS (see reminder_check_service.dart).
+  /// Returns true if the send succeeded, false if it was attempted but failed
+  /// or the client has no phone number on file.
+  Future<bool> _sendEstimateReadySms({
+    required ClientProfile client,
+    required String estimateNumber,
+    required double total,
+  }) async {
+    final phone = client.phoneNumber.trim();
+    if (phone.isEmpty) return false;
+
+    final ownerSettings = await OwnerSettingsService.fetch();
+    final businessName = ownerSettings.companyName.trim().isEmpty
+        ? 'Your service provider'
+        : ownerSettings.companyName.trim();
+
+    return CommsService.sendSms(
+      to: phone,
+      body: '$businessName: A new estimate ($estimateNumber) for '
+          '\$${total.toStringAsFixed(2)} is ready for your review. '
+          'Log in to your account to view it. Reply STOP to opt out.',
+    );
   }
 
   Future<void> _downloadEstimatePdf(Estimate estimate) async {
@@ -870,6 +915,9 @@ class _EstimatesPageState extends State<EstimatesPage> {
               onRequireDepositChanged: (value) =>
                   setState(() => _requireDeposit = value),
               depositPercentController: _depositPercentController,
+              notifyClientBySms: _notifyClientBySms,
+              onNotifyClientBySmsChanged: (value) =>
+                  setState(() => _notifyClientBySms = value),
               isSubmitting: _isSubmitting,
               onAddService: _addServiceRow,
               onRemoveService: _removeServiceRow,
@@ -1052,6 +1100,8 @@ class _OwnerEstimateForm extends StatelessWidget {
     required this.requireDeposit,
     required this.onRequireDepositChanged,
     required this.depositPercentController,
+    required this.notifyClientBySms,
+    required this.onNotifyClientBySmsChanged,
     required this.isSubmitting,
     required this.onAddService,
     required this.onRemoveService,
@@ -1073,6 +1123,8 @@ class _OwnerEstimateForm extends StatelessWidget {
   final bool requireDeposit;
   final ValueChanged<bool> onRequireDepositChanged;
   final TextEditingController depositPercentController;
+  final bool notifyClientBySms;
+  final ValueChanged<bool> onNotifyClientBySmsChanged;
   final bool isSubmitting;
   final VoidCallback onAddService;
   final void Function(int index) onRemoveService;
@@ -1226,6 +1278,15 @@ class _OwnerEstimateForm extends StatelessWidget {
               ),
               const SizedBox(height: 8),
             ],
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: notifyClientBySms,
+              onChanged: (value) => onNotifyClientBySmsChanged(value ?? false),
+              title: const Text('Text the client that this estimate is ready'),
+              subtitle: const Text(
+                  'Only sent if the client has a phone number on file.'),
+            ),
             const SizedBox(height: 4),
             Align(
               alignment: Alignment.centerRight,
