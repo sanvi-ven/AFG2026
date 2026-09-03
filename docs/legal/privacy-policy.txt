@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Effective date: September 1, 2026
+Effective date: September 3, 2026
 
 RP Landscaping ("RP Landscaping," "we," "us," or "our") operates the Anchor app (the "App") to schedule and manage landscaping work for our clients and crew. This Privacy Policy explains what information we collect through the App, how we use it, who we share it with, and the choices you have.
 
@@ -52,9 +52,11 @@ We may also share information if required by law, to protect the rights and safe
 
 ## Text Messages and Email
 
+**No mobile information — including your phone number and your consent to receive text messages — will be sold, shared, or disclosed to any third party or affiliate for marketing or promotional purposes, under any circumstances.** This applies regardless of any other data-sharing described elsewhere in this policy.
+
 By providing your phone number, you agree that RP Landscaping may text you appointment- and invoice-related reminders using our SMS delivery provider, Twilio. Message frequency varies based on your scheduled jobs and account activity — these are account and service notifications, not recurring marketing messages. Message and data rates may apply. You can opt out at any time by replying STOP to any text, or by contacting us using the information below, and we will remove your number from future messages.
 
-Your mobile phone number and any text-message consent you provide are used only to send you the account and service notifications described above. We do not sell, rent, or share your mobile phone number or SMS opt-in data with any third party for their own marketing or promotional purposes. Twilio processes your number solely to deliver these messages on our behalf and does not use it for its own purposes — see "How We Share Your Information" above for our full list of service providers.
+Twilio processes your phone number and text-message consent only as our service provider, solely to deliver the messages described above on our behalf. Twilio does not use your number or consent for its own purposes, and does not share it with any other party — see "How We Share Your Information" above for our full list of service providers.
 
 By providing your email address, you agree that RP Landscaping may email you quote confirmations, appointment reminders, and invoice reminders. These are service-related messages, not marketing — we don't send promotional email blasts.
 
