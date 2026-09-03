@@ -21,6 +21,7 @@ import '../../../models/scheduled_work.dart';
 import '../../../models/team.dart';
 import '../../../shared/utils/list_highlight_controller.dart';
 import '../../../shared/widgets/app_scaffold.dart';
+import '../../../shared/widgets/archived_badge.dart';
 import '../../../shared/widgets/google_calendar_booking_button.dart';
 import '../../../shared/widgets/google_calendar_widget.dart';
 import '../../../shared/widgets/sort_control.dart';
@@ -334,8 +335,9 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                       // Firestore rules are scoped by role.
                       stream: widget.role == 'owner'
                           ? ClientProfileService.watchAllProfiles()
-                          : Stream.value(
-                              profile != null ? [profile] : const <ClientProfile>[]),
+                          : Stream.value(profile != null
+                              ? [profile]
+                              : const <ClientProfile>[]),
                       builder: (context, clientsSnapshot) {
                         final clients =
                             clientsSnapshot.data ?? const <ClientProfile>[];
@@ -761,21 +763,37 @@ class _ScheduledWorkCardState extends State<_ScheduledWorkCard> {
                     runSpacing: 8,
                     children: [
                       for (final employee in widget.employees)
-                        FilterChip(
-                          label: Text(employee.fullName),
-                          selected:
-                              work.employeeIds.contains(employee.employeeId),
-                          onSelected: (selected) {
-                            final updated = [...work.employeeIds];
-                            if (selected) {
-                              updated.add(employee.employeeId);
-                            } else {
-                              updated.remove(employee.employeeId);
-                            }
-                            ScheduledWorkService.assignEmployees(
-                                workId: work.id, employeeIds: updated);
-                          },
-                        ),
+                        // archived employees are hidden from new assignment
+                        // once they're not already on this job — but if
+                        // they're already assigned (a historical record),
+                        // keep showing them, badged, so the assignment isn't
+                        // silently hidden.
+                        if (!employee.archived ||
+                            work.employeeIds.contains(employee.employeeId))
+                          FilterChip(
+                            label: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(employee.fullName),
+                                if (employee.archived) ...[
+                                  const SizedBox(width: 6),
+                                  const ArchivedBadge(),
+                                ],
+                              ],
+                            ),
+                            selected:
+                                work.employeeIds.contains(employee.employeeId),
+                            onSelected: (selected) {
+                              final updated = [...work.employeeIds];
+                              if (selected) {
+                                updated.add(employee.employeeId);
+                              } else {
+                                updated.remove(employee.employeeId);
+                              }
+                              ScheduledWorkService.assignEmployees(
+                                  workId: work.id, employeeIds: updated);
+                            },
+                          ),
                     ],
                   )
                 else

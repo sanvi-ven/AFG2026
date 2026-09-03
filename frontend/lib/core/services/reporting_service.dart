@@ -79,7 +79,8 @@ class ReportingService {
     final clientTotals = totals.entries
         .map((entry) => ClientTotal(
               clientId: entry.key,
-              displayName: ClientProfileService.displayNameFor(profiles, entry.key),
+              displayName:
+                  ClientProfileService.displayNameFor(profiles, entry.key),
               total: entry.value,
               count: counts[entry.key] ?? 0,
             ))
@@ -90,14 +91,16 @@ class ReportingService {
 
   /// total clocked hours per employee across the given entries (expects
   /// entries already scoped to the desired date range).
-  static Map<String, Duration> employeeHoursByEmployee(List<TimeEntry> entries) {
+  static Map<String, Duration> employeeHoursByEmployee(
+      List<TimeEntry> entries) {
     final hours = <String, Duration>{};
     for (final entry in entries) {
       final clockInAt = entry.clockInAt;
       final clockOutAt = entry.clockOutAt;
       if (clockInAt == null || clockOutAt == null) continue;
       final worked = clockOutAt.difference(clockInAt);
-      hours[entry.employeeId] = (hours[entry.employeeId] ?? Duration.zero) + worked;
+      hours[entry.employeeId] =
+          (hours[entry.employeeId] ?? Duration.zero) + worked;
     }
     return hours;
   }
@@ -118,7 +121,8 @@ class ReportingService {
     final rows = <CompletedJobRow>[];
     for (final job in jobs.where((j) => j.isCompleted || j.isInvoiced)) {
       final form = formsByWorkId[job.id];
-      final invoice = job.invoiceId != null ? invoicesById[job.invoiceId] : null;
+      final invoice =
+          job.invoiceId != null ? invoicesById[job.invoiceId] : null;
       rows.add(CompletedJobRow(
         jobId: job.id,
         estimateNumber: job.estimateNumber,
@@ -144,7 +148,8 @@ class ReportingService {
   /// the hourly rate that actually applies to this entry — its own
   /// wageOverride when set, else the employee's normal hourlyRate (0 if
   /// neither is set)
-  static double effectiveRateForEntry(TimeEntry entry, EmployeeProfile? employee) =>
+  static double effectiveRateForEntry(
+          TimeEntry entry, EmployeeProfile? employee) =>
       entry.wageOverride ?? employee?.hourlyRate ?? 0;
 
   /// calculated pay for a single time entry: hoursForEntry × effectiveRateForEntry
@@ -163,7 +168,8 @@ class ReportingService {
     return employees.map((employee) {
       var hours = 0.0;
       var payout = 0.0;
-      for (final entry in entries.where((e) => e.employeeId == employee.employeeId)) {
+      for (final entry
+          in entries.where((e) => e.employeeId == employee.employeeId)) {
         hours += hoursForEntry(entry);
         payout += payoutForEntry(entry, employee);
       }
@@ -173,6 +179,7 @@ class ReportingService {
         hours: hours,
         rate: employee.hourlyRate ?? 0,
         payout: payout,
+        archived: employee.archived,
       );
     }).toList();
   }
@@ -231,6 +238,7 @@ class EmployeePayoutRow {
     required this.hours,
     required this.rate,
     required this.payout,
+    this.archived = false,
   });
 
   final String employeeId;
@@ -238,4 +246,5 @@ class EmployeePayoutRow {
   final double hours;
   final double rate;
   final double payout;
+  final bool archived;
 }

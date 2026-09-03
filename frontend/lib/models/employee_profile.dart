@@ -10,6 +10,7 @@ class EmployeeProfile {
     required this.active,
     this.hourlyRate,
     this.uid,
+    this.archived = false,
   });
 
   final String employeeId;
@@ -20,8 +21,14 @@ class EmployeeProfile {
   final String? teamId;
   final bool active;
   final double? hourlyRate;
+
   /// linked Firebase Auth uid
   final String? uid;
+
+  /// true once the owner has archived this employee (hidden from the active
+  /// roster and from new job/team assignments) — their history (jobs, time
+  /// entries, pay) stays intact and still resolves through this profile.
+  final bool archived;
 
   String get greetingName {
     if (firstName.trim().isNotEmpty) {
@@ -66,7 +73,10 @@ class EmployeeProfile {
       teamId: rawTeamId.isEmpty ? null : rawTeamId,
       active: map['active'] as bool? ?? true,
       hourlyRate: (map['hourly_rate'] as num?)?.toDouble(),
-      uid: (map['uid'] as String?)?.trim().isEmpty ?? true ? null : (map['uid'] as String).trim(),
+      uid: (map['uid'] as String?)?.trim().isEmpty ?? true
+          ? null
+          : (map['uid'] as String).trim(),
+      archived: map['archived'] as bool? ?? false,
     );
   }
 
@@ -81,6 +91,7 @@ class EmployeeProfile {
       'teamId': teamId,
       'active': active,
       'hourly_rate': hourlyRate,
+      'archived': archived,
     };
   }
 
@@ -97,6 +108,7 @@ class EmployeeProfile {
     double? hourlyRate,
     bool clearHourlyRate = false,
     String? uid,
+    bool? archived,
   }) {
     return EmployeeProfile(
       employeeId: employeeId ?? this.employeeId,
@@ -108,6 +120,7 @@ class EmployeeProfile {
       active: active ?? this.active,
       hourlyRate: clearHourlyRate ? null : (hourlyRate ?? this.hourlyRate),
       uid: uid ?? this.uid,
+      archived: archived ?? this.archived,
     );
   }
 }

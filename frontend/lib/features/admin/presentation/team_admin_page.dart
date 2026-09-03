@@ -19,6 +19,7 @@ import '../../../models/team.dart';
 import '../../../models/time_entry.dart';
 import '../../../shared/utils/time_entry_pay_format.dart';
 import '../../../shared/widgets/app_scaffold.dart';
+import '../../../shared/widgets/archived_badge.dart';
 import '../../../shared/widgets/csv_export_buttons.dart';
 
 /// owner-only admin hub: employee roster, teams, invite codes,
@@ -74,8 +75,127 @@ class TeamAdminPage extends StatelessWidget {
   }
 }
 
-class _EmployeesTab extends StatelessWidget {
+class _EmployeesTab extends StatefulWidget {
   const _EmployeesTab();
+
+  @override
+  State<_EmployeesTab> createState() => _EmployeesTabState();
+}
+
+class _EmployeesTabState extends State<_EmployeesTab> {
+  Future<void> _confirmArchive(EmployeeProfile employee) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Archive Employee'),
+        content: Text(
+          'Archive ${employee.fullName}? They\'ll be hidden from the active roster and from new '
+          'job/team assignments. Their jobs, time entries, and pay history all stay on file — you '
+          'can restore them from the Archived section any time.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Archive')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await EmployeeProfileService.archiveEmployee(employee.employeeId);
+  }
+
+  Widget _employeeCard(EmployeeProfile employee, List<Team> teams) {
+    final currentTeam = teams.where((t) => t.id == employee.teamId).toList();
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Flexible(
+                  child: Text(employee.fullName,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(width: 8),
+                Switch(
+                  value: employee.active,
+                  onChanged: (value) => EmployeeProfileService.setActive(
+                      employee.employeeId, value),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.archive_outlined),
+                  tooltip: 'Archive',
+                  onPressed: () => _confirmArchive(employee),
+                ),
+              ],
+            ),
+            Text(employee.email, style: Theme.of(context).textTheme.bodySmall),
+            Text(employee.phoneNumber,
+                style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              initialValue: currentTeam.isEmpty ? null : currentTeam.first.id,
+              decoration: const InputDecoration(
+                  labelText: 'Team', border: OutlineInputBorder()),
+              items: [
+                const DropdownMenuItem<String>(
+                    value: null, child: Text('Unassigned')),
+                for (final team in teams)
+                  DropdownMenuItem<String>(
+                      value: team.id, child: Text(team.name)),
+              ],
+              onChanged: (value) =>
+                  EmployeeProfileService.assignTeam(employee.employeeId, value),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              key: ValueKey('rate-${employee.employeeId}'),
+              initialValue: employee.hourlyRate?.toStringAsFixed(2) ?? '',
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                  labelText: 'Hourly rate (\$)', border: OutlineInputBorder()),
+              onFieldSubmitted: (value) => EmployeeProfileService.setHourlyRate(
+                employee.employeeId,
+                double.tryParse(value.trim()),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _archivedTile(EmployeeProfile employee) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        title: Row(
+          children: [
+            Flexible(child: Text(employee.fullName)),
+            const SizedBox(width: 8),
+            const ArchivedBadge(),
+          ],
+        ),
+        subtitle: Text([employee.email, employee.phoneNumber]
+            .where((s) => s.isNotEmpty)
+            .join(' · ')),
+        trailing: IconButton(
+          icon: const Icon(Icons.unarchive_outlined),
+          tooltip: 'Restore',
+          onPressed: () =>
+              EmployeeProfileService.unarchiveEmployee(employee.employeeId),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,62 +210,36 @@ class _EmployeesTab extends StatelessWidget {
             final teams = teamSnapshot.data ?? const <Team>[];
 
             if (employees.isEmpty) {
-              return const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('No employees yet. Share an invite code to get started.')));
+              return const Center(
+                  child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text(
+                          'No employees yet. Share an invite code to get started.')));
             }
 
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: employees.length,
-              itemBuilder: (context, index) {
-                final employee = employees[index];
-                final currentTeam = teams.where((t) => t.id == employee.teamId).toList();
+            final active = employees.where((e) => !e.archived).toList();
+            final archived = employees.where((e) => e.archived).toList();
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(employee.fullName, style: const TextStyle(fontWeight: FontWeight.w700)),
-                            ),
-                            Switch(
-                              value: employee.active,
-                              onChanged: (value) => EmployeeProfileService.setActive(employee.employeeId, value),
-                            ),
-                          ],
-                        ),
-                        Text(employee.email, style: Theme.of(context).textTheme.bodySmall),
-                        Text(employee.phoneNumber, style: Theme.of(context).textTheme.bodySmall),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          initialValue: currentTeam.isEmpty ? null : currentTeam.first.id,
-                          decoration: const InputDecoration(labelText: 'Team', border: OutlineInputBorder()),
-                          items: [
-                            const DropdownMenuItem<String>(value: null, child: Text('Unassigned')),
-                            for (final team in teams) DropdownMenuItem<String>(value: team.id, child: Text(team.name)),
-                          ],
-                          onChanged: (value) => EmployeeProfileService.assignTeam(employee.employeeId, value),
-                        ),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          key: ValueKey('rate-${employee.employeeId}'),
-                          initialValue: employee.hourlyRate?.toStringAsFixed(2) ?? '',
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(labelText: 'Hourly rate (\$)', border: OutlineInputBorder()),
-                          onFieldSubmitted: (value) => EmployeeProfileService.setHourlyRate(
-                            employee.employeeId,
-                            double.tryParse(value.trim()),
-                          ),
-                        ),
-                      ],
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                for (final employee in active) _employeeCard(employee, teams),
+                if (archived.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  ExpansionTile(
+                    title: Text(
+                      'Archived (${archived.length})',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.outline),
                     ),
+                    tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+                    childrenPadding: EdgeInsets.zero,
+                    children: [
+                      for (final employee in archived) _archivedTile(employee)
+                    ],
                   ),
-                );
-              },
+                ],
+              ],
             );
           },
         );
@@ -180,7 +274,8 @@ class _TeamsTabState extends State<_TeamsTab> {
       _newTeamController.clear();
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -193,10 +288,16 @@ class _TeamsTabState extends State<_TeamsTab> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Rename team'),
-        content: TextField(controller: controller, decoration: const InputDecoration(border: OutlineInputBorder())),
+        content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(border: OutlineInputBorder())),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: const Text('Save')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              child: const Text('Save')),
         ],
       ),
     );
@@ -217,7 +318,9 @@ class _TeamsTabState extends State<_TeamsTab> {
                 Expanded(
                   child: TextField(
                     controller: _newTeamController,
-                    decoration: const InputDecoration(labelText: 'New team name', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                        labelText: 'New team name',
+                        border: OutlineInputBorder()),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -235,7 +338,8 @@ class _TeamsTabState extends State<_TeamsTab> {
           builder: (context, snapshot) {
             final teams = snapshot.data ?? const <Team>[];
             if (teams.isEmpty) {
-              return const Padding(padding: EdgeInsets.all(12), child: Text('No teams yet.'));
+              return const Padding(
+                  padding: EdgeInsets.all(12), child: Text('No teams yet.'));
             }
             return Column(
               children: [
@@ -282,12 +386,14 @@ class _InviteCodesTabState extends State<_InviteCodesTab> {
     if (_codeController.text.trim().isEmpty) return;
     setState(() => _isSaving = true);
     try {
-      await InviteCodeService.generate(_codeController.text, label: _labelController.text);
+      await InviteCodeService.generate(_codeController.text,
+          label: _labelController.text);
       _codeController.clear();
       _labelController.clear();
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -303,8 +409,12 @@ class _InviteCodesTabState extends State<_InviteCodesTab> {
           "Delete ${code.code}? This can't be undone and the code will stop working immediately.",
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete')),
         ],
       ),
     );
@@ -314,7 +424,8 @@ class _InviteCodesTabState extends State<_InviteCodesTab> {
       await InviteCodeService.deleteCode(code.code);
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
       }
     }
   }
@@ -333,12 +444,16 @@ class _InviteCodesTabState extends State<_InviteCodesTab> {
                 TextField(
                   controller: _codeController,
                   textCapitalization: TextCapitalization.characters,
-                  decoration: const InputDecoration(labelText: 'Code (e.g. CREW2026)', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                      labelText: 'Code (e.g. CREW2026)',
+                      border: OutlineInputBorder()),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: _labelController,
-                  decoration: const InputDecoration(labelText: 'Label (optional)', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                      labelText: 'Label (optional)',
+                      border: OutlineInputBorder()),
                 ),
                 const SizedBox(height: 10),
                 FilledButton(
@@ -355,7 +470,9 @@ class _InviteCodesTabState extends State<_InviteCodesTab> {
           builder: (context, snapshot) {
             final codes = snapshot.data ?? const <InviteCode>[];
             if (codes.isEmpty) {
-              return const Padding(padding: EdgeInsets.all(12), child: Text('No invite codes yet.'));
+              return const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text('No invite codes yet.'));
             }
             return Column(
               children: [
@@ -364,7 +481,8 @@ class _InviteCodesTabState extends State<_InviteCodesTab> {
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
                       title: Text(code.code),
-                      subtitle: Text(code.label.isEmpty ? 'No label' : code.label),
+                      subtitle:
+                          Text(code.label.isEmpty ? 'No label' : code.label),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline),
                         tooltip: 'Delete invite code',
@@ -399,7 +517,11 @@ class _JobCompletionsTab extends StatelessWidget {
     Navigator.pushNamed(
       context,
       AppRouter.invoices,
-      arguments: {'role': role, 'authToken': authToken, 'highlightId': invoiceId},
+      arguments: {
+        'role': role,
+        'authToken': authToken,
+        'highlightId': invoiceId
+      },
     );
   }
 
@@ -420,7 +542,8 @@ class _JobCompletionsTab extends StatelessWidget {
           stream: ScheduledWorkService.watchScheduledWork(role: 'owner'),
           builder: (context, jobsSnapshot) {
             final jobsById = {
-              for (final job in jobsSnapshot.data ?? const <ScheduledWork>[]) job.id: job,
+              for (final job in jobsSnapshot.data ?? const <ScheduledWork>[])
+                job.id: job,
             };
 
             return StreamBuilder<List<ClientProfile>>(
@@ -428,68 +551,112 @@ class _JobCompletionsTab extends StatelessWidget {
               builder: (context, clientsSnapshot) {
                 final clients = clientsSnapshot.data ?? const <ClientProfile>[];
 
-                return ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    for (final form in forms)
-                      Builder(builder: (context) {
-                        final job = jobsById[form.workId];
-                        final descriptor = job == null
-                            ? 'Job ${form.workId}'
-                            : '${ClientProfileService.displayNameFor(clients, job.clientId)} — Est #${job.estimateNumber}';
+                return StreamBuilder<List<EmployeeProfile>>(
+                  stream: EmployeeProfileService.watchAllProfiles(),
+                  builder: (context, employeesSnapshot) {
+                    final employeesById = {
+                      for (final employee in employeesSnapshot.data ??
+                          const <EmployeeProfile>[])
+                        employee.employeeId: employee,
+                    };
 
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(descriptor, style: const TextStyle(fontWeight: FontWeight.w700)),
-                                const SizedBox(height: 4),
-                                if (job != null)
-                                  Text('Scheduled: ${DateFormat('MMM d, yyyy').format(job.scheduledDate)}'),
-                                Text('Submitted by: ${form.submittedByName}'),
-                                Text('${DateFormat('MMM d, h:mm a').format(form.startTime)} – ${DateFormat('h:mm a').format(form.endTime)}'),
-                                if (form.notes.isNotEmpty) Text('Notes: ${form.notes}'),
-                                if (form.beforePhotoUrls.isNotEmpty || form.afterPhotoUrls.isNotEmpty) ...[
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 6,
-                                    runSpacing: 6,
-                                    children: [
-                                      for (final url in [...form.beforePhotoUrls, ...form.afterPhotoUrls])
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(6),
-                                          child: Image.network(url, width: 56, height: 56, fit: BoxFit.cover),
-                                        ),
-                                    ],
-                                  ),
-                                ],
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
+                    return ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        for (final form in forms)
+                          Builder(builder: (context) {
+                            final job = jobsById[form.workId];
+                            final descriptor = job == null
+                                ? 'Job ${form.workId}'
+                                : '${ClientProfileService.displayNameFor(clients, job.clientId)} — Est #${job.estimateNumber}';
+                            final submittedByArchived =
+                                employeesById[form.submittedByEmployeeId]
+                                        ?.archived ??
+                                    false;
+
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    OutlinedButton.icon(
-                                      onPressed: () => _viewInAppointments(context, form.workId),
-                                      icon: const Icon(Icons.event_outlined, size: 16),
-                                      label: const Text('View in Appointments'),
+                                    Text(descriptor,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700)),
+                                    const SizedBox(height: 4),
+                                    if (job != null)
+                                      Text(
+                                          'Scheduled: ${DateFormat('MMM d, yyyy').format(job.scheduledDate)}'),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                            'Submitted by: ${form.submittedByName}'),
+                                        if (submittedByArchived) ...[
+                                          const SizedBox(width: 6),
+                                          const ArchivedBadge(),
+                                        ],
+                                      ],
                                     ),
-                                    if (job?.invoiceId != null)
-                                      OutlinedButton.icon(
-                                        onPressed: () => _viewInvoice(context, job!.invoiceId!),
-                                        icon: const Icon(Icons.receipt_long_outlined, size: 16),
-                                        label: const Text('View Invoice'),
+                                    Text(
+                                        '${DateFormat('MMM d, h:mm a').format(form.startTime)} – ${DateFormat('h:mm a').format(form.endTime)}'),
+                                    if (form.notes.isNotEmpty)
+                                      Text('Notes: ${form.notes}'),
+                                    if (form.beforePhotoUrls.isNotEmpty ||
+                                        form.afterPhotoUrls.isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: [
+                                          for (final url in [
+                                            ...form.beforePhotoUrls,
+                                            ...form.afterPhotoUrls
+                                          ])
+                                            ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                              child: Image.network(url,
+                                                  width: 56,
+                                                  height: 56,
+                                                  fit: BoxFit.cover),
+                                            ),
+                                        ],
                                       ),
+                                    ],
+                                    const SizedBox(height: 10),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        OutlinedButton.icon(
+                                          onPressed: () => _viewInAppointments(
+                                              context, form.workId),
+                                          icon: const Icon(Icons.event_outlined,
+                                              size: 16),
+                                          label: const Text(
+                                              'View in Appointments'),
+                                        ),
+                                        if (job?.invoiceId != null)
+                                          OutlinedButton.icon(
+                                            onPressed: () => _viewInvoice(
+                                                context, job!.invoiceId!),
+                                            icon: const Icon(
+                                                Icons.receipt_long_outlined,
+                                                size: 16),
+                                            label: const Text('View Invoice'),
+                                          ),
+                                      ],
+                                    ),
                                   ],
                                 ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                  ],
+                              ),
+                            );
+                          }),
+                      ],
+                    );
+                  },
                 );
               },
             );
@@ -513,20 +680,34 @@ class _TimeEntriesTab extends StatelessWidget {
       stream: EmployeeProfileService.watchAllProfiles(),
       builder: (context, employeeSnapshot) {
         final employees = {
-          for (final employee in employeeSnapshot.data ?? const <EmployeeProfile>[])
+          for (final employee
+              in employeeSnapshot.data ?? const <EmployeeProfile>[])
             employee.employeeId: employee,
         };
 
         return StreamBuilder<List<TimeEntry>>(
-          stream: TimeEntryService.watchEntriesInRange(format.format(startOfRange), format.format(now)),
+          stream: TimeEntryService.watchEntriesInRange(
+              format.format(startOfRange), format.format(now)),
           builder: (context, snapshot) {
             final entries = snapshot.data ?? const <TimeEntry>[];
             if (entries.isEmpty) {
-              return const Padding(padding: EdgeInsets.all(16), child: Text('No time entries in the last 30 days.'));
+              return const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No time entries in the last 30 days.'));
             }
 
             final exportRows = <List<Object?>>[
-              ['Employee', 'Date', 'Clock In', 'Clock Out', 'Hours', 'Rate', 'Payout', 'Notes', 'Paid'],
+              [
+                'Employee',
+                'Date',
+                'Clock In',
+                'Clock Out',
+                'Hours',
+                'Rate',
+                'Payout',
+                'Notes',
+                'Paid'
+              ],
               for (final entry in entries)
                 [
                   employees[entry.employeeId]?.fullName ?? entry.employeeId,
@@ -534,8 +715,10 @@ class _TimeEntriesTab extends StatelessWidget {
                   entry.clockInAt,
                   entry.clockOutAt,
                   ReportingService.hoursForEntry(entry),
-                  ReportingService.effectiveRateForEntry(entry, employees[entry.employeeId]),
-                  ReportingService.payoutForEntry(entry, employees[entry.employeeId]),
+                  ReportingService.effectiveRateForEntry(
+                      entry, employees[entry.employeeId]),
+                  ReportingService.payoutForEntry(
+                      entry, employees[entry.employeeId]),
                   entry.notes,
                   entry.isPaid ? 'Yes' : 'No',
                 ],
@@ -546,41 +729,55 @@ class _TimeEntriesTab extends StatelessWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                  child: ExportButtons(rows: exportRows, fileNamePrefix: 'time_entries'),
+                  child: ExportButtons(
+                      rows: exportRows, fileNamePrefix: 'time_entries'),
                 ),
                 Expanded(
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: entries.length,
                     itemBuilder: (context, index) {
-                final entry = entries[index];
-                final employee = employees[entry.employeeId];
-                final subtitleLines = [
-                  '${entry.date} · ${entry.clockInAt == null ? '—' : DateFormat('h:mm a').format(entry.clockInAt!)}'
-                      ' – ${entry.clockOutAt == null ? 'in progress' : DateFormat('h:mm a').format(entry.clockOutAt!)}',
-                  formatEntryPay(entry, employee),
-                  if (entry.notes.isNotEmpty) entry.notes,
-                ];
+                      final entry = entries[index];
+                      final employee = employees[entry.employeeId];
+                      final subtitleLines = [
+                        '${entry.date} · ${entry.clockInAt == null ? '—' : DateFormat('h:mm a').format(entry.clockInAt!)}'
+                            ' – ${entry.clockOutAt == null ? 'in progress' : DateFormat('h:mm a').format(entry.clockOutAt!)}',
+                        formatEntryPay(entry, employee),
+                        if (entry.notes.isNotEmpty) entry.notes,
+                      ];
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    onTap: () => showDialog<void>(
-                      context: context,
-                      builder: (_) => _EditTimeEntryDialog(entry: entry, employee: employee),
-                    ),
-                    title: Text(employee?.fullName ?? entry.employeeId),
-                    subtitle: Text(subtitleLines.join('\n')),
-                    isThreeLine: subtitleLines.length > 1,
-                    trailing: entry.isPaid
-                        ? const Chip(
-                            avatar: Icon(Icons.check_circle, size: 16, color: Colors.green),
-                            label: Text('Paid'),
-                            visualDensity: VisualDensity.compact,
-                          )
-                        : null,
-                  ),
-                );
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          onTap: () => showDialog<void>(
+                            context: context,
+                            builder: (_) => _EditTimeEntryDialog(
+                                entry: entry, employee: employee),
+                          ),
+                          title: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                  child: Text(
+                                      employee?.fullName ?? entry.employeeId)),
+                              if (employee?.archived ?? false) ...[
+                                const SizedBox(width: 6),
+                                const ArchivedBadge(),
+                              ],
+                            ],
+                          ),
+                          subtitle: Text(subtitleLines.join('\n')),
+                          isThreeLine: subtitleLines.length > 1,
+                          trailing: entry.isPaid
+                              ? const Chip(
+                                  avatar: Icon(Icons.check_circle,
+                                      size: 16, color: Colors.green),
+                                  label: Text('Paid'),
+                                  visualDensity: VisualDensity.compact,
+                                )
+                              : null,
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -604,12 +801,14 @@ class _EditTimeEntryDialog extends StatefulWidget {
 }
 
 class _EditTimeEntryDialogState extends State<_EditTimeEntryDialog> {
-  late TimeOfDay? _clockIn =
-      widget.entry.clockInAt == null ? null : TimeOfDay.fromDateTime(widget.entry.clockInAt!);
-  late TimeOfDay? _clockOut =
-      widget.entry.clockOutAt == null ? null : TimeOfDay.fromDateTime(widget.entry.clockOutAt!);
-  late final _wageController =
-      TextEditingController(text: widget.entry.wageOverride?.toStringAsFixed(2) ?? '');
+  late TimeOfDay? _clockIn = widget.entry.clockInAt == null
+      ? null
+      : TimeOfDay.fromDateTime(widget.entry.clockInAt!);
+  late TimeOfDay? _clockOut = widget.entry.clockOutAt == null
+      ? null
+      : TimeOfDay.fromDateTime(widget.entry.clockOutAt!);
+  late final _wageController = TextEditingController(
+      text: widget.entry.wageOverride?.toStringAsFixed(2) ?? '');
   late final _notesController = TextEditingController(text: widget.entry.notes);
   late bool _isPaid = widget.entry.isPaid;
   bool _isSaving = false;
@@ -670,7 +869,8 @@ class _EditTimeEntryDialogState extends State<_EditTimeEntryDialog> {
   Widget build(BuildContext context) {
     final defaultRate = widget.employee?.hourlyRate;
     return AlertDialog(
-      title: Text('Edit Shift — ${widget.employee?.fullName ?? widget.entry.employeeId}, ${widget.entry.date}'),
+      title: Text(
+          'Edit Shift — ${widget.employee?.fullName ?? widget.entry.employeeId}, ${widget.entry.date}'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -680,18 +880,23 @@ class _EditTimeEntryDialogState extends State<_EditTimeEntryDialog> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Clock in'),
               subtitle: Text(_clockIn?.format(context) ?? '—'),
-              trailing: TextButton(onPressed: () => _pickTime(isClockIn: true), child: const Text('Edit')),
+              trailing: TextButton(
+                  onPressed: () => _pickTime(isClockIn: true),
+                  child: const Text('Edit')),
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Clock out'),
               subtitle: Text(_clockOut?.format(context) ?? '—'),
-              trailing: TextButton(onPressed: () => _pickTime(isClockIn: false), child: const Text('Edit')),
+              trailing: TextButton(
+                  onPressed: () => _pickTime(isClockIn: false),
+                  child: const Text('Edit')),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _wageController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 labelText: 'Hourly wage override',
                 border: const OutlineInputBorder(),
@@ -705,7 +910,8 @@ class _EditTimeEntryDialogState extends State<_EditTimeEntryDialog> {
               controller: _notesController,
               minLines: 2,
               maxLines: 4,
-              decoration: const InputDecoration(labelText: 'Notes', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                  labelText: 'Notes', border: OutlineInputBorder()),
             ),
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
@@ -718,11 +924,16 @@ class _EditTimeEntryDialogState extends State<_EditTimeEntryDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: _isSaving ? null : () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(
+            onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+            child: const Text('Cancel')),
         FilledButton(
           onPressed: _isSaving ? null : _save,
           child: _isSaving
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Save'),
         ),
       ],

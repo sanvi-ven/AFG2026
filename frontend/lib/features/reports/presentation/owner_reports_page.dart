@@ -29,6 +29,7 @@ import '../../../models/scheduled_work.dart';
 import '../../../models/team.dart';
 import '../../../models/time_entry.dart';
 import '../../../shared/widgets/app_scaffold.dart';
+import '../../../shared/widgets/archived_badge.dart';
 import '../../../shared/widgets/csv_export_buttons.dart';
 
 enum _ReportRange { thisWeek, thisMonth, allTime }
@@ -97,30 +98,37 @@ class _OwnerReportsPageState extends State<OwnerReportsPage> {
                             stream: TeamService.watchAllTeams(),
                             builder: (context, teamsSnapshot) {
                               return StreamBuilder<List<TimeEntry>>(
-                                stream: TimeEntryService.watchEntriesInRange(startDate, endDate),
+                                stream: TimeEntryService.watchEntriesInRange(
+                                    startDate, endDate),
                                 builder: (context, entriesSnapshot) {
                                   return StreamBuilder<List<JobCompletionForm>>(
-                                    stream: JobCompletionService.watchAllForms(),
+                                    stream:
+                                        JobCompletionService.watchAllForms(),
                                     builder: (context, formsSnapshot) {
                                       return StreamBuilder<List<Expense>>(
-                                        stream: ExpenseService.watchAllExpenses(),
+                                        stream:
+                                            ExpenseService.watchAllExpenses(),
                                         builder: (context, expensesSnapshot) {
-                                          final loading = !invoiceSnapshot.hasData ||
-                                              !estimateSnapshot.hasData ||
-                                              !jobsSnapshot.hasData ||
-                                              !clientsSnapshot.hasData ||
-                                              !employeesSnapshot.hasData ||
-                                              !teamsSnapshot.hasData ||
-                                              !entriesSnapshot.hasData ||
-                                              !formsSnapshot.hasData ||
-                                              !expensesSnapshot.hasData;
+                                          final loading =
+                                              !invoiceSnapshot.hasData ||
+                                                  !estimateSnapshot.hasData ||
+                                                  !jobsSnapshot.hasData ||
+                                                  !clientsSnapshot.hasData ||
+                                                  !employeesSnapshot.hasData ||
+                                                  !teamsSnapshot.hasData ||
+                                                  !entriesSnapshot.hasData ||
+                                                  !formsSnapshot.hasData ||
+                                                  !expensesSnapshot.hasData;
                                           if (loading) {
-                                            return const Center(child: CircularProgressIndicator());
+                                            return const Center(
+                                                child:
+                                                    CircularProgressIndicator());
                                           }
 
                                           return _ReportsTabs(
                                             range: _range,
-                                            onRangeChanged: (value) => setState(() => _range = value),
+                                            onRangeChanged: (value) =>
+                                                setState(() => _range = value),
                                             invoices: invoiceSnapshot.data!,
                                             estimates: estimateSnapshot.data!,
                                             jobs: jobsSnapshot.data!,
@@ -191,13 +199,20 @@ class _ReportsTabs extends StatelessWidget {
     // range-scoped copies used only for the Net Profit figure — the
     // dashboard's own revenue chart/stat tiles stay all-time as before.
     final rangeInvoices = invoices
-        .where((invoice) => !invoice.createdAt.isBefore(rangeStart) && !invoice.createdAt.isAfter(rangeEnd))
+        .where((invoice) =>
+            !invoice.createdAt.isBefore(rangeStart) &&
+            !invoice.createdAt.isAfter(rangeEnd))
         .toList();
-    final rangeExpenses =
-        expenses.where((expense) => !expense.date.isBefore(rangeStart) && !expense.date.isAfter(rangeEnd)).toList();
+    final rangeExpenses = expenses
+        .where((expense) =>
+            !expense.date.isBefore(rangeStart) &&
+            !expense.date.isAfter(rangeEnd))
+        .toList();
 
-    final payoutRows = ReportingService.employeePayoutReport(entries: entries, employees: employees);
-    final totalPayout = payoutRows.fold<double>(0, (sum, row) => sum + row.payout);
+    final payoutRows = ReportingService.employeePayoutReport(
+        entries: entries, employees: employees);
+    final totalPayout =
+        payoutRows.fold<double>(0, (sum, row) => sum + row.payout);
     final netProfit = ReportingService.netProfit(
       paidRevenue: ReportingService.totalPaidRevenue(rangeInvoices),
       totalPayout: totalPayout,
@@ -285,8 +300,10 @@ class _DashboardTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final monthlyRevenue = ReportingService.paidRevenueByMonth(invoices);
     final totalPaid = ReportingService.totalPaidRevenue(invoices);
-    final expectedFromEstimates = ReportingService.expectedRevenueFromEstimates(estimates);
-    final expectedFromJobs = ReportingService.expectedRevenueFromScheduledWork(jobs);
+    final expectedFromEstimates =
+        ReportingService.expectedRevenueFromEstimates(estimates);
+    final expectedFromJobs =
+        ReportingService.expectedRevenueFromScheduledWork(jobs);
     final busiestClients = ReportingService.busiestClients(
       clients,
       invoices: invoices,
@@ -294,7 +311,9 @@ class _DashboardTab extends StatelessWidget {
       scheduledWork: jobs,
     ).take(8).toList();
     final hoursByEmployee = ReportingService.employeeHoursByEmployee(entries);
-    final employeeNameFor = {for (final employee in employees) employee.employeeId: employee.fullName};
+    final employeeNameFor = {
+      for (final employee in employees) employee.employeeId: employee.fullName
+    };
 
     final sortedMonths = monthlyRevenue.keys.toList()..sort();
 
@@ -331,20 +350,27 @@ class _DashboardTab extends StatelessWidget {
                           showTitles: true,
                           getTitlesWidget: (value, meta) {
                             final index = value.toInt();
-                            if (index < 0 || index >= sortedMonths.length) return const SizedBox.shrink();
+                            if (index < 0 || index >= sortedMonths.length)
+                              return const SizedBox.shrink();
                             return Padding(
                               padding: const EdgeInsets.only(top: 6),
-                              child: Text(sortedMonths[index], style: const TextStyle(fontSize: 10)),
+                              child: Text(sortedMonths[index],
+                                  style: const TextStyle(fontSize: 10)),
                             );
                           },
                         ),
                       ),
-                      leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40)),
-                      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      leftTitles: const AxisTitles(
+                          sideTitles:
+                              SideTitles(showTitles: true, reservedSize: 40)),
+                      topTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false)),
+                      rightTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false)),
                     ),
                     borderData: FlBorderData(show: false),
-                    gridData: const FlGridData(show: true, drawVerticalLine: false),
+                    gridData:
+                        const FlGridData(show: true, drawVerticalLine: false),
                   ),
                 ),
         ),
@@ -398,15 +424,19 @@ class _DashboardTab extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Employee Hours', style: Theme.of(context).textTheme.titleLarge),
+            Text('Employee Hours',
+                style: Theme.of(context).textTheme.titleLarge),
             SegmentedButton<_ReportRange>(
               segments: const [
-                ButtonSegment(value: _ReportRange.thisWeek, label: Text('Week')),
-                ButtonSegment(value: _ReportRange.thisMonth, label: Text('Month')),
+                ButtonSegment(
+                    value: _ReportRange.thisWeek, label: Text('Week')),
+                ButtonSegment(
+                    value: _ReportRange.thisMonth, label: Text('Month')),
                 ButtonSegment(value: _ReportRange.allTime, label: Text('All')),
               ],
               selected: {range},
-              onSelectionChanged: (selection) => onRangeChanged(selection.first),
+              onSelectionChanged: (selection) =>
+                  onRangeChanged(selection.first),
             ),
           ],
         ),
@@ -449,7 +479,11 @@ class _StatTile extends StatelessWidget {
           children: [
             Text(label, style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 6),
-            Text(value, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+            Text(value,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700)),
           ],
         ),
       ),
@@ -470,12 +504,14 @@ class _CompletedJobsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     if (rows.isEmpty) {
       return const Center(
-        child: Padding(padding: EdgeInsets.all(16), child: Text('No completed jobs yet.')),
+        child: Padding(
+            padding: EdgeInsets.all(16), child: Text('No completed jobs yet.')),
       );
     }
 
-    String durationLabel(Duration? duration) =>
-        duration == null ? '—' : '${duration.inHours}h ${duration.inMinutes.remainder(60)}m';
+    String durationLabel(Duration? duration) => duration == null
+        ? '—'
+        : '${duration.inHours}h ${duration.inMinutes.remainder(60)}m';
     String teamLabel(String? teamId) =>
         teamId == null ? 'Unassigned' : (teamNameFor[teamId] ?? teamId);
 
@@ -497,7 +533,8 @@ class _CompletedJobsTab extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-          child: ExportButtons(rows: exportRows, fileNamePrefix: 'completed_jobs'),
+          child:
+              ExportButtons(rows: exportRows, fileNamePrefix: 'completed_jobs'),
         ),
         Expanded(
           child: SingleChildScrollView(
@@ -542,14 +579,14 @@ class _EmployeePayoutTab extends StatelessWidget {
   Widget build(BuildContext context) {
     if (rows.isEmpty) {
       return const Center(
-        child: Padding(padding: EdgeInsets.all(16), child: Text('No employees yet.')),
+        child: Padding(
+            padding: EdgeInsets.all(16), child: Text('No employees yet.')),
       );
     }
 
     final exportRows = <List<Object?>>[
       ['Employee', 'Hours', 'Rate', 'Payout'],
-      for (final row in rows)
-        [row.name, row.hours, row.rate, row.payout],
+      for (final row in rows) [row.name, row.hours, row.rate, row.payout],
     ];
 
     return Column(
@@ -557,7 +594,8 @@ class _EmployeePayoutTab extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-          child: ExportButtons(rows: exportRows, fileNamePrefix: 'employee_payout'),
+          child: ExportButtons(
+              rows: exportRows, fileNamePrefix: 'employee_payout'),
         ),
         Expanded(
           child: SingleChildScrollView(
@@ -573,9 +611,20 @@ class _EmployeePayoutTab extends StatelessWidget {
               rows: [
                 for (final row in rows)
                   DataRow(cells: [
-                    DataCell(Text(row.name)),
+                    DataCell(Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(row.name),
+                        if (row.archived) ...[
+                          const SizedBox(width: 6),
+                          const ArchivedBadge(),
+                        ],
+                      ],
+                    )),
                     DataCell(Text(row.hours.toStringAsFixed(1))),
-                    DataCell(Text(row.rate == 0 ? '—' : '${_currency.format(row.rate)}/hr')),
+                    DataCell(Text(row.rate == 0
+                        ? '—'
+                        : '${_currency.format(row.rate)}/hr')),
                     DataCell(Text(_currency.format(row.payout))),
                   ]),
               ],
@@ -601,7 +650,8 @@ class _ExpensesTabState extends State<_ExpensesTab> {
   static final DateFormat _dateFormat = DateFormat('MMM d, yyyy');
 
   Future<void> _addExpense() async {
-    await showDialog<void>(context: context, builder: (_) => const _AddExpenseDialog());
+    await showDialog<void>(
+        context: context, builder: (_) => const _AddExpenseDialog());
   }
 
   Future<void> _confirmDelete(Expense expense) async {
@@ -611,8 +661,12 @@ class _ExpensesTabState extends State<_ExpensesTab> {
         title: const Text('Delete Expense'),
         content: Text("Delete '${expense.description}'? This can't be undone."),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete')),
         ],
       ),
     );
@@ -646,7 +700,8 @@ class _ExpensesTabState extends State<_ExpensesTab> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Total: ${_currency.format(total)}', style: Theme.of(context).textTheme.titleMedium),
+            Text('Total: ${_currency.format(total)}',
+                style: Theme.of(context).textTheme.titleMedium),
             FilledButton.icon(
               onPressed: _addExpense,
               icon: const Icon(Icons.add),
@@ -678,7 +733,8 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                   DataRow(cells: [
                     DataCell(Text(_dateFormat.format(expense.date))),
                     DataCell(Text(expense.description)),
-                    DataCell(Text(ExpenseCategory.displayLabel(expense.category))),
+                    DataCell(
+                        Text(ExpenseCategory.displayLabel(expense.category))),
                     DataCell(Text(_currency.format(expense.amount))),
                     DataCell(IconButton(
                       icon: const Icon(Icons.delete_outline),
@@ -730,7 +786,9 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
     final amount = double.tryParse(_amountController.text.trim());
     if (description.isEmpty || amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('A description and amount greater than 0 are required.')),
+        const SnackBar(
+            content:
+                Text('A description and amount greater than 0 are required.')),
       );
       return;
     }
@@ -747,7 +805,8 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
       Navigator.of(context).pop();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save expense: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save expense: $error')));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -765,23 +824,30 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
           children: [
             TextField(
               controller: _descriptionController,
-              decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                  labelText: 'Description', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
               initialValue: _category,
-              decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                  labelText: 'Category', border: OutlineInputBorder()),
               items: [
                 for (final category in ExpenseCategory.all)
-                  DropdownMenuItem(value: category, child: Text(ExpenseCategory.displayLabel(category))),
+                  DropdownMenuItem(
+                      value: category,
+                      child: Text(ExpenseCategory.displayLabel(category))),
               ],
-              onChanged: (value) => setState(() => _category = value ?? _category),
+              onChanged: (value) =>
+                  setState(() => _category = value ?? _category),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Amount (\$)', border: OutlineInputBorder()),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                  labelText: 'Amount (\$)', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
@@ -793,11 +859,16 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: _isSaving ? null : () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(
+            onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+            child: const Text('Cancel')),
         FilledButton(
           onPressed: _isSaving ? null : _save,
           child: _isSaving
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Save'),
         ),
       ],
@@ -835,13 +906,16 @@ class _EquipmentReportsTab extends StatelessWidget {
                 final reservations = reservationSnapshot.data!;
                 final broken = brokenSnapshot.data!;
 
-                final nameForId = {for (final item in equipment) item.id: item.name};
+                final nameForId = {
+                  for (final item in equipment) item.id: item.name
+                };
 
                 // most requested: active (non-cancelled) reservations grouped
                 // by denormalized name — a cancelled reservation isn't real
                 // demand and shouldn't count toward "most requested."
                 final requestCounts = <String, int>{};
-                for (final reservation in reservations.where((r) => r.isActive)) {
+                for (final reservation
+                    in reservations.where((r) => r.isActive)) {
                   final name = reservation.equipmentName.trim().isEmpty
                       ? 'Unknown'
                       : reservation.equipmentName.trim();
@@ -858,7 +932,8 @@ class _EquipmentReportsTab extends StatelessWidget {
                 return ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    Text('Most Requested Equipment', style: Theme.of(context).textTheme.titleLarge),
+                    Text('Most Requested Equipment',
+                        style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 4),
                     const Text('By number of reservations'),
                     const SizedBox(height: 12),
@@ -867,7 +942,8 @@ class _EquipmentReportsTab extends StatelessWidget {
                       emptyMessage: 'No equipment reservations yet.',
                     ),
                     const SizedBox(height: 24),
-                    Text('Most Broken Equipment', style: Theme.of(context).textTheme.titleLarge),
+                    Text('Most Broken Equipment',
+                        style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 4),
                     const Text('By number of broken reports (all time)'),
                     const SizedBox(height: 12),
@@ -885,8 +961,10 @@ class _EquipmentReportsTab extends StatelessWidget {
     );
   }
 
-  static List<MapEntry<String, int>> _topEntries(Map<String, int> counts, int limit) {
-    final entries = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+  static List<MapEntry<String, int>> _topEntries(
+      Map<String, int> counts, int limit) {
+    final entries = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     return entries.take(limit).toList();
   }
 }
@@ -928,7 +1006,8 @@ class _CountBarChart extends StatelessWidget {
                       reservedSize: 28,
                       getTitlesWidget: (value, meta) {
                         final index = value.toInt();
-                        if (index < 0 || index >= entries.length) return const SizedBox.shrink();
+                        if (index < 0 || index >= entries.length)
+                          return const SizedBox.shrink();
                         return Padding(
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
@@ -940,9 +1019,13 @@ class _CountBarChart extends StatelessWidget {
                       },
                     ),
                   ),
-                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: const AxisTitles(
+                      sideTitles:
+                          SideTitles(showTitles: true, reservedSize: 40)),
+                  topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
                 ),
                 borderData: FlBorderData(show: false),
                 gridData: const FlGridData(show: true, drawVerticalLine: false),

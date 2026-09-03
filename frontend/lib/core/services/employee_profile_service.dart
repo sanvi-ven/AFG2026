@@ -18,7 +18,8 @@ class EmployeeProfileService {
       final profiles = snapshot.docs
           .map((doc) => EmployeeProfile.fromMap({...doc.data(), 'id': doc.id}))
           .toList();
-      profiles.sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+      profiles.sort((a, b) =>
+          a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
       return profiles;
     });
   }
@@ -36,7 +37,10 @@ class EmployeeProfileService {
 
   static Future<EmployeeProfile?> fetchByEmail(String email) async {
     final normalizedEmail = normalizeEmail(email);
-    final query = await _collection.where('email', isEqualTo: normalizedEmail).limit(1).get();
+    final query = await _collection
+        .where('email', isEqualTo: normalizedEmail)
+        .limit(1)
+        .get();
     if (query.docs.isEmpty) return null;
 
     final doc = query.docs.first;
@@ -50,13 +54,16 @@ class EmployeeProfileService {
     }
 
     final normalizedEmail = normalizeEmail(profile.email);
-    final payload = profile.copyWith(employeeId: normalizedId, email: normalizedEmail).toMap()
+    final payload = profile
+        .copyWith(employeeId: normalizedId, email: normalizedEmail)
+        .toMap()
       ..addAll({'updated_at': FieldValue.serverTimestamp()});
 
     await _collection.doc(normalizedId).set(payload, SetOptions(merge: true));
 
     final saved = await fetchBySignupId(normalizedId);
-    return saved ?? profile.copyWith(employeeId: normalizedId, email: normalizedEmail);
+    return saved ??
+        profile.copyWith(employeeId: normalizedId, email: normalizedEmail);
   }
 
   /// look up an employee profile by their linked Firebase Auth uid
@@ -64,7 +71,8 @@ class EmployeeProfileService {
     final normalizedUid = uid.trim();
     if (normalizedUid.isEmpty) return null;
 
-    final query = await _collection.where('uid', isEqualTo: normalizedUid).limit(1).get();
+    final query =
+        await _collection.where('uid', isEqualTo: normalizedUid).limit(1).get();
     if (query.docs.isEmpty) return null;
 
     final doc = query.docs.first;
@@ -73,16 +81,39 @@ class EmployeeProfileService {
 
   /// owner action: activate/deactivate an employee account
   static Future<void> setActive(String employeeId, bool active) async {
-    await _collection.doc(employeeId.trim()).set({'active': active}, SetOptions(merge: true));
+    await _collection
+        .doc(employeeId.trim())
+        .set({'active': active}, SetOptions(merge: true));
   }
 
   /// owner action: assign (or clear) an employee's current team
   static Future<void> assignTeam(String employeeId, String? teamId) async {
-    await _collection.doc(employeeId.trim()).set({'teamId': teamId}, SetOptions(merge: true));
+    await _collection
+        .doc(employeeId.trim())
+        .set({'teamId': teamId}, SetOptions(merge: true));
   }
 
   /// owner action: set (or clear) an employee's hourly pay rate
   static Future<void> setHourlyRate(String employeeId, double? rate) async {
-    await _collection.doc(employeeId.trim()).set({'hourly_rate': rate}, SetOptions(merge: true));
+    await _collection
+        .doc(employeeId.trim())
+        .set({'hourly_rate': rate}, SetOptions(merge: true));
+  }
+
+  /// owner action: hide an employee from the active roster and from new
+  /// job/team assignments without deleting their history — their jobs, time
+  /// entries, and pay records all stay on file and still resolve through
+  /// this profile.
+  static Future<void> archiveEmployee(String employeeId) async {
+    await _collection
+        .doc(employeeId.trim())
+        .set({'archived': true}, SetOptions(merge: true));
+  }
+
+  /// owner action: restore a previously archived employee to the active roster
+  static Future<void> unarchiveEmployee(String employeeId) async {
+    await _collection
+        .doc(employeeId.trim())
+        .set({'archived': false}, SetOptions(merge: true));
   }
 }
