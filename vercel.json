@@ -3,6 +3,23 @@
   "installCommand": "if [ -f package.json ]; then npm install; else echo \"Skipping npm install\"; fi",
   "buildCommand": "bash build.sh",
   "outputDirectory": "frontend/build/web",
+  "redirects": [
+    { "source": "/legal/privacy-policy.html.", "destination": "/legal/privacy-policy.html", "permanent": false },
+    { "source": "/legal/terms-of-service.html.", "destination": "/legal/terms-of-service.html", "permanent": false },
+    { "source": "/legal/employee-data-notice.html.", "destination": "/legal/employee-data-notice.html", "permanent": false },
+    { "source": "/legal/sms-consent.html.", "destination": "/legal/sms-consent.html", "permanent": false },
+
+    { "source": "/legal/privacy-policy", "destination": "/legal/privacy-policy.html", "permanent": false },
+    { "source": "/legal/terms-of-service", "destination": "/legal/terms-of-service.html", "permanent": false },
+    { "source": "/legal/employee-data-notice", "destination": "/legal/employee-data-notice.html", "permanent": false },
+    { "source": "/legal/sms-consent", "destination": "/legal/sms-consent.html", "permanent": false },
+
+    { "source": "/privacy", "destination": "/legal/privacy-policy.html", "permanent": false },
+    { "source": "/privacy-policy", "destination": "/legal/privacy-policy.html", "permanent": false },
+    { "source": "/terms", "destination": "/legal/terms-of-service.html", "permanent": false },
+    { "source": "/terms-of-service", "destination": "/legal/terms-of-service.html", "permanent": false },
+    { "source": "/sms-consent", "destination": "/legal/sms-consent.html", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

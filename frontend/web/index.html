@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Anchor is the scheduling and account app for RP Landscaping (Ryan Prendergast, doing business as RP Landscaping) in Holden and Worcester, MA. Clients create an account to request work, view estimates and invoices, and opt in to appointment and invoice text reminders.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -35,6 +35,46 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <!--
+    Text-only fallback for visitors and automated reviewers that do not execute
+    JavaScript. Anchor is a Flutter web app, so every route's raw HTML is this
+    same shell until the engine boots client-side. Without this block, a crawler
+    fetching a real, meaningful URL (for example the client sign-up page named in
+    our A2P 10DLC campaign's message flow) sees an empty page with no business
+    name, no consent language, and no policy links. Keep the SMS consent sentence
+    below byte-identical to the one rendered next to the phone field in
+    frontend/lib/features/auth/presentation/client_signup_page.dart.
+  -->
+  <noscript>
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:720px;margin:0 auto;padding:32px 24px;color:#1a1a1a;line-height:1.55">
+      <h1 style="font-size:1.5rem;margin:0 0 12px">Anchor &mdash; RP Landscaping</h1>
+      <p>Anchor is the scheduling and account app operated by <strong>Ryan Prendergast, doing business as RP Landscaping</strong>, a landscaping and lawn care business serving Holden and Worcester, Massachusetts. Clients use it to request work, review estimates and invoices, and receive service reminders. Employees use it for scheduling and time tracking.</p>
+      <p>This app needs JavaScript to run. The information below is provided in plain HTML so that it is readable without it.</p>
+
+      <h2 style="font-size:1.15rem;margin:28px 0 8px">Text message program and consent</h2>
+      <p>Clients opt in to text messages by creating an account at
+        <a href="/signup/client">https://anchor-orpin.vercel.app/signup/client</a>
+        and entering their mobile phone number. Directly below the phone field the sign-up form displays:</p>
+      <blockquote style="margin:0 0 14px;padding-left:14px;border-left:3px solid #ccc">&ldquo;By providing your phone number, you agree to receive appointment and invoice text reminders. Message and data rates may apply.&rdquo;</blockquote>
+      <p>Below that, the account cannot be created until the visitor checks a box &mdash; unchecked by default and never pre-selected &mdash; reading &ldquo;I agree to the Privacy Policy and Terms of Service.&rdquo; This is the only way anyone is enrolled in text messages; there is no verbal, paper, keyword or QR-code opt-in.</p>
+      <p>Messages are transactional appointment and invoice reminders only. There is no marketing or promotional texting. Message frequency varies with your own scheduled work and account activity. Reply <strong>STOP</strong> to any message to opt out, or <strong>HELP</strong> for help. Message and data rates may apply.</p>
+      <p><strong>No mobile information &mdash; including your phone number and your consent to receive text messages &mdash; is sold, shared, or disclosed to any third party or affiliate for marketing or promotional purposes, under any circumstances.</strong></p>
+
+      <h2 style="font-size:1.15rem;margin:28px 0 8px">Policies</h2>
+      <ul>
+        <li><a href="/legal/privacy-policy.html">Privacy Policy</a></li>
+        <li><a href="/legal/terms-of-service.html">Terms of Service</a></li>
+        <li><a href="/legal/employee-data-notice.html">Employee Data Privacy Notice</a></li>
+      </ul>
+
+      <h2 style="font-size:1.15rem;margin:28px 0 8px">Contact</h2>
+      <p>Ryan Prendergast, doing business as RP Landscaping<br>
+        <a href="mailto:immc17289@gmail.com">immc17289@gmail.com</a><br>
+        <a href="tel:+17745599448">774-559-9448</a><br>
+        <a href="https://rplandscaping.org/">rplandscaping.org</a></p>
+    </div>
+  </noscript>
+
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

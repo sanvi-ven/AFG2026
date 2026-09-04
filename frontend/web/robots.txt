@@ -1,0 +1,10 @@
+# Anchor — RP Landscaping (Ryan Prendergast, doing business as RP Landscaping)
+# Everything here is public and intended to be crawlable, including the
+# legal documents that A2P 10DLC / carrier compliance review needs to fetch.
+#
+# This file exists mainly so /robots.txt does not fall through Vercel's
+# catch-all SPA rewrite and get served as an HTML page with a 200 status,
+# which is what happened before and is ambiguous to strict crawlers.
+
+User-agent: *
+Allow: /
