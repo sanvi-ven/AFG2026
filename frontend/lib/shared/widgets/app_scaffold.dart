@@ -1405,8 +1405,28 @@ class _EmployeePersonalInfoDialogState
       TextEditingController(text: widget.initialProfile.medicationAllergies);
   late final _environmentalAllergiesController =
       TextEditingController(text: widget.initialProfile.environmentalAllergies);
+  late final _guardianNameController =
+      TextEditingController(text: widget.initialProfile.guardianName);
+  late final _guardianEmailController =
+      TextEditingController(text: widget.initialProfile.guardianEmail);
+  late final _guardianPhoneController =
+      TextEditingController(text: widget.initialProfile.guardianPhone);
   late DateTime? _dateOfBirth = widget.initialProfile.dateOfBirth;
   bool _isSaving = false;
+
+  /// mirrors EmployeeProfile.isMinor but reacts live to the date picked in
+  /// this dialog, before it's saved — so the guardian fields appear the
+  /// moment a qualifying birthdate is picked, not just on next reopen.
+  bool get _isMinor {
+    final dob = _dateOfBirth;
+    if (dob == null) return false;
+    final today = DateTime.now();
+    var age = today.year - dob.year;
+    if (today.month < dob.month || (today.month == dob.month && today.day < dob.day)) {
+      age--;
+    }
+    return age < 18;
+  }
 
   @override
   void dispose() {
@@ -1414,6 +1434,9 @@ class _EmployeePersonalInfoDialogState
     _foodAllergiesController.dispose();
     _medicationAllergiesController.dispose();
     _environmentalAllergiesController.dispose();
+    _guardianNameController.dispose();
+    _guardianEmailController.dispose();
+    _guardianPhoneController.dispose();
     super.dispose();
   }
 
@@ -1440,6 +1463,14 @@ class _EmployeePersonalInfoDialogState
         medicationAllergies: _medicationAllergiesController.text,
         environmentalAllergies: _environmentalAllergiesController.text,
       );
+      if (_isMinor) {
+        await EmployeeProfileService.setGuardianContact(
+          employeeId,
+          name: _guardianNameController.text,
+          email: _guardianEmailController.text,
+          phone: _guardianPhoneController.text,
+        );
+      }
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (error) {
@@ -1479,6 +1510,36 @@ class _EmployeePersonalInfoDialogState
                   ),
                 ),
               ),
+              if (_isMinor) ...[
+                const SizedBox(height: 20),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Parent/Guardian', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Because you're under 18, your employment contract needs a parent or guardian's "
+                  'signature — this is who we\'ll email.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _guardianNameController,
+                  decoration: const InputDecoration(labelText: "Parent/guardian's name"),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _guardianEmailController,
+                  decoration: const InputDecoration(labelText: "Parent/guardian's email"),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _guardianPhoneController,
+                  decoration: const InputDecoration(labelText: "Parent/guardian's phone (optional)"),
+                  keyboardType: TextInputType.phone,
+                ),
+              ],
               const SizedBox(height: 20),
               const Align(
                 alignment: Alignment.centerLeft,

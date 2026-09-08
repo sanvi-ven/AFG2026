@@ -46,10 +46,13 @@ class EmployeeProfile {
   /// someone with no birthdate on file (see ContractsTab._issueContract).
   final DateTime? dateOfBirth;
 
-  /// owner-only-writable — unlike dateOfBirth, guardian contact stays
-  /// owner-only since a self-editable guardian email would let a minor
-  /// redirect their own contract's guardian consent to an address they
-  /// control, which is a materially worse gap than misstating a birthdate.
+  /// self-editable by the employee (opened up 2026-09-08 by explicit owner
+  /// request) — a known, accepted tradeoff: combined with self-editable
+  /// dateOfBirth above, a minor could in principle self-report both their
+  /// own birthdate and a guardian contact they control, which functionally
+  /// defeats the guardian-consent step on their own contract. There is no
+  /// remaining backstop against that specific scenario; see firestore.rules'
+  /// employee_signups comment for the same note.
   final String guardianName;
   final String guardianEmail;
   final String guardianPhone;

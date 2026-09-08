@@ -126,10 +126,10 @@ class EmployeeProfileService {
         .set({'date_of_birth': dob}, SetOptions(merge: true));
   }
 
-  /// owner action: set an employee's parent/guardian contact info (used for
-  /// the contract co-sign flow when the employee is a minor). Owner-only —
-  /// see firestore.rules, an employee can't redirect guardian consent to an
-  /// email they control.
+  /// set an employee's parent/guardian contact info (used for the contract
+  /// co-sign flow when the employee is a minor) — owner, or the employee
+  /// themselves (self-editable as of 2026-09-08, see firestore.rules and
+  /// EmployeeProfile's doc comment for the accepted tradeoff this creates).
   static Future<void> setGuardianContact(
     String employeeId, {
     String? name,
