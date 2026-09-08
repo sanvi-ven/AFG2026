@@ -47,9 +47,17 @@ class ContractService {
   /// current employment-contract template and the employee's current
   /// DOB/guardian info. Throws if a contract already exists for them — an
   /// existing contract is changed via an amendment, not by re-issuing.
+  ///
+  /// [isMinorOverride] lets the caller supply an explicit adult/minor
+  /// determination instead of trusting [EmployeeProfile.isMinor] — used when
+  /// there's no dateOfBirth on file at all, since isMinor silently defaults
+  /// to "adult" in that case and this is the one place that gap is closed:
+  /// the owner is prompted to pick explicitly rather than it happening
+  /// silently (see ContractsTab._issueContract).
   static Future<void> issueContract({
     required EmployeeProfile employee,
     required String issuedBy,
+    bool? isMinorOverride,
   }) async {
     final normalizedId = employee.employeeId.trim();
     final doc = _collection.doc(normalizedId);
@@ -66,14 +74,15 @@ class ContractService {
           'Set up the employment contract template first, in Owner Settings → Manage Legal Documents.');
     }
 
+    final isMinor = isMinorOverride ?? employee.isMinor;
     final now = DateTime.now();
     final contract = EmploymentContract(
       id: normalizedId,
       employeeId: normalizedId,
       content: content,
       contractVersion: 1,
-      isMinorAtSigning: employee.isMinor,
-      guardianRequired: employee.isMinor,
+      isMinorAtSigning: isMinor,
+      guardianRequired: isMinor,
       guardianName: employee.guardianName,
       guardianEmail: employee.guardianEmail,
       guardianPhone: employee.guardianPhone,

@@ -1317,6 +1317,21 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
                   child: OutlinedButton.icon(
                     onPressed: _isSaving
                         ? null
+                        : () => showDialog<void>(
+                              context: context,
+                              builder: (_) => _EmployeePersonalInfoDialog(
+                                  initialProfile: widget.initialProfile),
+                            ),
+                    icon: const Icon(Icons.badge_outlined, size: 18),
+                    label: const Text('My Info'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving
+                        ? null
                         : () => _requestAccountDeletion(
                               context,
                               roleLabel: 'employee',
@@ -1356,6 +1371,154 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
+              : const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+/// self-service personal/emergency info: address, date of birth, and
+/// allergies (food/medication/environmental), kept separate from the main
+/// Employee Settings dialog since it's a distinct kind of information
+/// (HR/emergency records, not account settings) and is looked at far less
+/// often. Also the entry point an employee uses to self-report their own
+/// date of birth — see EmployeeProfile's doc comment on why that field is
+/// self-editable while guardian contact is not.
+class _EmployeePersonalInfoDialog extends StatefulWidget {
+  const _EmployeePersonalInfoDialog({required this.initialProfile});
+
+  final EmployeeProfile initialProfile;
+
+  @override
+  State<_EmployeePersonalInfoDialog> createState() =>
+      _EmployeePersonalInfoDialogState();
+}
+
+class _EmployeePersonalInfoDialogState
+    extends State<_EmployeePersonalInfoDialog> {
+  late final _addressController =
+      TextEditingController(text: widget.initialProfile.address);
+  late final _foodAllergiesController =
+      TextEditingController(text: widget.initialProfile.foodAllergies);
+  late final _medicationAllergiesController =
+      TextEditingController(text: widget.initialProfile.medicationAllergies);
+  late final _environmentalAllergiesController =
+      TextEditingController(text: widget.initialProfile.environmentalAllergies);
+  late DateTime? _dateOfBirth = widget.initialProfile.dateOfBirth;
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _foodAllergiesController.dispose();
+    _medicationAllergiesController.dispose();
+    _environmentalAllergiesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDateOfBirth() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dateOfBirth ?? DateTime(now.year - 25, now.month, now.day),
+      firstDate: DateTime(now.year - 100),
+      lastDate: now,
+    );
+    if (picked != null) setState(() => _dateOfBirth = picked);
+  }
+
+  Future<void> _save() async {
+    setState(() => _isSaving = true);
+    try {
+      final employeeId = widget.initialProfile.employeeId;
+      await EmployeeProfileService.setDateOfBirth(employeeId, _dateOfBirth);
+      await EmployeeProfileService.updatePersonalInfo(
+        employeeId,
+        address: _addressController.text,
+        foodAllergies: _foodAllergiesController.text,
+        medicationAllergies: _medicationAllergiesController.text,
+        environmentalAllergies: _environmentalAllergiesController.text,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('My Info'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextFormField(
+                controller: _addressController,
+                decoration: const InputDecoration(labelText: 'Address'),
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: _isSaving ? null : _pickDateOfBirth,
+                child: InputDecorator(
+                  decoration: const InputDecoration(labelText: 'Date of birth'),
+                  child: Text(
+                    _dateOfBirth == null
+                        ? 'Not set'
+                        : '${_dateOfBirth!.month}/${_dateOfBirth!.day}/${_dateOfBirth!.year}',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Allergies', style: TextStyle(fontWeight: FontWeight.w600)),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "In case a crew lead or the owner ever needs this in an emergency. Leave blank if none.",
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _foodAllergiesController,
+                decoration: const InputDecoration(labelText: 'Food allergies'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _medicationAllergiesController,
+                decoration: const InputDecoration(labelText: 'Medication allergies'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _environmentalAllergiesController,
+                decoration: const InputDecoration(
+                    labelText: 'Environmental allergies (bee stings, pollen, poison ivy, etc.)'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isSaving ? null : _save,
+          child: _isSaving
+              ? const SizedBox(
+                  width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Save'),
         ),
       ],

@@ -117,8 +117,9 @@ class EmployeeProfileService {
         .set({'archived': false}, SetOptions(merge: true));
   }
 
-  /// owner action: set (or clear) an employee's date of birth. Owner-only —
-  /// see firestore.rules, an employee can't self-edit this.
+  /// set (or clear) an employee's date of birth — owner or the employee
+  /// themselves (see firestore.rules); an owner-facing prompt still catches
+  /// the case where this was never set at all (see ContractsTab._issueContract).
   static Future<void> setDateOfBirth(String employeeId, DateTime? dob) async {
     await _collection
         .doc(employeeId.trim())
@@ -139,6 +140,28 @@ class EmployeeProfileService {
     if (name != null) payload['guardian_name'] = name.trim();
     if (email != null) payload['guardian_email'] = email.trim();
     if (phone != null) payload['guardian_phone'] = phone.trim();
+    if (payload.isEmpty) return;
+    await _collection.doc(employeeId.trim()).set(payload, SetOptions(merge: true));
+  }
+
+  /// self-service: an employee updates their own address and/or allergy
+  /// info. Owner can also call this (e.g. entering it on someone's behalf).
+  static Future<void> updatePersonalInfo(
+    String employeeId, {
+    String? address,
+    String? foodAllergies,
+    String? medicationAllergies,
+    String? environmentalAllergies,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (address != null) payload['address'] = address.trim();
+    if (foodAllergies != null) payload['food_allergies'] = foodAllergies.trim();
+    if (medicationAllergies != null) {
+      payload['medication_allergies'] = medicationAllergies.trim();
+    }
+    if (environmentalAllergies != null) {
+      payload['environmental_allergies'] = environmentalAllergies.trim();
+    }
     if (payload.isEmpty) return;
     await _collection.doc(employeeId.trim()).set(payload, SetOptions(merge: true));
   }

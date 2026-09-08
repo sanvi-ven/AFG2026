@@ -17,6 +17,10 @@ class EmployeeProfile {
     this.guardianName = '',
     this.guardianEmail = '',
     this.guardianPhone = '',
+    this.address = '',
+    this.foodAllergies = '',
+    this.medicationAllergies = '',
+    this.environmentalAllergies = '',
   });
 
   final String employeeId;
@@ -36,13 +40,29 @@ class EmployeeProfile {
   /// entries, pay) stays intact and still resolves through this profile.
   final bool archived;
 
-  /// owner-only-writable (see firestore.rules) — an employee can't self-edit
-  /// their own birthdate or guardian contact, since that would let a minor
-  /// misstate their age or redirect guardian consent to an email they control.
+  /// self-editable by the employee (see firestore.rules) — note this means an
+  /// employee could misstate their own age; the one backstop is the owner
+  /// being prompted to confirm adult/minor status when issuing a contract to
+  /// someone with no birthdate on file (see ContractsTab._issueContract).
   final DateTime? dateOfBirth;
+
+  /// owner-only-writable — unlike dateOfBirth, guardian contact stays
+  /// owner-only since a self-editable guardian email would let a minor
+  /// redirect their own contract's guardian consent to an address they
+  /// control, which is a materially worse gap than misstating a birthdate.
   final String guardianName;
   final String guardianEmail;
   final String guardianPhone;
+
+  /// self-editable by the employee — home address, for HR/emergency records.
+  final String address;
+
+  /// self-editable by the employee — free-text allergy info a crew lead or
+  /// the owner might need in an emergency, kept as three separate categories
+  /// rather than one blob so each is quick to scan.
+  final String foodAllergies;
+  final String medicationAllergies;
+  final String environmentalAllergies;
 
   /// derived, never stored — same reasoning as EquipmentBasket.computeStatus,
   /// so it can't drift out of sync with dateOfBirth.
@@ -116,6 +136,10 @@ class EmployeeProfile {
       guardianName: (map['guardian_name'] as String? ?? '').trim(),
       guardianEmail: (map['guardian_email'] as String? ?? '').trim(),
       guardianPhone: (map['guardian_phone'] as String? ?? '').trim(),
+      address: (map['address'] as String? ?? '').trim(),
+      foodAllergies: (map['food_allergies'] as String? ?? '').trim(),
+      medicationAllergies: (map['medication_allergies'] as String? ?? '').trim(),
+      environmentalAllergies: (map['environmental_allergies'] as String? ?? '').trim(),
     );
   }
 
@@ -135,6 +159,10 @@ class EmployeeProfile {
       'guardian_name': guardianName.trim(),
       'guardian_email': guardianEmail.trim(),
       'guardian_phone': guardianPhone.trim(),
+      'address': address.trim(),
+      'food_allergies': foodAllergies.trim(),
+      'medication_allergies': medicationAllergies.trim(),
+      'environmental_allergies': environmentalAllergies.trim(),
     };
   }
 
@@ -157,6 +185,10 @@ class EmployeeProfile {
     String? guardianName,
     String? guardianEmail,
     String? guardianPhone,
+    String? address,
+    String? foodAllergies,
+    String? medicationAllergies,
+    String? environmentalAllergies,
   }) {
     return EmployeeProfile(
       employeeId: employeeId ?? this.employeeId,
@@ -173,6 +205,10 @@ class EmployeeProfile {
       guardianName: guardianName ?? this.guardianName,
       guardianEmail: guardianEmail ?? this.guardianEmail,
       guardianPhone: guardianPhone ?? this.guardianPhone,
+      address: address ?? this.address,
+      foodAllergies: foodAllergies ?? this.foodAllergies,
+      medicationAllergies: medicationAllergies ?? this.medicationAllergies,
+      environmentalAllergies: environmentalAllergies ?? this.environmentalAllergies,
     );
   }
 }

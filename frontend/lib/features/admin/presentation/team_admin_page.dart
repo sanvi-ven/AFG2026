@@ -272,11 +272,12 @@ class _EmployeesTabState extends State<_EmployeesTab> {
 }
 
 /// date-of-birth + guardian-contact fields for one employee, shown inside
-/// the Employees tab's expandable "Contract info" section — this is how
-/// existing (pre-feature) staff get this data filled in retroactively; new
-/// signups capture it on employee_signup_page.dart instead. Owner-only
-/// writable (see firestore.rules), so this is intentionally not exposed
-/// anywhere in the employee's own self-edit UI.
+/// the Employees tab's expandable "Contract info" section — lets the owner
+/// fill this in on an employee's behalf (existing staff, or a birthdate the
+/// employee hasn't self-entered via their own "My Info" section in Employee
+/// Settings). Guardian contact stays owner-only (see firestore.rules) even
+/// though date_of_birth itself is self-editable now — see EmployeeProfile's
+/// own doc comments for why those two fields are treated differently.
 class _ContractInfoFields extends StatefulWidget {
   const _ContractInfoFields({required this.employee});
 
@@ -1073,8 +1074,48 @@ class _ContractsTab extends StatefulWidget {
 
 class _ContractsTabState extends State<_ContractsTab> {
   Future<void> _issueContract(EmployeeProfile employee) async {
+    // isMinor silently defaults to "adult" when dateOfBirth is unset — ask
+    // explicitly here instead of letting that happen without anyone noticing.
+    bool? isMinorOverride;
+    if (employee.dateOfBirth == null) {
+      isMinorOverride = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          title: const Text('Adult or minor?'),
+          content: Text(
+            'No birth date is on file for ${employee.fullName}. Is ${employee.firstName.isEmpty ? 'this employee' : employee.firstName} '
+            'an adult (18+) or a minor? This determines whether a parent/guardian needs to co-sign.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Adult'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Minor'),
+            ),
+          ],
+        ),
+      );
+      if (isMinorOverride == null) return; // dialog dismissed without a choice
+      if (isMinorOverride == true && employee.guardianEmail.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Add a guardian email in Contract Info before issuing a contract to a minor.')));
+        }
+        return;
+      }
+    }
+
     try {
-      await ContractService.issueContract(employee: employee, issuedBy: 'owner');
+      await ContractService.issueContract(
+        employee: employee,
+        issuedBy: 'owner',
+        isMinorOverride: isMinorOverride,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Contract issued for ${employee.fullName}.')));
