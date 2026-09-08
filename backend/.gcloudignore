@@ -1,0 +1,18 @@
+# Mirrors the root .gitignore's exclusions for this directory — without this
+# file, `gcloud run deploy --source backend` uploads everything under
+# backend/ as the build context, including .venv (a full virtualenv with
+# thousands of files) and any local secrets. Neither should ever be part of
+# a Cloud Build upload.
+
+.venv/
+__pycache__/
+*.py[cod]
+*.log
+
+.env
+.env.*
+service-account.json
+service-account*.json
+
+.git/
+.gitignore
