@@ -1,4 +1,5 @@
 import io
+import os
 from typing import Optional
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, Request, UploadFile, status
@@ -99,8 +100,16 @@ async def upload_photo(
     else:
         _validate_real_image(file_bytes)
 
+    # only meaningful for resource_type="raw" — see upload_photo's own doc
+    # comment for why a raw upload needs an explicit public_id carrying the
+    # real extension. os.path.basename strips any path components a caller
+    # could otherwise smuggle into a Cloudinary public_id via the filename.
+    public_id = os.path.basename(file.filename) if file.filename else None
+
     try:
-        url = photo_service.upload_photo(file_bytes, folder, resource_type=resource_type)
+        url = photo_service.upload_photo(
+            file_bytes, folder, resource_type=resource_type, public_id=public_id
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     return {"url": url}

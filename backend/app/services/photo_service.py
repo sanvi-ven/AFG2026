@@ -26,10 +26,29 @@ class PhotoService:
     convention previously used for Firebase Storage paths (job_photos/{workId}/{phase},
     request_photos/{requestId})"""
 
-    def upload_photo(self, file_bytes: bytes, folder: str, resource_type: str = "image") -> str:
+    def upload_photo(
+        self,
+        file_bytes: bytes,
+        folder: str,
+        resource_type: str = "image",
+        public_id: str | None = None,
+    ) -> str:
         _ensure_configured()
         try:
-            result = cloudinary.uploader.upload(file_bytes, folder=folder, resource_type=resource_type)
+            # for resource_type="raw" (PDFs), Cloudinary does NOT infer a
+            # file extension from the actual content the way it does for
+            # images (an image delivery URL gets .jpg/.png appended
+            # automatically based on the detected format; a raw one doesn't,
+            # unless the public_id itself carries the extension) - without
+            # this, a PDF's delivery URL has no .pdf in it at all, and
+            # browsers that can't sniff the content type render the raw
+            # bytes as text instead of opening a PDF viewer. public_id is
+            # only passed for raw uploads - image uploads keep their
+            # existing Cloudinary-assigned ids unchanged.
+            upload_kwargs = {"folder": folder, "resource_type": resource_type}
+            if resource_type == "raw" and public_id:
+                upload_kwargs["public_id"] = public_id
+            result = cloudinary.uploader.upload(file_bytes, **upload_kwargs)
         except Exception as exc:
             # never surface the raw Cloudinary exception to a caller.
             # RuntimeError here is what /photos/upload already knows how to
