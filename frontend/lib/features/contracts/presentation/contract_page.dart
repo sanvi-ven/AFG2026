@@ -7,6 +7,7 @@ import '../../../core/services/contract_amendment_service.dart';
 import '../../../core/services/contract_api_service.dart';
 import '../../../core/services/contract_pdf_service.dart';
 import '../../../core/services/contract_service.dart';
+import '../../../core/services/contract_upload_service.dart';
 import '../../../models/contract_amendment.dart';
 import '../../../models/employment_contract.dart';
 import '../../../shared/widgets/contract_signature_form.dart';
@@ -105,15 +106,28 @@ class _ContractPageState extends State<ContractPage> {
     // an uploaded paper contract has no real `content` to render into a PDF
     // (recordUploadedContract creates it empty) — open the actual uploaded
     // file directly instead of generating a broken wrapper PDF around
-    // nothing.
-    final uploadedUrl = contract.uploadedFile?.url;
-    if (uploadedUrl != null) {
-      final uri = Uri.parse(uploadedUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Could not open the uploaded file.')));
+    // nothing. The stored URL itself isn't directly fetchable for a raw
+    // (PDF) upload — see ContractUploadService.resolveViewableUrl's doc
+    // comment — so ask the backend for a working link right before opening
+    // it, rather than trusting what's stored on the contract.
+    if (contract.uploadedFile != null) {
+      setState(() => _isDownloading = true);
+      try {
+        final url = await ContractUploadService.resolveViewableUrl(widget.employeeId);
+        final uri = Uri.parse(url);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('Could not open the uploaded file.')));
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('Failed to open file: $error')));
+        }
+      } finally {
+        if (mounted) setState(() => _isDownloading = false);
       }
       return;
     }

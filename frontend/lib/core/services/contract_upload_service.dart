@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 import '../config/app_config.dart';
+import 'api_client.dart';
 
 /// uploads a scan/photo or PDF of an already-signed paper employment
 /// contract — the one folder backend/app/api/v1/routes/photos.py accepts a
@@ -84,5 +85,24 @@ class ContractUploadService {
     final bytes = await file.readAsBytes();
 
     return _uploadBytes(bytes: bytes, employeeId: employeeId, extension: 'pdf');
+  }
+
+  /// resolves an uploaded contract's stored URL into one that's actually
+  /// fetchable right now. A PDF's plain stored URL 401s when opened
+  /// directly — Cloudinary's account-level security settings block public
+  /// delivery of raw files — so this asks the backend for a freshly-signed
+  /// link each time the file is actually about to be viewed/downloaded,
+  /// rather than trusting the URL stored on the contract at upload time.
+  /// An uploaded photo's URL comes back unchanged, no signing needed.
+  static Future<String> resolveViewableUrl(String employeeId) async {
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    final client = ApiClient(baseUrl: AppConfig.apiBaseUrl, authToken: token);
+    final response = await client
+        .getJson('/api/v1/photos/contract-document-link?employee_id=${Uri.encodeQueryComponent(employeeId)}');
+    final url = response['url'] as String?;
+    if (url == null) {
+      throw Exception('No uploaded file found.');
+    }
+    return url;
   }
 }

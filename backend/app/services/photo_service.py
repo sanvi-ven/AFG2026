@@ -1,5 +1,6 @@
 import cloudinary
 import cloudinary.uploader
+import cloudinary.utils
 
 from app.core.config import settings
 
@@ -54,4 +55,33 @@ class PhotoService:
             # RuntimeError here is what /photos/upload already knows how to
             # turn into a clean 503.
             raise RuntimeError("Failed to upload photo.") from exc
+
+        # NOTE on raw (PDF) delivery: the stored secure_url below is NOT
+        # directly fetchable for resource_type="raw" on this account -
+        # Cloudinary's "Restricted media types" account setting blocks
+        # public delivery of raw files (confirmed live: 401, "x-cld-error:
+        # deny or ACL failure"), and neither a signed CDN URL
+        # (cloudinary.utils.cloudinary_url(..., sign_url=True)) nor HTTP
+        # Basic Auth on that same CDN URL bypasses it - both tested live and
+        # still 401. What DOES work is Cloudinary's separate Admin API
+        # download endpoint (cloudinary.utils.private_download_url, served
+        # from api.cloudinary.com rather than the res.cloudinary.com CDN) -
+        # see get_contract_document_link() in routes/photos.py, which
+        # generates a fresh one of those on demand. That endpoint's
+        # signature is timestamp-bound, so it can't be generated once here
+        # and cached in this URL - it must be requested fresh each time a
+        # raw file is actually opened, which is exactly what that route
+        # does using the public_id embedded in this stored URL.
         return result["secure_url"]
+
+    def get_raw_download_link(self, public_id: str, format: str) -> str:
+        """generates a fresh, signed Admin-API download link for a raw
+        resource (served from api.cloudinary.com, not the restricted
+        res.cloudinary.com CDN) — see upload_photo's doc comment for why
+        this can't just be generated once and cached. The signature is
+        timestamp-bound, so callers must request a new one each time the
+        file is actually about to be opened, not reuse an old result."""
+        _ensure_configured()
+        return cloudinary.utils.private_download_url(
+            public_id, format, resource_type="raw", type="upload"
+        )
