@@ -84,9 +84,11 @@ class ContractAmendmentService {
     return doc.id;
   }
 
-  /// employee action: initial an amendment. Advances status to
-  /// pendingGuardianInitial if required, otherwise straight to
-  /// fullyInitialed — the owner still has to explicitly apply it from there.
+  /// employee action: initial an amendment. Recomputes status from both
+  /// initials, not just "is a guardian required" — same reasoning as
+  /// ContractService.submitEmployeeSignature: the guardian can initial
+  /// before the employee does, and this must check whether guardianInitials
+  /// is already there rather than always assuming it still needs to happen.
   static Future<void> submitEmployeeInitial({
     required String amendmentId,
     required ContractSignature initials,
@@ -102,9 +104,9 @@ class ContractAmendmentService {
       throw Exception('This amendment has already been initialed.');
     }
 
-    final newStatus = amendment.guardianRequired
-        ? AmendmentStatus.pendingGuardianInitial
-        : AmendmentStatus.fullyInitialed;
+    final stillNeedsGuardian = amendment.guardianRequired && amendment.guardianInitials == null;
+    final newStatus =
+        stillNeedsGuardian ? AmendmentStatus.pendingGuardianInitial : AmendmentStatus.fullyInitialed;
     await doc.set(
       {
         'employeeInitials': initials.toMap(),

@@ -124,11 +124,26 @@ def guardian_sign(request: Request, payload: GuardianSignRequest) -> SendGuardia
     _check_not_expired(record, kind)
 
     signature_field = "guardianSignature" if kind == "contract" else "guardianInitials"
+    employee_field = "employeeSignature" if kind == "contract" else "employeeInitials"
     fully_status = "fully_signed" if kind == "contract" else "fully_initialed"
+    pending_employee_status = (
+        "pending_employee_signature" if kind == "contract" else "pending_employee_initial"
+    )
+    # the employee can sign/initial before or after the guardian - there's
+    # nothing that forces the guardian's emailed link to be opened second -
+    # so the status after the guardian acts must reflect whether the
+    # employee side is already done too, not just "guardian required".
+    employee_already_done = record.get(employee_field) is not None
+    new_status = fully_status if employee_already_done else pending_employee_status
 
     # idempotent on repeat submits — a guardian re-clicking an old email tab
-    # after already signing should see success again, not an error
+    # after already signing should see success again, not an error. Also
+    # opportunistically fixes status here if an older bug ever left it out
+    # of sync (previously: signing order guardian-then-employee could leave
+    # status stuck on "pending guardian" forever even once both had signed).
     if record.get(signature_field) is not None:
+        if record.get("status") != new_status:
+            repo.update(record["id"], {"status": new_status})
         return SendGuardianLinkResult(sent=True)
 
     signature_payload = {
@@ -138,7 +153,7 @@ def guardian_sign(request: Request, payload: GuardianSignRequest) -> SendGuardia
         "consentText": payload.consent_text.strip(),
         "signedAt": datetime.utcnow(),
     }
-    repo.update(record["id"], {signature_field: signature_payload, "status": fully_status})
+    repo.update(record["id"], {signature_field: signature_payload, "status": new_status})
     return SendGuardianLinkResult(sent=True)
 
 

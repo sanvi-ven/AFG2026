@@ -94,9 +94,14 @@ class ContractService {
     await doc.set(contract.toMap());
   }
 
-  /// employee action: submit their own signature. Recomputes status —
-  /// guardian required and not yet signed moves to pendingGuardianSignature,
-  /// otherwise straight to fullySigned.
+  /// employee action: submit their own signature. Recomputes status from
+  /// both signatures, not just "is a guardian required" — the guardian can
+  /// sign before the employee does (there's nothing stopping them opening
+  /// the emailed link first), so this must check whether guardianSignature
+  /// is already there rather than always assuming it still needs to happen.
+  /// Getting this wrong previously meant an employee signing after their
+  /// already-signed guardian reset status back to "pending guardian
+  /// signature" forever, since nothing re-checked it from that point on.
   static Future<void> submitEmployeeSignature({
     required String employeeId,
     required ContractSignature signature,
@@ -113,9 +118,9 @@ class ContractService {
       throw Exception('This contract has already been signed.');
     }
 
-    final newStatus = contract.guardianRequired
-        ? ContractStatus.pendingGuardianSignature
-        : ContractStatus.fullySigned;
+    final stillNeedsGuardian = contract.guardianRequired && contract.guardianSignature == null;
+    final newStatus =
+        stillNeedsGuardian ? ContractStatus.pendingGuardianSignature : ContractStatus.fullySigned;
     await doc.set(
       {
         'employeeSignature': signature.toMap(),
