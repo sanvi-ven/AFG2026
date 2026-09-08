@@ -1,8 +1,13 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/services/client_profile_service.dart';
+import '../../../core/services/contract_amendment_service.dart';
+import '../../../core/services/contract_api_service.dart';
+import '../../../core/services/contract_service.dart';
+import '../../../core/services/contract_upload_service.dart';
 import '../../../core/services/employee_profile_service.dart';
 import '../../../core/services/invite_code_service.dart';
 import '../../../core/services/job_completion_service.dart';
@@ -11,7 +16,9 @@ import '../../../core/services/scheduled_work_service.dart';
 import '../../../core/services/team_service.dart';
 import '../../../core/services/time_entry_service.dart';
 import '../../../models/client_profile.dart';
+import '../../../models/contract_amendment.dart';
 import '../../../models/employee_profile.dart';
+import '../../../models/employment_contract.dart';
 import '../../../models/invite_code.dart';
 import '../../../models/job_completion_form.dart';
 import '../../../models/scheduled_work.dart';
@@ -20,6 +27,7 @@ import '../../../models/time_entry.dart';
 import '../../../shared/utils/time_entry_pay_format.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/archived_badge.dart';
+import '../../../shared/widgets/contract_status_badge.dart';
 import '../../../shared/widgets/csv_export_buttons.dart';
 
 /// owner-only admin hub: employee roster, teams, invite codes,
@@ -36,7 +44,7 @@ class TeamAdminPage extends StatelessWidget {
       return const SizedBox.shrink();
     }
     return DefaultTabController(
-      length: 5,
+      length: 6,
       child: AppScaffold(
         title: 'Team',
         role: role,
@@ -54,6 +62,7 @@ class TeamAdminPage extends StatelessWidget {
                   Tab(text: 'Invite Codes'),
                   Tab(text: 'Job Completions'),
                   Tab(text: 'Time Entries'),
+                  Tab(text: 'Contracts'),
                 ],
               ),
             ),
@@ -65,6 +74,7 @@ class TeamAdminPage extends StatelessWidget {
                   const _InviteCodesTab(),
                   _JobCompletionsTab(role: role, authToken: authToken),
                   const _TimeEntriesTab(),
+                  _ContractsTab(authToken: authToken),
                 ],
               ),
             ),
@@ -167,6 +177,19 @@ class _EmployeesTabState extends State<_EmployeesTab> {
                 double.tryParse(value.trim()),
               ),
             ),
+            const SizedBox(height: 8),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: Row(
+                children: [
+                  const Text('Contract info', style: TextStyle(fontSize: 13)),
+                  const SizedBox(width: 8),
+                  ContractStatusBadge(employeeId: employee.employeeId),
+                ],
+              ),
+              childrenPadding: const EdgeInsets.only(bottom: 8),
+              children: [_ContractInfoFields(employee: employee)],
+            ),
           ],
         ),
       ),
@@ -244,6 +267,101 @@ class _EmployeesTabState extends State<_EmployeesTab> {
           },
         );
       },
+    );
+  }
+}
+
+/// date-of-birth + guardian-contact fields for one employee, shown inside
+/// the Employees tab's expandable "Contract info" section — this is how
+/// existing (pre-feature) staff get this data filled in retroactively; new
+/// signups capture it on employee_signup_page.dart instead. Owner-only
+/// writable (see firestore.rules), so this is intentionally not exposed
+/// anywhere in the employee's own self-edit UI.
+class _ContractInfoFields extends StatefulWidget {
+  const _ContractInfoFields({required this.employee});
+
+  final EmployeeProfile employee;
+
+  @override
+  State<_ContractInfoFields> createState() => _ContractInfoFieldsState();
+}
+
+class _ContractInfoFieldsState extends State<_ContractInfoFields> {
+  late final _guardianNameController =
+      TextEditingController(text: widget.employee.guardianName);
+  late final _guardianEmailController =
+      TextEditingController(text: widget.employee.guardianEmail);
+  late final _guardianPhoneController =
+      TextEditingController(text: widget.employee.guardianPhone);
+
+  @override
+  void dispose() {
+    _guardianNameController.dispose();
+    _guardianEmailController.dispose();
+    _guardianPhoneController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDateOfBirth() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: widget.employee.dateOfBirth ?? DateTime(now.year - 30, now.month, now.day),
+      firstDate: DateTime(now.year - 100),
+      lastDate: now,
+    );
+    if (picked != null) {
+      await EmployeeProfileService.setDateOfBirth(widget.employee.employeeId, picked);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: _pickDateOfBirth,
+          child: InputDecorator(
+            decoration: const InputDecoration(
+                labelText: 'Date of birth', border: OutlineInputBorder()),
+            child: Text(
+              widget.employee.dateOfBirth == null
+                  ? 'Not set'
+                  : '${widget.employee.dateOfBirth!.month}/${widget.employee.dateOfBirth!.day}/${widget.employee.dateOfBirth!.year}'
+                      '${widget.employee.isMinor ? ' (minor)' : ''}',
+            ),
+          ),
+        ),
+        if (widget.employee.isMinor) ...[
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _guardianNameController,
+            decoration: const InputDecoration(
+                labelText: "Parent/guardian's name", border: OutlineInputBorder()),
+            onFieldSubmitted: (value) => EmployeeProfileService.setGuardianContact(
+                widget.employee.employeeId, name: value),
+          ),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _guardianEmailController,
+            decoration: const InputDecoration(
+                labelText: "Parent/guardian's email", border: OutlineInputBorder()),
+            keyboardType: TextInputType.emailAddress,
+            onFieldSubmitted: (value) => EmployeeProfileService.setGuardianContact(
+                widget.employee.employeeId, email: value),
+          ),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _guardianPhoneController,
+            decoration: const InputDecoration(
+                labelText: "Parent/guardian's phone", border: OutlineInputBorder()),
+            keyboardType: TextInputType.phone,
+            onFieldSubmitted: (value) => EmployeeProfileService.setGuardianContact(
+                widget.employee.employeeId, phone: value),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -936,6 +1054,428 @@ class _EditTimeEntryDialogState extends State<_EditTimeEntryDialog> {
                   child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Save'),
         ),
+      ],
+    );
+  }
+}
+
+/// owner-only roster view of every employee's employment contract, merged
+/// client-side from three streams (employees, contracts, amendments) — same
+/// "one stream, split client-side" approach the archiving feature uses.
+class _ContractsTab extends StatefulWidget {
+  const _ContractsTab({required this.authToken});
+
+  final String? authToken;
+
+  @override
+  State<_ContractsTab> createState() => _ContractsTabState();
+}
+
+class _ContractsTabState extends State<_ContractsTab> {
+  Future<void> _issueContract(EmployeeProfile employee) async {
+    try {
+      await ContractService.issueContract(employee: employee, issuedBy: 'owner');
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Contract issued for ${employee.fullName}.')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+      }
+    }
+  }
+
+  void _viewContract(EmployeeProfile employee) {
+    Navigator.pushNamed(
+      context,
+      AppRouter.contractDetail,
+      arguments: {
+        'role': 'owner',
+        'authToken': widget.authToken,
+        'employeeId': employee.employeeId,
+      },
+    );
+  }
+
+  Future<void> _uploadPaperContract(EmployeeProfile employee) async {
+    try {
+      final url =
+          await ContractUploadService.pickAndUploadPaperContract(employeeId: employee.employeeId);
+      if (url == null) return;
+      await ContractService.recordUploadedContract(
+        employeeId: employee.employeeId,
+        url: url,
+        uploadedBy: 'owner',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Paper contract uploaded.')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Upload failed: $error')));
+      }
+    }
+  }
+
+  Future<void> _sendGuardianLink(String recordId) async {
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    if (token == null) return;
+    try {
+      await ContractApiService.sendGuardianLink(recordId: recordId, authToken: token);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Link sent to the guardian.')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to send link: $error')));
+      }
+    }
+  }
+
+  Future<void> _draftAmendment(EmploymentContract contract) async {
+    final draft = await showDialog<_AmendmentDraft>(
+      context: context,
+      builder: (_) => _DraftAmendmentDialog(contract: contract),
+    );
+    if (draft == null) return;
+    try {
+      await ContractAmendmentService.draftAmendment(
+        contract: contract,
+        changedSections: draft.sections,
+        fullContentSnapshot: draft.fullContent,
+        isMinorAtSigning: contract.isMinorAtSigning,
+        guardianRequired: contract.guardianRequired,
+        guardianName: contract.guardianName,
+        guardianEmail: contract.guardianEmail,
+        guardianPhone: contract.guardianPhone,
+        createdBy: 'owner',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Amendment drafted.')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+      }
+    }
+  }
+
+  Future<void> _applyAmendment(ContractAmendment amendment) async {
+    try {
+      await ContractAmendmentService.applyAmendmentToContract(amendment);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Amendment applied.')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+      }
+    }
+  }
+
+  String _amendmentStatusLabel(String status) {
+    return status == AmendmentStatus.pendingGuardianInitial
+        ? 'awaiting guardian initial'
+        : 'awaiting employee initial';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<EmployeeProfile>>(
+      stream: EmployeeProfileService.watchAllProfiles(),
+      builder: (context, employeeSnapshot) {
+        final employees = (employeeSnapshot.data ?? const <EmployeeProfile>[])
+            .where((e) => !e.archived)
+            .toList()
+          ..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+
+        return StreamBuilder<List<EmploymentContract>>(
+          stream: ContractService.watchAllContracts(),
+          builder: (context, contractSnapshot) {
+            final contractsByEmployee = <String, EmploymentContract>{
+              for (final c in contractSnapshot.data ?? const <EmploymentContract>[])
+                c.employeeId: c,
+            };
+
+            return StreamBuilder<List<ContractAmendment>>(
+              stream: ContractAmendmentService.watchAllAmendments(),
+              builder: (context, amendmentSnapshot) {
+                final allAmendments = amendmentSnapshot.data ?? const <ContractAmendment>[];
+                final pendingByEmployee = <String, ContractAmendment>{};
+                final appliableByEmployee = <String, ContractAmendment>{};
+                for (final amendment in allAmendments) {
+                  if (!amendment.isFullyInitialed) {
+                    final existing = pendingByEmployee[amendment.employeeId];
+                    if (existing == null || amendment.createdAt.isAfter(existing.createdAt)) {
+                      pendingByEmployee[amendment.employeeId] = amendment;
+                    }
+                    continue;
+                  }
+                  final contract = contractsByEmployee[amendment.employeeId];
+                  if (contract != null && contract.contractVersion < amendment.version) {
+                    appliableByEmployee[amendment.employeeId] = amendment;
+                  }
+                }
+
+                if (employees.isEmpty) {
+                  return const Center(
+                      child: Padding(
+                          padding: EdgeInsets.all(24), child: Text('No employees yet.')));
+                }
+
+                return ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    for (final employee in employees)
+                      _contractCard(
+                        employee,
+                        contractsByEmployee[employee.employeeId],
+                        pendingByEmployee[employee.employeeId],
+                        appliableByEmployee[employee.employeeId],
+                      ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _contractCard(
+    EmployeeProfile employee,
+    EmploymentContract? contract,
+    ContractAmendment? pendingAmendment,
+    ContractAmendment? appliableAmendment,
+  ) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                    child: Text(employee.fullName,
+                        style: const TextStyle(fontWeight: FontWeight.w700))),
+                ContractStatusBadge(employeeId: employee.employeeId),
+              ],
+            ),
+            if (employee.isMinor)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  employee.guardianEmail.isEmpty
+                      ? 'Minor — no guardian email on file'
+                      : 'Minor — guardian: ${employee.guardianEmail}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                if (contract == null)
+                  FilledButton(
+                      onPressed: () => _issueContract(employee),
+                      child: const Text('Issue contract'))
+                else ...[
+                  OutlinedButton(
+                      onPressed: () => _viewContract(employee),
+                      child: const Text('View / Download')),
+                  if (contract.guardianRequired &&
+                      contract.guardianSignature == null &&
+                      contract.guardianEmail.isNotEmpty)
+                    OutlinedButton(
+                      onPressed: () => _sendGuardianLink(contract.id),
+                      child: Text(contract.guardianSignTokenSentAt == null
+                          ? 'Send guardian link'
+                          : 'Resend guardian link'),
+                    ),
+                  if (contract.isFullySigned &&
+                      pendingAmendment == null &&
+                      appliableAmendment == null)
+                    OutlinedButton(
+                        onPressed: () => _draftAmendment(contract),
+                        child: const Text('Draft amendment')),
+                ],
+                TextButton(
+                    onPressed: () => _uploadPaperContract(employee),
+                    child: const Text('Upload paper contract')),
+              ],
+            ),
+            if (pendingAmendment != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Amendment pending: ${_amendmentStatusLabel(pendingAmendment.status)}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            if (appliableAmendment != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text('Amendment fully initialed — ready to apply.',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ),
+                    TextButton(
+                        onPressed: () => _applyAmendment(appliableAmendment),
+                        child: const Text('Apply')),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AmendmentDraft {
+  const _AmendmentDraft({required this.sections, required this.fullContent});
+  final List<AmendmentChangedSection> sections;
+  final String fullContent;
+}
+
+class _ChangedSectionRow {
+  final headingController = TextEditingController();
+  final previousController = TextEditingController();
+  final newController = TextEditingController();
+
+  void dispose() {
+    headingController.dispose();
+    previousController.dispose();
+    newController.dispose();
+  }
+}
+
+/// owner dialog for drafting a contract amendment — changed sections are
+/// entered manually (per the approved plan's decision, no auto-diff engine).
+class _DraftAmendmentDialog extends StatefulWidget {
+  const _DraftAmendmentDialog({required this.contract});
+
+  final EmploymentContract contract;
+
+  @override
+  State<_DraftAmendmentDialog> createState() => _DraftAmendmentDialogState();
+}
+
+class _DraftAmendmentDialogState extends State<_DraftAmendmentDialog> {
+  late final _fullContentController = TextEditingController(text: widget.contract.content);
+  final List<_ChangedSectionRow> _rows = [_ChangedSectionRow()];
+  String? _error;
+
+  @override
+  void dispose() {
+    _fullContentController.dispose();
+    for (final row in _rows) {
+      row.dispose();
+    }
+    super.dispose();
+  }
+
+  void _addRow() => setState(() => _rows.add(_ChangedSectionRow()));
+
+  void _submit() {
+    final sections = <AmendmentChangedSection>[];
+    for (final row in _rows) {
+      final heading = row.headingController.text.trim();
+      final newText = row.newController.text.trim();
+      if (heading.isEmpty || newText.isEmpty) continue;
+      sections.add(AmendmentChangedSection(
+        sectionHeading: heading,
+        previousText: row.previousController.text.trim(),
+        newText: newText,
+      ));
+    }
+    if (sections.isEmpty) {
+      setState(() => _error = 'Describe at least one changed section.');
+      return;
+    }
+    if (_fullContentController.text.trim().isEmpty) {
+      setState(() => _error = 'The full updated contract text is required.');
+      return;
+    }
+    Navigator.of(context)
+        .pop(_AmendmentDraft(sections: sections, fullContent: _fullContentController.text));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Draft Amendment'),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('What changed', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 8),
+              for (final row in _rows) ...[
+                TextField(
+                  controller: row.headingController,
+                  decoration:
+                      const InputDecoration(labelText: 'Section', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: row.previousController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                      labelText: 'Previous text (optional)', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: row.newController,
+                  maxLines: 2,
+                  decoration:
+                      const InputDecoration(labelText: 'New text', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _addRow,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add another changed section'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text('Full updated contract text', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _fullContentController,
+                maxLines: 10,
+                decoration: const InputDecoration(border: OutlineInputBorder()),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        FilledButton(onPressed: _submit, child: const Text('Draft')),
       ],
     );
   }

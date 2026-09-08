@@ -170,6 +170,40 @@ service cloud.firestore {
       allow delete: if isOwner() || isOwnEmployee(resource.data.employeeId);
     }
 
+    // Employment contracts (added 2026-09). Owner always issues a contract —
+    // an employee never authors its content, only ever fills in their own
+    // signature. The `employeeSignature == null` guard on update makes a
+    // signature immutable via the client SDK once set (a correction becomes
+    // an owner-only action) — the closest a rule can get to "not silently
+    // replaceable," which matters for the audit-trail story. The guardian
+    // co-signer never has a Firebase Auth account and never writes through
+    // these rules at all — see backend/app/api/v1/routes/contracts.py, which
+    // verifies a mailed one-time token server-side via the Admin SDK instead.
+    match /employment_contracts/{document=**} {
+      allow read: if isOwner() || isOwnEmployee(resource.data.employeeId);
+      allow create: if isOwner();
+      allow update: if isOwner() ||
+        (isOwnEmployee(resource.data.employeeId) &&
+         onlyChanged(['employeeSignature', 'status', 'updatedAt']) &&
+         resource.data.employeeSignature == null &&
+         request.resource.data.status in ['pending_guardian_signature', 'fully_signed']);
+      allow delete: if isOwner();
+    }
+
+    // Amendments to an already-signed employment contract, requiring a fresh
+    // initial from the employee (and guardian, if still required) before it
+    // takes effect. Same write-integrity shape as employment_contracts above,
+    // scoped to employeeInitials instead of employeeSignature.
+    match /contract_amendments/{document=**} {
+      allow read: if isOwner() || isOwnEmployee(resource.data.employeeId);
+      allow create: if isOwner();
+      allow update: if isOwner() ||
+        (isOwnEmployee(resource.data.employeeId) &&
+         onlyChanged(['employeeInitials', 'status', 'updatedAt']) &&
+         resource.data.employeeInitials == null);
+      allow delete: if isOwner();
+    }
+
     // Collaborative staff-shared data — zero ownership checks anywhere in
     // the app for any of these today, and equipment_catalog_page.dart's own
     // doc comment states "full parity between owner and employee" is the

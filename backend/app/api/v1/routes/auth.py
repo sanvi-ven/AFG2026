@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
@@ -97,6 +98,15 @@ def complete_signup(
             "address": address,
         })
     elif payload.role == "employee":
+        date_of_birth = None
+        if payload.date_of_birth:
+            try:
+                date_of_birth = datetime.fromisoformat(payload.date_of_birth.strip())
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="date_of_birth must be an ISO date (YYYY-MM-DD).",
+                )
         record = employee_repo.create({
             "uid": uid,
             "email": email,
@@ -105,6 +115,10 @@ def complete_signup(
             "phone_number": phone_number,
             "teamId": None,
             "active": True,
+            "date_of_birth": date_of_birth,
+            "guardian_name": payload.guardian_name.strip(),
+            "guardian_email": payload.guardian_email.strip(),
+            "guardian_phone": payload.guardian_phone.strip(),
         })
     else:
         # owner has no separate profile collection — the users record above

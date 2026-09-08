@@ -26,9 +26,35 @@ class _EmployeeSignupPageState extends State<EmployeeSignupPage> {
   final _inviteCodeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _guardianNameController = TextEditingController();
+  final _guardianEmailController = TextEditingController();
+  final _guardianPhoneController = TextEditingController();
+  DateTime? _dateOfBirth;
   bool _isSubmitting = false;
   bool _agreedToTerms = false;
   String? _error;
+
+  bool get _isMinor {
+    final dob = _dateOfBirth;
+    if (dob == null) return false;
+    final today = DateTime.now();
+    var age = today.year - dob.year;
+    if (today.month < dob.month || (today.month == dob.month && today.day < dob.day)) {
+      age--;
+    }
+    return age < 18;
+  }
+
+  Future<void> _pickDateOfBirth() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dateOfBirth ?? DateTime(now.year - 16, now.month, now.day),
+      firstDate: DateTime(now.year - 100),
+      lastDate: now,
+    );
+    if (picked != null) setState(() => _dateOfBirth = picked);
+  }
 
   bool _looksLikeEmail(String value) {
     final trimmed = value.trim();
@@ -49,6 +75,9 @@ class _EmployeeSignupPageState extends State<EmployeeSignupPage> {
     _inviteCodeController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _guardianNameController.dispose();
+    _guardianEmailController.dispose();
+    _guardianPhoneController.dispose();
     super.dispose();
   }
 
@@ -79,6 +108,10 @@ class _EmployeeSignupPageState extends State<EmployeeSignupPage> {
         lastName: _lastNameController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
         inviteCode: _inviteCodeController.text.trim(),
+        dateOfBirth: _dateOfBirth,
+        guardianName: _guardianNameController.text.trim(),
+        guardianEmail: _guardianEmailController.text.trim(),
+        guardianPhone: _guardianPhoneController.text.trim(),
       );
       final savedProfile = EmployeeProfile.fromMap(response);
       EmployeeSession.setProfile(savedProfile);
@@ -187,6 +220,49 @@ class _EmployeeSignupPageState extends State<EmployeeSignupPage> {
                     keyboardType: TextInputType.phone,
                     validator: (value) => (value == null || value.trim().isEmpty) ? 'Phone is required' : null,
                   ),
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: _pickDateOfBirth,
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Date of birth (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                      child: Text(
+                        _dateOfBirth == null
+                            ? 'Not set'
+                            : '${_dateOfBirth!.month}/${_dateOfBirth!.day}/${_dateOfBirth!.year}',
+                      ),
+                    ),
+                  ),
+                  if (_isMinor) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      "Because you're under 18, a parent or guardian will need to co-sign your "
+                      'employment contract by email after you sign up.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _guardianNameController,
+                      decoration: const InputDecoration(
+                          labelText: "Parent/guardian's name", border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _guardianEmailController,
+                      decoration: const InputDecoration(
+                          labelText: "Parent/guardian's email", border: OutlineInputBorder()),
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _guardianPhoneController,
+                      decoration: const InputDecoration(
+                          labelText: "Parent/guardian's phone (optional)", border: OutlineInputBorder()),
+                      keyboardType: TextInputType.phone,
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _passwordController,

@@ -1292,6 +1292,31 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
                   child: OutlinedButton.icon(
                     onPressed: _isSaving
                         ? null
+                        : () async {
+                            final token =
+                                await FirebaseAuth.instance.currentUser?.getIdToken();
+                            if (!context.mounted) return;
+                            Navigator.of(context).pop();
+                            Navigator.pushNamed(
+                              context,
+                              AppRouter.contractDetail,
+                              arguments: {
+                                'role': 'employee',
+                                'authToken': token,
+                                'employeeId': widget.initialProfile.employeeId,
+                              },
+                            );
+                          },
+                    icon: const Icon(Icons.description_outlined, size: 18),
+                    label: const Text('My Employment Contract'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving
+                        ? null
                         : () => _requestAccountDeletion(
                               context,
                               roleLabel: 'employee',

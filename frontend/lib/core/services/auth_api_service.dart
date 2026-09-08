@@ -20,6 +20,10 @@ class AuthApiService {
     String phoneNumber = '',
     String address = '',
     String? inviteCode,
+    DateTime? dateOfBirth,
+    String guardianName = '',
+    String guardianEmail = '',
+    String guardianPhone = '',
   }) {
     final client = ApiClient(baseUrl: AppConfig.apiBaseUrl, authToken: idToken);
     return client.postJson('/api/v1/auth/complete-signup', {
@@ -29,6 +33,12 @@ class AuthApiService {
       'phone_number': phoneNumber,
       'address': address,
       if (inviteCode != null) 'invite_code': inviteCode,
+      if (dateOfBirth != null)
+        'date_of_birth':
+            '${dateOfBirth.year.toString().padLeft(4, '0')}-${dateOfBirth.month.toString().padLeft(2, '0')}-${dateOfBirth.day.toString().padLeft(2, '0')}',
+      if (guardianName.isNotEmpty) 'guardian_name': guardianName,
+      if (guardianEmail.isNotEmpty) 'guardian_email': guardianEmail,
+      if (guardianPhone.isNotEmpty) 'guardian_phone': guardianPhone,
     });
   }
 

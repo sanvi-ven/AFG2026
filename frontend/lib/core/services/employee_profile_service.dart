@@ -116,4 +116,30 @@ class EmployeeProfileService {
         .doc(employeeId.trim())
         .set({'archived': false}, SetOptions(merge: true));
   }
+
+  /// owner action: set (or clear) an employee's date of birth. Owner-only —
+  /// see firestore.rules, an employee can't self-edit this.
+  static Future<void> setDateOfBirth(String employeeId, DateTime? dob) async {
+    await _collection
+        .doc(employeeId.trim())
+        .set({'date_of_birth': dob}, SetOptions(merge: true));
+  }
+
+  /// owner action: set an employee's parent/guardian contact info (used for
+  /// the contract co-sign flow when the employee is a minor). Owner-only —
+  /// see firestore.rules, an employee can't redirect guardian consent to an
+  /// email they control.
+  static Future<void> setGuardianContact(
+    String employeeId, {
+    String? name,
+    String? email,
+    String? phone,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (name != null) payload['guardian_name'] = name.trim();
+    if (email != null) payload['guardian_email'] = email.trim();
+    if (phone != null) payload['guardian_phone'] = phone.trim();
+    if (payload.isEmpty) return;
+    await _collection.doc(employeeId.trim()).set(payload, SetOptions(merge: true));
+  }
 }

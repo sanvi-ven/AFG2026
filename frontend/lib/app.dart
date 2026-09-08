@@ -21,18 +21,21 @@ import 'features/auth/presentation/login_page.dart';
 import 'features/dashboard/presentation/dashboard_page.dart';
 import 'features/legal/presentation/legal_document_page.dart';
 import 'features/auth/presentation/client_signup_page.dart';
+import 'features/contracts/presentation/guardian_sign_page.dart';
 
 /// picks the app's very first screen based on the actual URL the browser
 /// loaded, for the cases that need to work as a real public link independent
 /// of auth state: a legal document (e.g. shared with a compliance reviewer,
-/// an app store listing, or pasted anywhere outside the app), and the client
+/// an app store listing, or pasted anywhere outside the app), the client
 /// signup form (needs to be independently reachable/verifiable by a Twilio
 /// A2P campaign reviewer checking the SMS-consent CTA, not just click-through
-/// from the login page). Every other path falls through to [_SessionGate] as
-/// before — this app's routing otherwise only works via in-app Navigator
-/// calls (onGenerateRoute never runs on a cold load, only on a later push),
-/// which is fine for pages that are only ever reached from inside the app,
-/// but wasn't for these two.
+/// from the login page), and the guardian contract co-sign link (a parent/
+/// guardian never has an app session at all, so this is the only way they
+/// ever reach GuardianSignPage). Every other path falls through to
+/// [_SessionGate] as before — this app's routing otherwise only works via
+/// in-app Navigator calls (onGenerateRoute never runs on a cold load, only
+/// on a later push), which is fine for pages that are only ever reached
+/// from inside the app, but wasn't for these three.
 Widget _resolveInitialHome() {
   final uri = Uri.base;
   if (uri.path == AppRouter.legalDocument) {
@@ -41,6 +44,9 @@ Widget _resolveInitialHome() {
   }
   if (uri.path == AppRouter.clientSignup) {
     return const ClientSignupPage();
+  }
+  if (uri.path == AppRouter.guardianSign) {
+    return GuardianSignPage(token: uri.queryParameters['token'] ?? '');
   }
   return const _SessionGate();
 }

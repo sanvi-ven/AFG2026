@@ -1,13 +1,18 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/app_notification.dart';
 import '../../models/client_profile.dart';
+import '../../models/employment_contract.dart';
 import '../../models/equipment.dart' show equipmentServiceDueLeadTime;
 import '../../models/invoice.dart';
 import 'client_profile_service.dart';
 import 'comms_service.dart';
+import 'contract_api_service.dart';
+import 'contract_service.dart';
+import 'employee_profile_service.dart';
 import 'equipment_service.dart';
 import 'invoice_service.dart';
 import 'local_notification_service.dart';
@@ -27,6 +32,8 @@ class ReminderCheckService {
   static const _appointmentLookahead = Duration(hours: 48);
   static const invoiceOverdueAfter = Duration(days: 7);
   static const _serviceDueLeadTime = equipmentServiceDueLeadTime;
+  static const _guardianLinkResendAfter = Duration(days: 5);
+  static const _guardianLinkMaxReminders = 3;
 
   /// an unpaid invoice counts as overdue once it's been sent and gone
   /// [invoiceOverdueAfter] without payment, measured from its last reminder
@@ -59,6 +66,7 @@ class ReminderCheckService {
       await _checkInvoiceReminders();
       await _checkServiceDueSoon();
       await _checkLowStock();
+      await _checkContractReminders();
     } finally {
       _isRunning = false;
     }
@@ -246,6 +254,59 @@ class ReminderCheckService {
         body: 'Only ${item.quantity} ${item.unitOfMeasure} left.'.trim(),
       );
       await EquipmentService.stampLowStockNotified(item.id);
+    }
+  }
+
+  /// nudge an owner to resend the guardian co-sign link for a minor
+  /// employee's contract that's been waiting a while, and let the employee
+  /// know in-app that their own contract is still unsigned. There's no
+  /// scheduled backend job anywhere in this app (see this class's own doc
+  /// comment) and no in-app presence for a guardian to notify directly, so
+  /// resending their email is the only real lever here — capped so an
+  /// ignored link doesn't resend forever.
+  static Future<void> _checkContractReminders() async {
+    final contracts = await ContractService.watchAllContracts().first;
+    final now = DateTime.now();
+
+    for (final contract in contracts) {
+      if (contract.status == ContractStatus.pendingEmployeeSignature) {
+        if (contract.employeeSignature != null) continue; // shouldn't happen, but stay safe
+        await NotificationService.create(
+          recipientRole: 'employee',
+          recipientId: contract.employeeId,
+          type: NotificationType.contractPending,
+          title: 'Employment contract needs your signature',
+          body: 'Your employment contract is still waiting on your signature.',
+          relatedId: contract.id,
+        );
+        continue;
+      }
+
+      if (contract.status != ContractStatus.pendingGuardianSignature) continue;
+      if (contract.guardianEmail.trim().isEmpty) continue;
+      if (contract.guardianReminderCount >= _guardianLinkMaxReminders) continue;
+      final sentAt = contract.guardianSignTokenSentAt;
+      if (sentAt != null && now.difference(sentAt) < _guardianLinkResendAfter) continue;
+
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      if (token == null) continue;
+      try {
+        await ContractApiService.sendGuardianLink(recordId: contract.id, authToken: token);
+      } catch (_) {
+        // best-effort — a failed resend here shouldn't block the rest of
+        // the dashboard's reminder scan, same as every other check above
+      }
+
+      final employee = await EmployeeProfileService.fetchBySignupId(contract.employeeId);
+      await NotificationService.create(
+        recipientRole: 'owner',
+        recipientId: ownerNotificationRecipientId,
+        type: NotificationType.contractPending,
+        title: 'Guardian signature still pending',
+        body:
+            '${employee?.fullName ?? 'An employee'}\'s guardian hasn\'t signed their contract yet — resent the link.',
+        relatedId: contract.id,
+      );
     }
   }
 }

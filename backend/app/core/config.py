@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     # "https://anchor-orpin.vercel.app,https://your-custom-domain.com".
     allowed_origins_raw: str = "https://anchor-orpin.vercel.app"
 
+    # the single production frontend URL — used server-side to build links
+    # emailed to someone with no app session (e.g. the guardian contract
+    # co-sign link in routes/contracts.py), distinct from allowed_origins
+    # above since that list may contain multiple/local origins.
+    frontend_base_url: str = "https://anchor-orpin.vercel.app"
+
     # Additionally allow any localhost/127.0.0.1 origin (any port) — for
     # running the Flutter web app locally against this backend. Defaults
     # off, so Cloud Run (which never sets this) stays production-only; set

@@ -76,6 +76,12 @@ class NotificationType {
   /// only notification type a non-owner is allowed to create (see
   /// firestore.rules' notifications create rule).
   static const deletionRequest = 'deletionRequest';
+
+  /// an employee's employment contract (or an amendment to it) is still
+  /// waiting on their signature/initial — owner-created, in-app only (no
+  /// email needed since they already have app access; contrast with the
+  /// guardian, who gets an email instead since they have no app session).
+  static const contractPending = 'contractPending';
 }
 
 /// constant recipientId used for owner-targeted notifications (the owner has

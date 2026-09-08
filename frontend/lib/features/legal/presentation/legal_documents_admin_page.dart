@@ -6,7 +6,7 @@ import '../../../core/services/legal_document_service.dart';
 import '../../../models/legal_document.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 
-/// owner-only screen listing the app's three legal documents, each editable
+/// owner-only screen listing the app's legal documents, each editable
 /// in place — lets the owner update wording (contact info, policy changes)
 /// without a code deploy.
 class LegalDocumentsAdminPage extends StatelessWidget {
@@ -19,6 +19,7 @@ class LegalDocumentsAdminPage extends StatelessWidget {
     (id: LegalDocumentIds.privacyPolicy, title: 'Privacy Policy'),
     (id: LegalDocumentIds.termsOfService, title: 'Terms of Service'),
     (id: LegalDocumentIds.employeeDataNotice, title: 'Employee Data Privacy Notice'),
+    (id: LegalDocumentIds.employmentContractTemplate, title: 'Employment Contract Template'),
   ];
 
   @override

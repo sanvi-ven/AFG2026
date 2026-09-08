@@ -45,11 +45,16 @@ class LegalDocument {
   }
 }
 
-/// fixed doc IDs for the three legal documents this app surfaces — matches
+/// fixed doc IDs for the legal documents this app surfaces — matches
 /// the seed script (backend/scripts/seed_legal_documents.py) and every
 /// signup/settings screen that links to one of these.
 class LegalDocumentIds {
   static const privacyPolicy = 'privacy_policy';
   static const termsOfService = 'terms_of_service';
   static const employeeDataNotice = 'employee_data_notice';
+
+  /// the owner-editable master template an issued EmploymentContract's
+  /// content is copied (frozen) from — not shown pre-auth like the other
+  /// three, only via the owner's Manage Legal Documents admin page.
+  static const employmentContractTemplate = 'employment_contract_template';
 }

@@ -11,6 +11,7 @@ import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/owner_signin_page.dart';
 import '../../features/availability/presentation/availability_page.dart';
 import '../../features/clients/presentation/clients_page.dart';
+import '../../features/contracts/presentation/contract_page.dart';
 import '../../features/crew_availability/presentation/crew_availability_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
 import '../../features/equipment/presentation/equipment_basket_builder_page.dart';
@@ -105,6 +106,12 @@ class AppRouter {
   static const legalDocumentsAdmin = '/legal/admin';
   static const legalDocumentEdit = '/legal/admin/edit';
   static const crewAvailability = '/crew-availability';
+  static const contractDetail = '/contracts/detail';
+  // only ever reached via a cold external link (the emailed guardian link) —
+  // see _resolveInitialHome() in app.dart, same shape as legalDocument's
+  // carve-out. No in-app Navigator.pushNamed ever targets this, since a
+  // guardian never has an app session to push from.
+  static const guardianSign = '/contracts/guardian-sign';
 /// generates appropriate page route based on settings and passes role/auth context
   
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
@@ -310,6 +317,15 @@ class AppRouter {
       case crewAvailability:
         return _NoAnimationPageRoute(
           builder: (_) => CrewAvailabilityPage(role: role, authToken: authToken),
+          settings: settings,
+        );
+      case contractDetail:
+        return _NoAnimationPageRoute(
+          builder: (_) => ContractPage(
+            role: role,
+            authToken: authToken,
+            employeeId: (args['employeeId'] as String?) ?? '',
+          ),
           settings: settings,
         );
       default:

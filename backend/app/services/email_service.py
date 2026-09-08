@@ -42,6 +42,24 @@ _TEMPLATES: dict[str, dict] = {
         ),
         "params": {"client_name", "invoice_number", "total"},
     },
+    # not reachable via /comms/email at all (see contracts.py) — called as a
+    # direct Python import instead, same as send_email is by one-off
+    # scripts, since the caller (the new contracts router) already looks
+    # the recipient address up server-side from the contract's own
+    # snapshotted guardianEmail field rather than trusting a client-supplied
+    # `to`. Reused unchanged for both the initial send and every reminder
+    # resend, same as invoice-reminder's reuse pattern.
+    "guardian-contract-signature": {
+        "subject": "{employee_name}'s employment contract needs your signature",
+        "body": (
+            "<p>{employee_name} has started employment with {company_name}. "
+            "Because they are a minor, their employment contract requires a "
+            "parent or guardian's signature.</p>"
+            "<p><a href=\"{sign_url}\">Review and sign the contract</a></p>"
+            "<p>This link is unique to you and expires {expires_date}.</p>"
+        ),
+        "params": {"employee_name", "company_name", "sign_url", "expires_date"},
+    },
 }
 
 
