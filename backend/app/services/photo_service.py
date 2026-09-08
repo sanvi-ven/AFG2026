@@ -26,10 +26,10 @@ class PhotoService:
     convention previously used for Firebase Storage paths (job_photos/{workId}/{phase},
     request_photos/{requestId})"""
 
-    def upload_photo(self, file_bytes: bytes, folder: str) -> str:
+    def upload_photo(self, file_bytes: bytes, folder: str, resource_type: str = "image") -> str:
         _ensure_configured()
         try:
-            result = cloudinary.uploader.upload(file_bytes, folder=folder, resource_type="image")
+            result = cloudinary.uploader.upload(file_bytes, folder=folder, resource_type=resource_type)
         except Exception as exc:
             # never surface the raw Cloudinary exception to a caller.
             # RuntimeError here is what /photos/upload already knows how to

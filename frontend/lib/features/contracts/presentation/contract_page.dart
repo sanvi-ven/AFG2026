@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/services/contract_amendment_service.dart';
 import '../../../core/services/contract_api_service.dart';
@@ -101,6 +102,22 @@ class _ContractPageState extends State<ContractPage> {
   }
 
   Future<void> _download(EmploymentContract contract) async {
+    // an uploaded paper contract has no real `content` to render into a PDF
+    // (recordUploadedContract creates it empty) — open the actual uploaded
+    // file directly instead of generating a broken wrapper PDF around
+    // nothing.
+    final uploadedUrl = contract.uploadedFile?.url;
+    if (uploadedUrl != null) {
+      final uri = Uri.parse(uploadedUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Could not open the uploaded file.')));
+      }
+      return;
+    }
+
     setState(() => _isDownloading = true);
     try {
       await ContractPdfService.generateAndDownloadContractPdf(contract: contract);
@@ -159,8 +176,14 @@ class _ContractPageState extends State<ContractPage> {
                           const SizedBox(height: 16),
                           OutlinedButton.icon(
                             onPressed: _isDownloading ? null : () => _download(contract),
-                            icon: const Icon(Icons.download),
-                            label: Text(_isDownloading ? 'Preparing…' : 'Download PDF'),
+                            icon: Icon(contract.uploadedFile != null
+                                ? Icons.open_in_new
+                                : Icons.download),
+                            label: Text(_isDownloading
+                                ? 'Preparing…'
+                                : (contract.uploadedFile != null
+                                    ? 'View uploaded file'
+                                    : 'Download PDF')),
                           ),
                         ],
                       ],

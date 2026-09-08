@@ -169,4 +169,26 @@ class ContractService {
     );
     await doc.set(contract.toMap());
   }
+
+  /// owner action: permanently delete an employee's contract (and any
+  /// amendments on it), so a fresh one can be issued or uploaded from
+  /// scratch. Unlike the app's other "permanently delete" actions
+  /// (ClientProfileService.deleteClientPermanently etc.), this doesn't
+  /// refuse based on dependent records — a contract has no downstream
+  /// financial/job data hanging off it the way an estimate or job does.
+  static Future<void> deleteContract(String employeeId) async {
+    final normalizedId = employeeId.trim();
+    final amendments = await _firestore
+        .collection('contract_amendments')
+        .where('employeeId', isEqualTo: normalizedId)
+        .get();
+    if (amendments.docs.isNotEmpty) {
+      final batch = _firestore.batch();
+      for (final doc in amendments.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
+    await _collection.doc(normalizedId).delete();
+  }
 }

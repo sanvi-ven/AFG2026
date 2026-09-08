@@ -1140,9 +1140,38 @@ class _ContractsTabState extends State<_ContractsTab> {
   }
 
   Future<void> _uploadPaperContract(EmployeeProfile employee) async {
+    final asPdf = await showDialog<bool>(
+      context: context,
+      builder: (_) => SimpleDialog(
+        title: const Text('Upload signed contract'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Row(children: [
+              Icon(Icons.photo_camera_outlined),
+              SizedBox(width: 12),
+              Text('Photo (camera or gallery)'),
+            ]),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Row(children: [
+              Icon(Icons.picture_as_pdf_outlined),
+              SizedBox(width: 12),
+              Text('PDF file'),
+            ]),
+          ),
+        ],
+      ),
+    );
+    if (asPdf == null) return;
+
     try {
-      final url =
-          await ContractUploadService.pickAndUploadPaperContract(employeeId: employee.employeeId);
+      final url = asPdf
+          ? await ContractUploadService.pickAndUploadPaperContractPdf(
+              employeeId: employee.employeeId)
+          : await ContractUploadService.pickAndUploadPaperContract(
+              employeeId: employee.employeeId);
       if (url == null) return;
       await ContractService.recordUploadedContract(
         employeeId: employee.employeeId,
@@ -1151,12 +1180,47 @@ class _ContractsTabState extends State<_ContractsTab> {
       );
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Paper contract uploaded.')));
+            .showSnackBar(const SnackBar(content: Text('Signed contract uploaded.')));
       }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Upload failed: $error')));
+      }
+    }
+  }
+
+  Future<void> _deleteContract(EmployeeProfile employee) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Contract'),
+        content: Text(
+          "Permanently delete ${employee.fullName}'s contract (and any amendments on it)? "
+          "This can't be undone — you'll be able to issue or upload a new one afterward.",
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ContractService.deleteContract(employee.employeeId);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("${employee.fullName}'s contract deleted.")));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
       }
     }
   }
@@ -1350,10 +1414,17 @@ class _ContractsTabState extends State<_ContractsTab> {
                     OutlinedButton(
                         onPressed: () => _draftAmendment(contract),
                         child: const Text('Draft amendment')),
+                  TextButton(
+                    onPressed: () => _deleteContract(employee),
+                    style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+                    child: const Text('Delete contract'),
+                  ),
                 ],
                 TextButton(
                     onPressed: () => _uploadPaperContract(employee),
-                    child: const Text('Upload paper contract')),
+                    child: Text(contract == null
+                        ? 'Upload signed contract'
+                        : 'Replace with uploaded file')),
               ],
             ),
             if (pendingAmendment != null)
