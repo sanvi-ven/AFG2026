@@ -46,6 +46,21 @@ class NotificationsPage extends StatelessWidget {
       return;
     }
 
+    // contractPending's relatedId is the employment_contracts doc id, which
+    // is always the employeeId (see ContractService — doc id == employeeId).
+    if (notification.type == NotificationType.contractPending) {
+      Navigator.pushNamed(
+        context,
+        AppRouter.contractDetail,
+        arguments: {
+          'role': role,
+          'authToken': authToken,
+          'employeeId': relatedId,
+        },
+      );
+      return;
+    }
+
     final route = notification.type == NotificationType.invoiceOverdue ? AppRouter.invoices : AppRouter.appointments;
     Navigator.pushNamed(
       context,
