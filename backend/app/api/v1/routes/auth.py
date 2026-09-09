@@ -96,6 +96,7 @@ def complete_signup(
             "last_name": last_name,
             "phone_number": phone_number,
             "address": address,
+            "sms_opt_in": payload.sms_opt_in,
         })
     elif payload.role == "employee":
         date_of_birth = None
@@ -145,6 +146,7 @@ def complete_signup(
         last_name=last_name,
         phone_number=phone_number,
         address=address,
+        sms_opt_in=payload.sms_opt_in if payload.role == "client" else False,
     )
 
 

@@ -46,7 +46,7 @@ service cloud.firestore {
       allow update: if isStaff() ||
         (isSignedIn() && resource.data.uid == request.auth.uid &&
          onlyChanged(['first_name', 'last_name', 'firstName', 'lastName',
-                      'phone_number', 'phoneNumber', 'address']));
+                      'phone_number', 'phoneNumber', 'address', 'sms_opt_in']));
     }
 
     match /employee_signups/{document=**} {

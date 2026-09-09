@@ -9,6 +9,7 @@ class ClientProfile {
     required this.address,
     this.uid,
     this.archived = false,
+    this.smsOptIn = false,
   });
 
   final String signupId;
@@ -17,6 +18,12 @@ class ClientProfile {
   final String lastName;
   final String phoneNumber;
   final String address;
+  /// explicit, freely-revocable opt-in to appointment/invoice text reminders
+  /// — unchecked by default at signup and never implied just by supplying a
+  /// phone number (A2P/CTIA rules require SMS consent to stay separate from,
+  /// and never a condition of, creating an account). Only send a client an
+  /// automated SMS when this is true.
+  final bool smsOptIn;
   /// linked Firebase Auth uid — null for owner-created "dummy" clients who
   /// haven't claimed their account (and so have never logged in themselves)
   final String? uid;
@@ -78,6 +85,7 @@ class ClientProfile {
       address: (map['address'] as String? ?? fallbackAddress).trim(),
       uid: (map['uid'] as String?)?.trim().isEmpty ?? true ? null : (map['uid'] as String).trim(),
       archived: map['archived'] as bool? ?? false,
+      smsOptIn: map['sms_opt_in'] as bool? ?? map['smsOptIn'] as bool? ?? false,
     );
   }
 
@@ -90,6 +98,7 @@ class ClientProfile {
       'last_name': lastName.trim(),
       'phone_number': phoneNumber.trim(),
       'address': address.trim(),
+      'sms_opt_in': smsOptIn,
     };
   }
 
@@ -103,6 +112,7 @@ class ClientProfile {
     String? address,
     String? uid,
     bool? archived,
+    bool? smsOptIn,
   }) {
     return ClientProfile(
       signupId: signupId ?? this.signupId,
@@ -113,6 +123,7 @@ class ClientProfile {
       address: address ?? this.address,
       uid: uid ?? this.uid,
       archived: archived ?? this.archived,
+      smsOptIn: smsOptIn ?? this.smsOptIn,
     );
   }
 }

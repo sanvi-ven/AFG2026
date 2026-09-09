@@ -745,6 +745,7 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
   bool _isLoadingAddressSuggestions = false;
   List<String> _addressSuggestions = const [];
   Timer? _addressDebounce;
+  late bool _smsOptIn;
 
   @override
   void initState() {
@@ -757,6 +758,7 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
         TextEditingController(text: widget.initialProfile.phoneNumber);
     _addressController =
         TextEditingController(text: widget.initialProfile.address);
+    _smsOptIn = widget.initialProfile.smsOptIn;
   }
 
   @override
@@ -828,6 +830,7 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
         lastName: _lastNameController.text,
         phoneNumber: _phoneNumberController.text,
         address: _addressController.text,
+        smsOptIn: _smsOptIn,
       );
       final updated = await ClientProfileService.save(nextProfile);
       ClientSession.setProfile(updated);
@@ -924,7 +927,17 @@ class _ClientSettingsDialogState extends State<_ClientSettingsDialog> {
                     ),
                   ),
                 ],
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: _smsOptIn,
+                  onChanged: (value) => setState(() => _smsOptIn = value ?? false),
+                  title: const Text('Text message reminders'),
+                  subtitle: const Text(
+                      'Receive appointment and invoice reminders by text. Reply STOP at any time to opt out.'),
+                ),
+                const SizedBox(height: 8),
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text(

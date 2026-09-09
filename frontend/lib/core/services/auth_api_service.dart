@@ -20,6 +20,7 @@ class AuthApiService {
     String phoneNumber = '',
     String address = '',
     String? inviteCode,
+    bool smsOptIn = false,
     DateTime? dateOfBirth,
     String guardianName = '',
     String guardianEmail = '',
@@ -32,6 +33,7 @@ class AuthApiService {
       'last_name': lastName,
       'phone_number': phoneNumber,
       'address': address,
+      'sms_opt_in': smsOptIn,
       if (inviteCode != null) 'invite_code': inviteCode,
       if (dateOfBirth != null)
         'date_of_birth':

@@ -169,7 +169,7 @@ class ReminderCheckService {
           },
         ));
       }
-      if (client != null && client.phoneNumber.trim().isNotEmpty) {
+      if (client != null && client.phoneNumber.trim().isNotEmpty && client.smsOptIn) {
         final phoneLine = businessPhone.isEmpty ? '' : ' Questions? Call $businessPhone.';
         unawaited(CommsService.sendSms(
           to: client.phoneNumber.trim(),

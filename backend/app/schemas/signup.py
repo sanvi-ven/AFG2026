@@ -13,6 +13,10 @@ class CompleteSignupRequest(BaseModel):
     phone_number: str = Field(default="", max_length=40)
     address: str = Field(default="", max_length=500)
     invite_code: Optional[str] = Field(default=None, max_length=64)
+    # client-only — explicit, unchecked-by-default opt-in to SMS reminders,
+    # kept fully independent of the (required) phone_number field above so
+    # that providing a phone number never itself implies SMS consent.
+    sms_opt_in: bool = False
     # employee-only, optional — date of birth (ISO date string) and, if the
     # employee is a minor, parent/guardian contact for the employment
     # contract co-sign flow. Never trusted for authorization purposes (that
@@ -33,6 +37,7 @@ class SignupProfileResponse(BaseModel):
     last_name: str
     phone_number: str
     address: str = ""
+    sms_opt_in: bool = False
 
 
 class ClaimAccountRequest(BaseModel):

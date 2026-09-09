@@ -402,15 +402,16 @@ class _EstimatesPageState extends State<EstimatesPage> {
   /// texts the client that a new estimate is ready, mirroring the business-name
   /// lead-in + STOP opt-out format registered with Twilio's A2P campaign for
   /// this app's other transactional SMS (see reminder_check_service.dart).
-  /// Returns true if the send succeeded, false if it was attempted but failed
-  /// or the client has no phone number on file.
+  /// Returns true if the send succeeded, false if it was attempted but failed,
+  /// the client has no phone number on file, or the client hasn't opted in
+  /// to SMS reminders.
   Future<bool> _sendEstimateReadySms({
     required ClientProfile client,
     required String estimateNumber,
     required double total,
   }) async {
     final phone = client.phoneNumber.trim();
-    if (phone.isEmpty) return false;
+    if (phone.isEmpty || !client.smsOptIn) return false;
 
     final ownerSettings = await OwnerSettingsService.fetch();
     final businessName = ownerSettings.companyName.trim().isEmpty
@@ -1285,7 +1286,7 @@ class _OwnerEstimateForm extends StatelessWidget {
               onChanged: (value) => onNotifyClientBySmsChanged(value ?? false),
               title: const Text('Text the client that this estimate is ready'),
               subtitle: const Text(
-                  'Only sent if the client has a phone number on file.'),
+                  'Only sent if the client has a phone number on file and has opted in to text reminders.'),
             ),
             const SizedBox(height: 4),
             Align(

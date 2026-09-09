@@ -34,6 +34,7 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
   bool _isSubmitting = false;
   bool _isLoadingAddressSuggestions = false;
   bool _agreedToTerms = false;
+  bool _smsOptIn = false;
   String? _error;
   Timer? _addressDebounce;
   List<String> _addressSuggestions = const [];
@@ -137,6 +138,7 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
         lastName: _lastNameController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
         address: _addressController.text.trim(),
+        smsOptIn: _smsOptIn,
       );
       final savedProfile = ClientProfile.fromMap(response);
       ClientSession.setProfile(savedProfile);
@@ -250,10 +252,25 @@ class _ClientSignupPageState extends State<ClientSignupPage> {
                     validator: (value) => (value == null || value.trim().isEmpty) ? 'Phone is required' : null,
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    'By providing your phone number, you agree to receive appointment and invoice '
-                    'text reminders. Message and data rates may apply.',
-                    style: Theme.of(context).textTheme.bodySmall,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Checkbox(
+                        value: _smsOptIn,
+                        onChanged: (value) => setState(() => _smsOptIn = value ?? false),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Text(
+                            "I'd like to receive text message reminders about my appointments "
+                            'and invoices (optional). Message and data rates may apply. '
+                            'Reply STOP at any time to opt out.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
