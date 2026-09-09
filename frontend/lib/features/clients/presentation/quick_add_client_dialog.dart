@@ -7,7 +7,25 @@ import '../../../models/client_profile.dart';
 /// dialog for the owner to add a client who won't use the app themselves —
 /// just name/phone/address, no email or password required up front
 class QuickAddClientDialog extends StatefulWidget {
-  const QuickAddClientDialog({super.key});
+  const QuickAddClientDialog({
+    this.initialFirstName = '',
+    this.initialLastName = '',
+    this.initialPhone = '',
+    this.initialAddress = '',
+    this.initialSmsOptIn = false,
+    super.key,
+  });
+
+  /// prefill values — used when this dialog is opened while converting a
+  /// work Request into a client, so the requester's own name/phone and,
+  /// importantly, their SMS consent (captured pre-auth on the request form)
+  /// carry forward instead of silently resetting to false on the new
+  /// ClientProfile.
+  final String initialFirstName;
+  final String initialLastName;
+  final String initialPhone;
+  final String initialAddress;
+  final bool initialSmsOptIn;
 
   @override
   State<QuickAddClientDialog> createState() => _QuickAddClientDialogState();
@@ -15,10 +33,11 @@ class QuickAddClientDialog extends StatefulWidget {
 
 class _QuickAddClientDialogState extends State<QuickAddClientDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _firstNameController = TextEditingController();
-  final _lastNameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _addressController = TextEditingController();
+  late final _firstNameController = TextEditingController(text: widget.initialFirstName);
+  late final _lastNameController = TextEditingController(text: widget.initialLastName);
+  late final _phoneController = TextEditingController(text: widget.initialPhone);
+  late final _addressController = TextEditingController(text: widget.initialAddress);
+  late bool _smsOptIn = widget.initialSmsOptIn;
   bool _isSaving = false;
   String? _error;
   List<String> _addressSuggestions = const [];
@@ -57,6 +76,7 @@ class _QuickAddClientDialogState extends State<QuickAddClientDialog> {
         lastName: _lastNameController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
         address: _addressController.text.trim(),
+        smsOptIn: _smsOptIn,
       );
       if (!mounted) return;
       Navigator.of(context).pop(profile);
@@ -117,6 +137,16 @@ class _QuickAddClientDialogState extends State<QuickAddClientDialog> {
                   validator: (value) =>
                       (value == null || value.trim().isEmpty) ? 'Address is required' : null,
                 ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: _smsOptIn,
+                  onChanged: (value) => setState(() => _smsOptIn = value ?? false),
+                  title: const Text('Text message reminders'),
+                  subtitle: const Text(
+                      'This client has agreed to receive appointment and invoice reminders by text.'),
+                ),
                 if (_addressSuggestions.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   ConstrainedBox(
@@ -163,6 +193,22 @@ class _QuickAddClientDialogState extends State<QuickAddClientDialog> {
 }
 
 /// convenience wrapper: shows the dialog, returns the created profile (or null if cancelled)
-Future<ClientProfile?> showQuickAddClientDialog(BuildContext context) {
-  return showDialog<ClientProfile>(context: context, builder: (_) => const QuickAddClientDialog());
+Future<ClientProfile?> showQuickAddClientDialog(
+  BuildContext context, {
+  String initialFirstName = '',
+  String initialLastName = '',
+  String initialPhone = '',
+  String initialAddress = '',
+  bool initialSmsOptIn = false,
+}) {
+  return showDialog<ClientProfile>(
+    context: context,
+    builder: (_) => QuickAddClientDialog(
+      initialFirstName: initialFirstName,
+      initialLastName: initialLastName,
+      initialPhone: initialPhone,
+      initialAddress: initialAddress,
+      initialSmsOptIn: initialSmsOptIn,
+    ),
+  );
 }

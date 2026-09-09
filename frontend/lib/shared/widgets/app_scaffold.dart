@@ -1100,6 +1100,7 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
   final TextEditingController _confirmNewPasswordController =
       TextEditingController();
   bool _isSaving = false;
+  late bool _smsOptIn;
 
   @override
   void initState() {
@@ -1110,6 +1111,7 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
         TextEditingController(text: widget.initialProfile.lastName);
     _phoneNumberController =
         TextEditingController(text: widget.initialProfile.phoneNumber);
+    _smsOptIn = widget.initialProfile.smsOptIn;
   }
 
   @override
@@ -1149,6 +1151,7 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
         firstName: _firstNameController.text,
         lastName: _lastNameController.text,
         phoneNumber: _phoneNumberController.text,
+        smsOptIn: _smsOptIn,
       );
       final updated = await EmployeeProfileService.save(nextProfile);
       EmployeeSession.setProfile(updated);
@@ -1206,7 +1209,17 @@ class _EmployeeSettingsDialogState extends State<_EmployeeSettingsDialog> {
                   decoration: const InputDecoration(labelText: 'Phone'),
                   keyboardType: TextInputType.phone,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: _smsOptIn,
+                  onChanged: (value) => setState(() => _smsOptIn = value ?? false),
+                  title: const Text('Text message notifications'),
+                  subtitle: const Text(
+                      'Receive shift, job-assignment, and contract reminders by text. Reply STOP at any time to opt out.'),
+                ),
+                const SizedBox(height: 8),
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text(

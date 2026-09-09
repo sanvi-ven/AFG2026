@@ -233,7 +233,34 @@ class _EstimatesPageState extends State<EstimatesPage> {
   }
 
   Future<void> _openQuickAddClient() async {
-    final profile = await showQuickAddClientDialog(context);
+    // when converting a Request into an estimate, carry its name/phone and
+    // — importantly — its SMS opt-in (captured pre-auth on the request
+    // form) forward into the new ClientProfile, so that consent doesn't
+    // silently evaporate the moment a lead becomes a real client record.
+    var initialFirstName = '';
+    var initialLastName = '';
+    var initialPhone = '';
+    var initialSmsOptIn = false;
+    final convertRequestId = widget.convertRequestId;
+    if (convertRequestId != null) {
+      final sourceRequest = await RequestService.fetchById(convertRequestId);
+      if (sourceRequest != null) {
+        final nameParts = sourceRequest.name.trim().split(RegExp(r'\s+'));
+        initialFirstName = nameParts.isNotEmpty ? nameParts.first : '';
+        initialLastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+        initialPhone = sourceRequest.phone;
+        initialSmsOptIn = sourceRequest.smsOptIn;
+      }
+    }
+    if (!mounted) return;
+
+    final profile = await showQuickAddClientDialog(
+      context,
+      initialFirstName: initialFirstName,
+      initialLastName: initialLastName,
+      initialPhone: initialPhone,
+      initialSmsOptIn: initialSmsOptIn,
+    );
     if (profile == null || !mounted) return;
     _clientIdController.text = profile.signupId;
     setState(() {

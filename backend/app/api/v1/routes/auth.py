@@ -120,6 +120,7 @@ def complete_signup(
             "guardian_name": payload.guardian_name.strip(),
             "guardian_email": payload.guardian_email.strip(),
             "guardian_phone": payload.guardian_phone.strip(),
+            "sms_opt_in": payload.sms_opt_in,
         })
     else:
         # owner has no separate profile collection — the users record above
@@ -146,7 +147,7 @@ def complete_signup(
         last_name=last_name,
         phone_number=phone_number,
         address=address,
-        sms_opt_in=payload.sms_opt_in if payload.role == "client" else False,
+        sms_opt_in=payload.sms_opt_in if payload.role in ("client", "employee") else False,
     )
 
 

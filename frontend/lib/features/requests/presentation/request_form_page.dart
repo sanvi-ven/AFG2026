@@ -8,6 +8,7 @@ import '../../../core/services/job_photo_upload_service.dart';
 import '../../../core/services/owner_settings_service.dart';
 import '../../../core/services/request_service.dart';
 import '../../../models/legal_document.dart';
+import '../../../models/request.dart';
 import '../../../shared/widgets/legal_link.dart';
 
 /// standalone "request work" form — reachable both by a public, not-yet-a-client
@@ -44,6 +45,8 @@ class _RequestFormPageState extends State<RequestFormPage> {
   bool _isUploadingPhoto = false;
   bool _isSaving = false;
   bool _submitted = false;
+  bool _smsOptIn = false;
+  String _preferredContact = PreferredContactMethod.email;
   Timer? _addressDebounce;
   List<String> _addressSuggestions = const [];
   bool _isLoadingAddressSuggestions = false;
@@ -122,8 +125,12 @@ class _RequestFormPageState extends State<RequestFormPage> {
         address: _addressController.text,
         description: _descriptionController.text,
         photoUrls: _photoUrls,
+        smsOptIn: _smsOptIn,
+        preferredContact: _preferredContact,
       );
       unawaited(_sendIntakeEmails());
+      unawaited(_sendIntakeSms());
+      unawaited(_sendOwnerLeadSms());
       if (mounted) setState(() => _submitted = true);
     } catch (error) {
       if (mounted) {
@@ -161,6 +168,70 @@ class _RequestFormPageState extends State<RequestFormPage> {
       }
     } catch (_) {
       // owner settings unavailable — skip the owner notification, in-app request inbox still has it
+    }
+  }
+
+  /// "request received" text to whoever just submitted — pre-auth, so this
+  /// goes through CommsService.sendSmsTemplate (fixed, server-owned content,
+  /// no owner token) rather than sendSms, using the phone/opt-in captured on
+  /// the request form itself since a ClientProfile usually doesn't exist yet
+  /// for a brand-new lead.
+  Future<void> _sendIntakeSms() async {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty || !_smsOptIn) return;
+
+    try {
+      final ownerSettings = await OwnerSettingsService.fetch();
+      final businessName =
+          ownerSettings.companyName.trim().isEmpty ? 'Your service provider' : ownerSettings.companyName.trim();
+      unawaited(CommsService.sendSmsTemplate(
+        to: phone,
+        template: 'request-received',
+        params: {'business_name': businessName},
+      ));
+    } catch (_) {
+      // best-effort, same reasoning as _sendIntakeEmails above
+    }
+  }
+
+  /// texts the owner's own number (OwnerSettingsService.phone, resolved
+  /// here rather than trusting any caller-supplied value) that a new
+  /// request came in, mirroring the existing owner-new-lead EMAIL but with
+  /// the details an owner actually wants from a phone: who, their
+  /// preferred way to be reached, and a link back into the app to see any
+  /// attached photos. Always attempted regardless of _smsOptIn — that
+  /// checkbox is the *requester's* own consent to be texted, not a gate on
+  /// the owner's own lead-alert preference.
+  Future<void> _sendOwnerLeadSms() async {
+    try {
+      final ownerSettings = await OwnerSettingsService.fetch();
+      final ownerPhone = ownerSettings.phone.trim();
+      if (ownerPhone.isEmpty) return;
+
+      final description = _descriptionController.text.trim();
+      final truncatedDescription =
+          description.length > 160 ? '${description.substring(0, 160)}...' : description;
+
+      unawaited(CommsService.sendSmsTemplate(
+        to: ownerPhone,
+        template: 'owner-new-lead',
+        params: {
+          'name': _nameController.text.trim(),
+          'preferred_contact': PreferredContactMethod.label(_preferredContact),
+          'phone': _phoneController.text.trim(),
+          'email': _emailController.text.trim(),
+          'address': _addressController.text.trim(),
+          'description': truncatedDescription,
+          // root link, not a deep link to this specific request — no
+          // externally-reachable per-request route exists yet (see
+          // app.dart's _resolveInitialHome for the app's only two cold-link
+          // carve-outs, neither of which is this). The owner is expected to
+          // already be signed in and just needs to open Requests.
+          'link': Uri.base.origin,
+        },
+      ));
+    } catch (_) {
+      // best-effort, same reasoning as _sendIntakeEmails above
     }
   }
 
@@ -230,6 +301,39 @@ class _RequestFormPageState extends State<RequestFormPage> {
               controller: _phoneController,
               decoration: const InputDecoration(labelText: 'Phone', border: OutlineInputBorder()),
               keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 4),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Checkbox(
+                  value: _smsOptIn,
+                  onChanged: (value) => setState(() => _smsOptIn = value ?? false),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      "I'd like to receive text message updates about this request (optional). "
+                      'Message and data rates may apply. Reply STOP at any time to opt out.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              initialValue: _preferredContact,
+              decoration: const InputDecoration(
+                labelText: 'Preferred way to be contacted',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (final method in PreferredContactMethod.all)
+                  DropdownMenuItem(value: method, child: Text(PreferredContactMethod.label(method))),
+              ],
+              onChanged: (value) => setState(() => _preferredContact = value ?? PreferredContactMethod.email),
             ),
             const SizedBox(height: 12),
             TextFormField(

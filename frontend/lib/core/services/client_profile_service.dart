@@ -145,6 +145,7 @@ class ClientProfileService {
     required String lastName,
     required String phoneNumber,
     required String address,
+    bool smsOptIn = false,
   }) async {
     final doc = _signupsCollection.doc();
     final resolvedEmail = 'client.${doc.id}@no-login.internal';
@@ -156,6 +157,7 @@ class ClientProfileService {
       lastName: lastName.trim(),
       phoneNumber: phoneNumber.trim(),
       address: address.trim(),
+      smsOptIn: smsOptIn,
     );
 
     await doc.set({

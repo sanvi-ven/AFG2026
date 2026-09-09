@@ -120,6 +120,11 @@ class _RequestCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text('${request.email} · ${request.phone}'),
+            Text(
+              'Prefers: ${PreferredContactMethod.label(request.preferredContact)}'
+              '${request.smsOptIn ? ' · opted in to texts' : ''}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             if (request.address.isNotEmpty) Text(request.address),
             const SizedBox(height: 8),
             Text(request.description),

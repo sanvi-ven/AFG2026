@@ -11,11 +11,12 @@ from app.services.sms_service import SmsService
 
 router = APIRouter()
 """outbound email/sms dispatch. Two email templates (request-confirmation,
-owner-new-lead) are reachable pre-auth — they're what the public "Request a
-Quote" form fires before anyone has an account — everything else (the other
-two email templates, and all of /sms, which has no pre-auth caller at all)
-requires a real owner session. See email_service.py for why content is
-template-only rather than caller-supplied free text/HTML."""
+owner-new-lead) and one SMS template (request-received) are reachable
+pre-auth — they're what the public "Request a Quote" form fires before
+anyone has an account. Everything else (the other two email templates, and
+every raw-`body` /sms send) requires a real owner session. See
+email_service.py / sms_service.py for why the pre-auth-reachable content is
+template-only rather than caller-supplied free text."""
 email_service = EmailService()
 sms_service = SmsService()
 
@@ -76,6 +77,18 @@ def send_sms(
     payload: SmsSendRequest,
     authorization: Optional[str] = Header(default=None),
 ) -> SendResult:
+    if payload.template is not None:
+        # the one pre-auth path — content is fixed server-side (see
+        # sms_service.py), so a caller can only select a template and fill
+        # in named params, never compose free-text message content.
+        try:
+            sms_service.send_templated_sms(payload.to, payload.template, payload.params)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+        return SendResult(sent=True)
+
     _require_owner(authorization)
     try:
         sms_service.send_sms(payload.to, payload.body)

@@ -114,6 +114,7 @@ class EmploymentContract {
     this.guardianSignTokenExpiresAt,
     this.guardianSignTokenSentAt,
     this.guardianReminderCount = 0,
+    this.employeeSmsReminderSentAt,
     this.uploadedFile,
     required this.createdAt,
     required this.createdBy,
@@ -144,6 +145,13 @@ class EmploymentContract {
   final DateTime? guardianSignTokenExpiresAt;
   final DateTime? guardianSignTokenSentAt;
   final int guardianReminderCount;
+
+  /// when the employee-signature-pending SMS reminder was last sent — same
+  /// resend-cadence purpose as guardianSignTokenSentAt above, so
+  /// ReminderCheckService doesn't re-text the employee on every dashboard
+  /// scan (unlike the in-app notification, which is cheap enough to recreate
+  /// each scan).
+  final DateTime? employeeSmsReminderSentAt;
 
   final UploadedContractFile? uploadedFile;
 
@@ -198,6 +206,8 @@ class EmploymentContract {
       guardianSignTokenSentAt:
           _readOptionalDate(map['guardianSignTokenSentAt']),
       guardianReminderCount: (map['guardianReminderCount'] as num? ?? 0).toInt(),
+      employeeSmsReminderSentAt:
+          _readOptionalDate(map['employeeSmsReminderSentAt']),
       uploadedFile: uploadedFileMap is Map<String, dynamic>
           ? UploadedContractFile.fromMap(uploadedFileMap)
           : null,
@@ -225,6 +235,7 @@ class EmploymentContract {
       'guardianSignTokenExpiresAt': guardianSignTokenExpiresAt,
       'guardianSignTokenSentAt': guardianSignTokenSentAt,
       'guardianReminderCount': guardianReminderCount,
+      'employeeSmsReminderSentAt': employeeSmsReminderSentAt,
       'uploadedFile': uploadedFile?.toMap(),
       'createdAt': createdAt,
       'createdBy': createdBy,

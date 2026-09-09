@@ -21,6 +21,7 @@ class EmployeeProfile {
     this.foodAllergies = '',
     this.medicationAllergies = '',
     this.environmentalAllergies = '',
+    this.smsOptIn = false,
   });
 
   final String employeeId;
@@ -66,6 +67,14 @@ class EmployeeProfile {
   final String foodAllergies;
   final String medicationAllergies;
   final String environmentalAllergies;
+
+  /// self-editable by the employee — explicit, unchecked-by-default opt-in
+  /// to work-related SMS (shift reminders, job assignments, contract
+  /// signature reminders), mirroring ClientProfile.smsOptIn. Accounts
+  /// created before this field existed were opted in by the owner directly
+  /// (see backend/scripts/backfill_employee_sms_optin.py) after verbally
+  /// confirming with every existing employee — new signups default to false.
+  final bool smsOptIn;
 
   /// derived, never stored — same reasoning as EquipmentBasket.computeStatus,
   /// so it can't drift out of sync with dateOfBirth.
@@ -143,6 +152,7 @@ class EmployeeProfile {
       foodAllergies: (map['food_allergies'] as String? ?? '').trim(),
       medicationAllergies: (map['medication_allergies'] as String? ?? '').trim(),
       environmentalAllergies: (map['environmental_allergies'] as String? ?? '').trim(),
+      smsOptIn: map['sms_opt_in'] as bool? ?? false,
     );
   }
 
@@ -166,6 +176,7 @@ class EmployeeProfile {
       'food_allergies': foodAllergies.trim(),
       'medication_allergies': medicationAllergies.trim(),
       'environmental_allergies': environmentalAllergies.trim(),
+      'sms_opt_in': smsOptIn,
     };
   }
 
@@ -192,6 +203,7 @@ class EmployeeProfile {
     String? foodAllergies,
     String? medicationAllergies,
     String? environmentalAllergies,
+    bool? smsOptIn,
   }) {
     return EmployeeProfile(
       employeeId: employeeId ?? this.employeeId,
@@ -212,6 +224,7 @@ class EmployeeProfile {
       foodAllergies: foodAllergies ?? this.foodAllergies,
       medicationAllergies: medicationAllergies ?? this.medicationAllergies,
       environmentalAllergies: environmentalAllergies ?? this.environmentalAllergies,
+      smsOptIn: smsOptIn ?? this.smsOptIn,
     );
   }
 }

@@ -1,12 +1,40 @@
 //made using https://firebase.google.com/docs/reference/js/firestore_
 
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/invoice.dart';
+import 'client_profile_service.dart';
+import 'comms_service.dart';
+import 'owner_settings_service.dart';
 
 /// manages invoice data in firestore with real-time updates and conversions
 class InvoiceService {
   InvoiceService._();
+
+  /// best-effort SMS to the client, gated on their own smsOptIn — same
+  /// business-name + STOP format registered with Twilio's A2P campaign as
+  /// every other transactional SMS in this app (see
+  /// reminder_check_service.dart / scheduled_work_service.dart). Never
+  /// throws — a failed/skipped send must never block the write it follows.
+  static Future<void> _notifyClient(String clientId, String Function(String businessName) buildBody) async {
+    try {
+      final client = await ClientProfileService.fetchBySignupId(clientId);
+      if (client == null) return;
+      final phone = client.phoneNumber.trim();
+      if (phone.isEmpty || !client.smsOptIn) return;
+
+      final ownerSettings = await OwnerSettingsService.fetch();
+      final businessName =
+          ownerSettings.companyName.trim().isEmpty ? 'Your service provider' : ownerSettings.companyName.trim();
+
+      await CommsService.sendSms(to: phone, body: buildBody(businessName));
+    } catch (_) {
+      // best-effort, same reasoning as every other fire-and-forget comms
+      // call in this app
+    }
+  }
 
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final CollectionReference<Map<String, dynamic>> _collection =
@@ -110,6 +138,12 @@ class InvoiceService {
     );
 
     await doc.set(invoice.toMap());
+    unawaited(_notifyClient(
+      invoice.clientId,
+      (businessName) => '$businessName: A new invoice (${invoice.invoiceNumber}) for '
+          '\$${invoice.total.toStringAsFixed(2)} is ready. Log in to your account to view it. '
+          'Reply STOP to opt out.',
+    ));
     return doc.id;
   }
 
@@ -131,13 +165,28 @@ class InvoiceService {
 
   /// update invoice status to pending, sent, paid, etc
   static Future<void> updateStatus({required String invoiceId, required String status}) async {
+    final normalizedStatus = status.trim();
+    // fetched before the write so a paid->paid no-op (e.g. a duplicate
+    // click) doesn't re-send a receipt the client already got
+    final existing = await getInvoiceById(invoiceId);
+
     await _collection.doc(invoiceId).set(
       {
-        'status': status,
+        'status': normalizedStatus,
         'updatedAt': DateTime.now(),
       },
       SetOptions(merge: true),
     );
+
+    final justPaid =
+        normalizedStatus == InvoiceStatus.paid && existing != null && existing.status != InvoiceStatus.paid;
+    if (justPaid) {
+      unawaited(_notifyClient(
+        existing.clientId,
+        (businessName) => "$businessName: Thank you! We've received your payment for Invoice "
+            '${existing.invoiceNumber} (\$${existing.total.toStringAsFixed(2)}). Reply STOP to opt out.',
+      ));
+    }
   }
 
   /// stamp that an overdue-invoice reminder notification has been created,

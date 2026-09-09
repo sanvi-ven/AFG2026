@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/request.dart';
+import 'comms_service.dart';
+import 'owner_settings_service.dart';
 
 /// manages work requests — the pre-estimate intake pipeline. Creation has no
 /// auth guard (mirrors ClientProfileService.createSignup) since brand-new,
@@ -34,6 +36,8 @@ class RequestService {
     required String address,
     required String description,
     List<String> photoUrls = const [],
+    bool smsOptIn = false,
+    String preferredContact = PreferredContactMethod.email,
   }) async {
     final request = Request(
       id: id,
@@ -46,8 +50,22 @@ class RequestService {
       photoUrls: photoUrls,
       status: RequestStatus.newRequest,
       createdAt: DateTime.now(),
+      smsOptIn: smsOptIn,
+      preferredContact: preferredContact,
     );
     await _collection.doc(id).set(request.toMap());
+  }
+
+  /// fetch a single request by id — used to carry its phone/smsOptIn
+  /// forward when converting it into a client record (see
+  /// QuickAddClientDialog's prefill support)
+  static Future<Request?> fetchById(String requestId) async {
+    final normalizedId = requestId.trim();
+    if (normalizedId.isEmpty) return null;
+    final snapshot = await _collection.doc(normalizedId).get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) return null;
+    return Request.fromMap({...data, 'id': snapshot.id});
   }
 
   static Future<void> markConverted({required String requestId, required String estimateId}) async {
@@ -57,10 +75,32 @@ class RequestService {
     );
   }
 
+  /// owner action, so the existing owner-authenticated CommsService.sendSms
+  /// (raw body, not the pre-auth template path) is the right call here —
+  /// unlike the request-received confirmation, which fires from the public,
+  /// not-yet-signed-in form.
   static Future<void> markDeclined({required String requestId, String reason = ''}) async {
     await _collection.doc(requestId).set(
       {'status': RequestStatus.declined, 'declineReason': reason.trim()},
       SetOptions(merge: true),
     );
+
+    try {
+      final request = await fetchById(requestId);
+      final phone = request?.phone.trim() ?? '';
+      if (request != null && phone.isNotEmpty && request.smsOptIn) {
+        final ownerSettings = await OwnerSettingsService.fetch();
+        final businessName =
+            ownerSettings.companyName.trim().isEmpty ? 'Your service provider' : ownerSettings.companyName.trim();
+        await CommsService.sendSms(
+          to: phone,
+          body: "$businessName: Thanks for reaching out. We're not able to take on this request "
+              'right now. Reply STOP to opt out.',
+        );
+      }
+    } catch (_) {
+      // best-effort, same reasoning as every other fire-and-forget comms
+      // call in this app
+    }
   }
 }

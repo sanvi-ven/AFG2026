@@ -76,6 +76,17 @@ class ReminderCheckService {
     final jobs = await ScheduledWorkService.watchScheduledWork(role: 'owner').first;
     final now = DateTime.now();
     final cutoff = now.add(_appointmentLookahead);
+    // fetched once and reused below — matches the invoice-reminder loop's
+    // own reasoning: the SMS text has to match the sample registered with
+    // Twilio's A2P campaign ("This is a reminder that your appointment is
+    // scheduled for [MM/DD/YYYY] at [HH:MM AM/PM]...") exactly.
+    final ownerSettings = await OwnerSettingsService.fetch();
+    final businessName =
+        ownerSettings.companyName.trim().isEmpty ? 'Your service provider' : ownerSettings.companyName.trim();
+    // fetched once, filtered per-job below by teamId/employeeIds — the
+    // roster doesn't change mid-scan, so no need to re-fetch per job the
+    // way the client lookup below does.
+    final employees = await EmployeeProfileService.watchAllProfiles().first;
 
     for (final job in jobs) {
       if (job.reminderSentAt != null) continue;
@@ -113,6 +124,27 @@ class ReminderCheckService {
           template: 'appointment-reminder',
           params: {'client_name': clientName, 'estimate_number': job.estimateNumber},
         ));
+      }
+      if (client != null && client.phoneNumber.trim().isNotEmpty && client.smsOptIn) {
+        unawaited(CommsService.sendSms(
+          to: client.phoneNumber.trim(),
+          body: '$businessName: This is a reminder that your appointment is scheduled for '
+              '${DateFormat('MM/dd/yyyy').format(job.scheduledDate)} at '
+              '${DateFormat('h:mm a').format(job.scheduledDate)}. Reply STOP to opt out.',
+        ));
+      }
+      final assignedEmployees = (job.teamId != null && job.teamId!.trim().isNotEmpty)
+          ? employees.where((e) => e.teamId == job.teamId && !e.archived)
+          : employees.where((e) => job.employeeIds.contains(e.employeeId));
+      for (final employee in assignedEmployees) {
+        if (employee.phoneNumber.trim().isNotEmpty && employee.smsOptIn) {
+          unawaited(CommsService.sendSms(
+            to: employee.phoneNumber.trim(),
+            body: '$businessName: Reminder — you have a job (Est #${job.estimateNumber}) scheduled for '
+                '${DateFormat('MM/dd/yyyy').format(job.scheduledDate)} at '
+                '${DateFormat('h:mm a').format(job.scheduledDate)}. Reply STOP to opt out.',
+          ));
+        }
       }
       await ScheduledWorkService.markReminderSent(job.id);
     }
@@ -279,6 +311,25 @@ class ReminderCheckService {
           body: 'Your employment contract is still waiting on your signature.',
           relatedId: contract.id,
         );
+        // SMS is capped to the same resend cadence as the guardian link
+        // below — unlike the in-app notification above, re-sending this
+        // every scan would text the employee once per dashboard load.
+        final smsSentAt = contract.employeeSmsReminderSentAt;
+        if (smsSentAt == null || now.difference(smsSentAt) >= _guardianLinkResendAfter) {
+          final employee = await EmployeeProfileService.fetchBySignupId(contract.employeeId);
+          final phone = employee?.phoneNumber.trim() ?? '';
+          if (employee != null && phone.isNotEmpty && employee.smsOptIn) {
+            final ownerSettings = await OwnerSettingsService.fetch();
+            final businessName =
+                ownerSettings.companyName.trim().isEmpty ? 'Your employer' : ownerSettings.companyName.trim();
+            unawaited(CommsService.sendSms(
+              to: phone,
+              body: '$businessName: Your employment contract is still waiting on your signature. '
+                  'Log in to your account to review and sign it. Reply STOP to opt out.',
+            ));
+            await ContractService.markEmployeeSmsReminderSent(contract.employeeId);
+          }
+        }
         continue;
       }
 

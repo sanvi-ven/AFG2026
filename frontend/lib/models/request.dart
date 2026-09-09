@@ -16,6 +16,8 @@ class Request {
     required this.createdAt,
     this.convertedEstimateId,
     this.declineReason = '',
+    this.smsOptIn = false,
+    this.preferredContact = PreferredContactMethod.email,
   });
 
   final String id;
@@ -32,6 +34,20 @@ class Request {
   final DateTime createdAt;
   final String? convertedEstimateId;
   final String declineReason;
+
+  /// explicit, unchecked-by-default opt-in to SMS about this request
+  /// (received/declined), captured pre-auth on the public request form —
+  /// unlike client/employee signup, a request submitted before this field
+  /// existed simply has no opt-in (defaults false) and is never backfilled,
+  /// since there's no prior verbal confirmation to fall back on the way
+  /// there was for existing employees.
+  final bool smsOptIn;
+
+  /// how this requester would rather be reached back about this request —
+  /// defaults to email for requests submitted before this field existed
+  /// (email was already always collected/required, so it's the only safe
+  /// default that doesn't imply a consent this app never captured).
+  final String preferredContact;
 
   bool get isNew => status == RequestStatus.newRequest;
   bool get isConverted => status == RequestStatus.converted;
@@ -59,6 +75,9 @@ class Request {
       createdAt: readDate(map['createdAt']),
       convertedEstimateId: (map['convertedEstimateId'] as String?)?.trim(),
       declineReason: (map['declineReason'] as String? ?? '').trim(),
+      smsOptIn: map['smsOptIn'] as bool? ?? false,
+      preferredContact:
+          (map['preferredContact'] as String? ?? PreferredContactMethod.email).trim(),
     );
   }
 
@@ -77,8 +96,26 @@ class Request {
       'createdAt': createdAt,
       'convertedEstimateId': convertedEstimateId,
       'declineReason': declineReason,
+      'smsOptIn': smsOptIn,
+      'preferredContact': preferredContact,
     };
   }
+}
+
+/// plain string constants for a requester's preferred contact method,
+/// matching this codebase's RequestStatus/InvoiceStatus convention
+class PreferredContactMethod {
+  static const call = 'call';
+  static const text = 'text';
+  static const email = 'email';
+
+  static const all = [call, text, email];
+
+  static String label(String value) => switch (value) {
+        call => 'Call',
+        text => 'Text',
+        _ => 'Email',
+      };
 }
 
 /// plain string constants for request status, matching this codebase's

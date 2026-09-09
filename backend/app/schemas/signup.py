@@ -13,9 +13,11 @@ class CompleteSignupRequest(BaseModel):
     phone_number: str = Field(default="", max_length=40)
     address: str = Field(default="", max_length=500)
     invite_code: Optional[str] = Field(default=None, max_length=64)
-    # client-only — explicit, unchecked-by-default opt-in to SMS reminders,
-    # kept fully independent of the (required) phone_number field above so
-    # that providing a phone number never itself implies SMS consent.
+    # client and employee — explicit, unchecked-by-default opt-in to SMS
+    # (appointment/invoice reminders for clients; shift/job-assignment/
+    # contract reminders for employees), kept fully independent of the
+    # (required) phone_number field above so that providing a phone number
+    # never itself implies SMS consent. Not used for the owner role.
     sms_opt_in: bool = False
     # employee-only, optional — date of birth (ISO date string) and, if the
     # employee is a minor, parent/guardian contact for the employment

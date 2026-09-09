@@ -68,7 +68,8 @@ service cloud.firestore {
          onlyChanged(['first_name', 'last_name', 'firstName', 'lastName',
                       'phone_number', 'phoneNumber', 'address', 'date_of_birth',
                       'guardian_name', 'guardian_email', 'guardian_phone',
-                      'food_allergies', 'medication_allergies', 'environmental_allergies']));
+                      'food_allergies', 'medication_allergies', 'environmental_allergies',
+                      'sms_opt_in']));
     }
 
     // Employee signup validates the invite code server-side now (via

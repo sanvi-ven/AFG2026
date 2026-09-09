@@ -32,6 +32,7 @@ class _EmployeeSignupPageState extends State<EmployeeSignupPage> {
   DateTime? _dateOfBirth;
   bool _isSubmitting = false;
   bool _agreedToTerms = false;
+  bool _smsOptIn = false;
   String? _error;
 
   bool get _isMinor {
@@ -108,6 +109,7 @@ class _EmployeeSignupPageState extends State<EmployeeSignupPage> {
         lastName: _lastNameController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
         inviteCode: _inviteCodeController.text.trim(),
+        smsOptIn: _smsOptIn,
         dateOfBirth: _dateOfBirth,
         guardianName: _guardianNameController.text.trim(),
         guardianEmail: _guardianEmailController.text.trim(),
@@ -220,7 +222,28 @@ class _EmployeeSignupPageState extends State<EmployeeSignupPage> {
                     keyboardType: TextInputType.phone,
                     validator: (value) => (value == null || value.trim().isEmpty) ? 'Phone is required' : null,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 4),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Checkbox(
+                        value: _smsOptIn,
+                        onChanged: (value) => setState(() => _smsOptIn = value ?? false),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Text(
+                            "I'd like to receive text messages about my shifts, job assignments, "
+                            'and my employment contract (optional). Message and data rates may apply. '
+                            'Reply STOP at any time to opt out.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   InkWell(
                     onTap: _pickDateOfBirth,
                     child: InputDecorator(

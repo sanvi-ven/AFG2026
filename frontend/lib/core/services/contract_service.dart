@@ -196,4 +196,13 @@ class ContractService {
     }
     await _collection.doc(normalizedId).delete();
   }
+
+  /// stamp that a signature-pending SMS reminder was just sent, so
+  /// ReminderCheckService doesn't re-text the employee on every dashboard scan
+  static Future<void> markEmployeeSmsReminderSent(String employeeId) async {
+    await _collection.doc(employeeId.trim()).set(
+      {'employeeSmsReminderSentAt': DateTime.now()},
+      SetOptions(merge: true),
+    );
+  }
 }

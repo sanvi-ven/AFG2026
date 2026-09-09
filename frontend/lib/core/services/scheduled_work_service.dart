@@ -1,12 +1,80 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 import '../../models/checklist_template.dart';
 import '../../models/invoice.dart';
 import '../../models/scheduled_work.dart';
+import 'client_profile_service.dart';
+import 'comms_service.dart';
+import 'employee_profile_service.dart';
+import 'owner_settings_service.dart';
 
 /// manages scheduled work orders from approved estimates
 class ScheduledWorkService {
   ScheduledWorkService._();
+
+  /// best-effort SMS to the client on a job-status change, gated on their
+  /// own [ClientProfile.smsOptIn] — mirrors the business-name + STOP format
+  /// registered with Twilio's A2P campaign (see reminder_check_service.dart).
+  /// Centralized here rather than in each calling page so every trigger
+  /// point (Appointments tab, Jobs tab drag-reschedule, etc.) gets it once,
+  /// instead of needing to be wired up per call site. Never throws — a
+  /// failed/skipped send must never block the status write it follows.
+  static Future<void> _notifyClient(String clientId, String Function(String businessName) buildBody) async {
+    try {
+      final client = await ClientProfileService.fetchBySignupId(clientId);
+      if (client == null) return;
+      final phone = client.phoneNumber.trim();
+      if (phone.isEmpty || !client.smsOptIn) return;
+
+      final ownerSettings = await OwnerSettingsService.fetch();
+      final businessName =
+          ownerSettings.companyName.trim().isEmpty ? 'Your service provider' : ownerSettings.companyName.trim();
+
+      await CommsService.sendSms(to: phone, body: buildBody(businessName));
+    } catch (_) {
+      // best-effort, same reasoning as every other fire-and-forget comms
+      // call in this app (see CommsService's own doc comment)
+    }
+  }
+
+  /// same as [_notifyClient] but for a single employee, gated on their own
+  /// [EmployeeProfile.smsOptIn].
+  static Future<void> _notifyEmployee(String employeeId, String Function(String businessName) buildBody) async {
+    try {
+      final employee = await EmployeeProfileService.fetchBySignupId(employeeId);
+      if (employee == null) return;
+      final phone = employee.phoneNumber.trim();
+      if (phone.isEmpty || !employee.smsOptIn) return;
+
+      final ownerSettings = await OwnerSettingsService.fetch();
+      final businessName =
+          ownerSettings.companyName.trim().isEmpty ? 'Your employer' : ownerSettings.companyName.trim();
+
+      await CommsService.sendSms(to: phone, body: buildBody(businessName));
+    } catch (_) {
+      // best-effort, same reasoning as _notifyClient above
+    }
+  }
+
+  /// notifies every opted-in employee on [teamId] — team membership is
+  /// tracked on EmployeeProfile.teamId (the reverse of what you'd expect
+  /// from the "teams" collection itself, which only stores id/name), so
+  /// this fetches the full roster and filters client-side rather than
+  /// querying a member list that doesn't exist.
+  static Future<void> _notifyTeam(String teamId, String Function(String businessName) buildBody) async {
+    try {
+      final employees = await EmployeeProfileService.watchAllProfiles().first;
+      final members = employees.where((e) => e.teamId == teamId && !e.archived);
+      for (final member in members) {
+        await _notifyEmployee(member.employeeId, buildBody);
+      }
+    } catch (_) {
+      // best-effort, same reasoning as _notifyClient above
+    }
+  }
 
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final CollectionReference<Map<String, dynamic>> _collection =
@@ -217,6 +285,17 @@ class ScheduledWorkService {
       {'scheduledDate': newDate, 'updatedAt': DateTime.now()},
       SetOptions(merge: true),
     );
+
+    final snapshot = await _collection.doc(workId).get();
+    final data = snapshot.data();
+    if (data == null) return;
+    final work = ScheduledWork.fromMap({...data, 'id': workId});
+    unawaited(_notifyClient(
+      work.clientId,
+      (businessName) => '$businessName: Your appointment (Est #${work.estimateNumber}) has been rescheduled to '
+          '${DateFormat('MM/dd/yyyy').format(work.scheduledDate)} at '
+          '${DateFormat('h:mm a').format(work.scheduledDate)}. Reply STOP to opt out.',
+    ));
   }
 
   /// owner action: hide a job from active use without deleting its history
@@ -272,6 +351,19 @@ class ScheduledWorkService {
       },
       SetOptions(merge: true),
     );
+
+    if (teamId != null && teamId.trim().isNotEmpty) {
+      final snapshot = await _collection.doc(workId).get();
+      final data = snapshot.data();
+      if (data == null) return;
+      final work = ScheduledWork.fromMap({...data, 'id': workId});
+      unawaited(_notifyTeam(
+        teamId.trim(),
+        (businessName) => "$businessName: You've been assigned to a job (Est #${work.estimateNumber}) "
+            'scheduled for ${DateFormat('MM/dd/yyyy').format(work.scheduledDate)} at '
+            '${DateFormat('h:mm a').format(work.scheduledDate)}. Reply STOP to opt out.',
+      ));
+    }
   }
 
   /// owner action: assign (or clear) the specific employees responsible for
@@ -288,6 +380,21 @@ class ScheduledWorkService {
       },
       SetOptions(merge: true),
     );
+
+    if (employeeIds.isNotEmpty) {
+      final snapshot = await _collection.doc(workId).get();
+      final data = snapshot.data();
+      if (data == null) return;
+      final work = ScheduledWork.fromMap({...data, 'id': workId});
+      for (final employeeId in employeeIds) {
+        unawaited(_notifyEmployee(
+          employeeId,
+          (businessName) => "$businessName: You've been assigned to a job (Est #${work.estimateNumber}) "
+              'scheduled for ${DateFormat('MM/dd/yyyy').format(work.scheduledDate)} at '
+              '${DateFormat('h:mm a').format(work.scheduledDate)}. Reply STOP to opt out.',
+        ));
+      }
+    }
   }
 
   /// stamp that an upcoming-appointment reminder notification has been
@@ -308,6 +415,16 @@ class ScheduledWorkService {
       },
       SetOptions(merge: true),
     );
+
+    final snapshot = await _collection.doc(workId).get();
+    final data = snapshot.data();
+    if (data == null) return;
+    final work = ScheduledWork.fromMap({...data, 'id': workId});
+    unawaited(_notifyClient(
+      work.clientId,
+      (businessName) => '$businessName: Your appointment (Est #${work.estimateNumber}) has been completed. '
+          'Thank you for choosing $businessName! Reply STOP to opt out.',
+    ));
   }
 
   /// owner action: persist a manual route sequence for a set of jobs, stamping
