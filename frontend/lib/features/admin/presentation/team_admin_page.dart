@@ -190,6 +190,13 @@ class _EmployeesTabState extends State<_EmployeesTab> {
               childrenPadding: const EdgeInsets.only(bottom: 8),
               children: [_ContractInfoFields(employee: employee)],
             ),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('Personal & emergency info',
+                  style: TextStyle(fontSize: 13)),
+              childrenPadding: const EdgeInsets.only(bottom: 8),
+              children: [_PersonalInfoFields(employee: employee)],
+            ),
           ],
         ),
       ),
@@ -362,6 +369,79 @@ class _ContractInfoFieldsState extends State<_ContractInfoFields> {
                 widget.employee.employeeId, phone: value),
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// address + allergy fields for one employee, shown inside the Employees
+/// tab's expandable "Personal & emergency info" section — lets the owner
+/// see (and, in a pinch, correct or fill in) what an employee entered via
+/// their own "My Info" section, without needing to ask them directly.
+class _PersonalInfoFields extends StatefulWidget {
+  const _PersonalInfoFields({required this.employee});
+
+  final EmployeeProfile employee;
+
+  @override
+  State<_PersonalInfoFields> createState() => _PersonalInfoFieldsState();
+}
+
+class _PersonalInfoFieldsState extends State<_PersonalInfoFields> {
+  late final _addressController =
+      TextEditingController(text: widget.employee.address);
+  late final _foodAllergiesController =
+      TextEditingController(text: widget.employee.foodAllergies);
+  late final _medicationAllergiesController =
+      TextEditingController(text: widget.employee.medicationAllergies);
+  late final _environmentalAllergiesController =
+      TextEditingController(text: widget.employee.environmentalAllergies);
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _foodAllergiesController.dispose();
+    _medicationAllergiesController.dispose();
+    _environmentalAllergiesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          controller: _addressController,
+          decoration: const InputDecoration(
+              labelText: 'Address', border: OutlineInputBorder()),
+          onFieldSubmitted: (value) => EmployeeProfileService.updatePersonalInfo(
+              widget.employee.employeeId, address: value),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _foodAllergiesController,
+          decoration: const InputDecoration(
+              labelText: 'Food allergies', border: OutlineInputBorder()),
+          onFieldSubmitted: (value) => EmployeeProfileService.updatePersonalInfo(
+              widget.employee.employeeId, foodAllergies: value),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _medicationAllergiesController,
+          decoration: const InputDecoration(
+              labelText: 'Medication allergies', border: OutlineInputBorder()),
+          onFieldSubmitted: (value) => EmployeeProfileService.updatePersonalInfo(
+              widget.employee.employeeId, medicationAllergies: value),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _environmentalAllergiesController,
+          decoration: const InputDecoration(
+              labelText: 'Environmental allergies', border: OutlineInputBorder()),
+          onFieldSubmitted: (value) => EmployeeProfileService.updatePersonalInfo(
+              widget.employee.employeeId, environmentalAllergies: value),
+        ),
       ],
     );
   }
