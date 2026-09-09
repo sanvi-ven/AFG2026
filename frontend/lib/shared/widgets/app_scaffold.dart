@@ -1471,6 +1471,16 @@ class _EmployeePersonalInfoDialogState
           phone: _guardianPhoneController.text,
         );
       }
+      // EmployeeSession.profile is only ever refreshed by an explicit
+      // setProfile call (nothing here streams live Firestore updates into
+      // it) — without this, the writes above succeed but the cached
+      // session still holds the old values, so reopening "My Info" (or
+      // anything else reading EmployeeSession.profile) shows the change as
+      // if it silently didn't happen.
+      final updated = await EmployeeProfileService.fetchBySignupId(employeeId);
+      if (updated != null) {
+        EmployeeSession.setProfile(updated);
+      }
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (error) {
