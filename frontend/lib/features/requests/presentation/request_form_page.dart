@@ -46,7 +46,10 @@ class _RequestFormPageState extends State<RequestFormPage> {
   bool _isSaving = false;
   bool _submitted = false;
   bool _smsOptIn = false;
-  String _preferredContact = PreferredContactMethod.email;
+  // form default — the SMS opt-in checkbox below stays unchecked by default
+  // regardless (this field is just a stated preference for how the owner
+  // should follow up, and never itself triggers or implies SMS consent)
+  String _preferredContact = PreferredContactMethod.text;
   Timer? _addressDebounce;
   List<String> _addressSuggestions = const [];
   bool _isLoadingAddressSuggestions = false;
@@ -333,7 +336,7 @@ class _RequestFormPageState extends State<RequestFormPage> {
                 for (final method in PreferredContactMethod.all)
                   DropdownMenuItem(value: method, child: Text(PreferredContactMethod.label(method))),
               ],
-              onChanged: (value) => setState(() => _preferredContact = value ?? PreferredContactMethod.email),
+              onChanged: (value) => setState(() => _preferredContact = value ?? PreferredContactMethod.text),
             ),
             const SizedBox(height: 12),
             TextFormField(

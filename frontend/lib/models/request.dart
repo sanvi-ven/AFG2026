@@ -109,7 +109,9 @@ class PreferredContactMethod {
   static const text = 'text';
   static const email = 'email';
 
-  static const all = [call, text, email];
+  /// display order for the request form's dropdown — text first (the
+  /// form's own default selection), then call, then email
+  static const all = [text, call, email];
 
   static String label(String value) => switch (value) {
         call => 'Call',
