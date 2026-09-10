@@ -1423,6 +1423,7 @@ class _EmployeePersonalInfoDialog extends StatefulWidget {
 
 class _EmployeePersonalInfoDialogState
     extends State<_EmployeePersonalInfoDialog> {
+  final _formKey = GlobalKey<FormState>();
   late final _addressController =
       TextEditingController(text: widget.initialProfile.address);
   late final _foodAllergiesController =
@@ -1477,7 +1478,18 @@ class _EmployeePersonalInfoDialogState
     if (picked != null) setState(() => _dateOfBirth = picked);
   }
 
+  bool _looksLikeEmail(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || trimmed.contains(' ')) return false;
+    final parts = trimmed.split('@');
+    if (parts.length != 2) return false;
+    if (parts.first.isEmpty || parts.last.isEmpty) return false;
+    if (!parts.last.contains('.')) return false;
+    return true;
+  }
+
   Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
     try {
       final employeeId = widget.initialProfile.employeeId;
@@ -1526,7 +1538,9 @@ class _EmployeePersonalInfoDialogState
       content: SizedBox(
         width: 420,
         child: SingleChildScrollView(
-          child: Column(
+          child: Form(
+            key: _formKey,
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1568,6 +1582,12 @@ class _EmployeePersonalInfoDialogState
                   controller: _guardianEmailController,
                   decoration: const InputDecoration(labelText: "Parent/guardian's email"),
                   keyboardType: TextInputType.emailAddress,
+                  validator: (value) {
+                    final input = value?.trim() ?? '';
+                    if (input.isEmpty) return null;
+                    if (!_looksLikeEmail(input)) return 'Enter a valid email address';
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -1603,6 +1623,7 @@ class _EmployeePersonalInfoDialogState
                     labelText: 'Environmental allergies (bee stings, pollen, poison ivy, etc.)'),
               ),
             ],
+          ),
           ),
         ),
       ),

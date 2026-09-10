@@ -277,6 +277,12 @@ class _EmployeeSignupPageState extends State<EmployeeSignupPage> {
                       decoration: const InputDecoration(
                           labelText: "Parent/guardian's email", border: OutlineInputBorder()),
                       keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        final input = value?.trim() ?? '';
+                        if (input.isEmpty) return null; // optional at signup time
+                        if (!_looksLikeEmail(input)) return 'Enter a valid email address';
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 12),
                     TextFormField(

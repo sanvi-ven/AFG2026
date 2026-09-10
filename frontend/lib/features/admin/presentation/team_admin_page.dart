@@ -323,6 +323,34 @@ class _ContractInfoFieldsState extends State<_ContractInfoFields> {
     }
   }
 
+  bool _looksLikeEmail(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || trimmed.contains(' ')) return false;
+    final parts = trimmed.split('@');
+    if (parts.length != 2) return false;
+    if (parts.first.isEmpty || parts.last.isEmpty) return false;
+    if (!parts.last.contains('.')) return false;
+    return true;
+  }
+
+  /// this section saves per-field on Enter (no Form/submit button), so
+  /// there's no single validate() gate the way the other guardian-email
+  /// entry points have — validate inline instead, and refuse to persist a
+  /// malformed address (this is exactly how the guardian-link send feature
+  /// broke silently for one employee: "maryvnewton@gmail" was saved with no
+  /// format check anywhere, and only surfaced as a failure when the owner
+  /// tried to actually email it).
+  void _saveGuardianEmail(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isNotEmpty && !_looksLikeEmail(trimmed)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Enter a valid email address for the parent/guardian.")),
+      );
+      return;
+    }
+    EmployeeProfileService.setGuardianContact(widget.employee.employeeId, email: value);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -356,8 +384,7 @@ class _ContractInfoFieldsState extends State<_ContractInfoFields> {
             decoration: const InputDecoration(
                 labelText: "Parent/guardian's email", border: OutlineInputBorder()),
             keyboardType: TextInputType.emailAddress,
-            onFieldSubmitted: (value) => EmployeeProfileService.setGuardianContact(
-                widget.employee.employeeId, email: value),
+            onFieldSubmitted: _saveGuardianEmail,
           ),
           const SizedBox(height: 8),
           TextFormField(

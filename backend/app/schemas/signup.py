@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class CompleteSignupRequest(BaseModel):
@@ -27,6 +27,23 @@ class CompleteSignupRequest(BaseModel):
     guardian_name: str = Field(default="", max_length=200)
     guardian_email: str = Field(default="", max_length=320)
     guardian_phone: str = Field(default="", max_length=40)
+
+    @field_validator("guardian_email")
+    @classmethod
+    def _guardian_email_must_look_valid(cls, value: str) -> str:
+        # optional field (empty is fine — not every minor employee has a
+        # guardian email on file yet), but a non-empty value must be a real
+        # email shape. Added after a malformed guardian_email ("...@gmail",
+        # missing the TLD) got saved with no validation anywhere and only
+        # surfaced as a silent failure later, when the owner tried to
+        # actually send the guardian co-sign link and Resend rejected it
+        # before ever creating a loggable send.
+        trimmed = value.strip()
+        if not trimmed:
+            return trimmed
+        if "@" not in trimmed or "." not in trimmed.split("@")[-1]:
+            raise ValueError("guardian_email must be a valid email address")
+        return trimmed
 
 
 class SignupProfileResponse(BaseModel):
