@@ -22,9 +22,11 @@ import '../../models/checklist_template.dart';
 import '../../models/client_profile.dart';
 import '../../models/common_service.dart';
 import '../../models/estimate.dart';
+import '../../models/internal_note.dart';
 import '../../models/invoice.dart';
 import '../../shared/utils/list_highlight_controller.dart';
 import '../../shared/widgets/app_scaffold.dart';
+import '../../shared/widgets/internal_notes_section.dart';
 import '../../shared/widgets/sort_control.dart';
 import '../clients/presentation/quick_add_client_dialog.dart';
 
@@ -1629,6 +1631,14 @@ class _EstimateCard extends StatelessWidget {
                 Text('Terms', style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 4),
                 Text(estimate.terms),
+              ],
+              if (role != 'client') ...[
+                const SizedBox(height: 14),
+                InternalNotesSection(
+                  entityType: InternalNoteEntityType.estimate,
+                  entityId: estimate.id,
+                  role: role,
+                ),
               ],
               if (estimate.originalVersion != null &&
                   estimate.revisionNumber > 1) ...[

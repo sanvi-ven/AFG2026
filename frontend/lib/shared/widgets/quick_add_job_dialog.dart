@@ -5,8 +5,10 @@ import 'package:intl/intl.dart';
 
 import '../../core/services/client_profile_service.dart';
 import '../../core/services/estimate_service.dart';
+import '../../core/services/internal_note_service.dart';
 import '../../core/services/scheduled_work_service.dart';
 import '../../models/client_profile.dart';
+import '../../models/internal_note.dart';
 import '../../models/invoice.dart';
 
 /// owner-only dialog: schedule a job directly, with no estimate/approval
@@ -30,6 +32,7 @@ class _QuickAddJobDialogState extends State<QuickAddJobDialog> {
   final _clientController = TextEditingController();
   final _serviceController = TextEditingController();
   final _priceController = TextEditingController();
+  final _notesController = TextEditingController();
 
   StreamSubscription<List<ClientProfile>>? _clientsSub;
   List<ClientProfile> _knownClients = const [];
@@ -63,6 +66,7 @@ class _QuickAddJobDialogState extends State<QuickAddJobDialog> {
     _clientController.dispose();
     _serviceController.dispose();
     _priceController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -152,6 +156,26 @@ class _QuickAddJobDialogState extends State<QuickAddJobDialog> {
       );
       await EstimateService.markScheduled(
           estimateId: estimateId, scheduledWorkId: workId);
+
+      final noteText = _notesController.text.trim();
+      if (noteText.isNotEmpty) {
+        try {
+          await InternalNoteService.addNote(
+            entityType: InternalNoteEntityType.scheduledWork,
+            entityId: workId,
+            text: noteText,
+            authorId: 'owner',
+            authorName: 'Owner',
+            authorRole: 'owner',
+          );
+        } catch (_) {
+          // the job + estimate already exist at this point — a failed
+          // seed-note write must not surface as "failed to add job" (which
+          // would invite a retry and create a duplicate job/estimate), and
+          // must not block the dialog from closing. Silently drop; the
+          // note can always be added afterward from the job's detail view.
+        }
+      }
 
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
@@ -263,6 +287,17 @@ class _QuickAddJobDialogState extends State<QuickAddJobDialog> {
                 decoration: const InputDecoration(
                   labelText: 'Price',
                   prefixText: '\$',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _notesController,
+                enabled: !_isSubmitting,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Internal notes (optional, staff only)',
                   border: OutlineInputBorder(),
                 ),
               ),

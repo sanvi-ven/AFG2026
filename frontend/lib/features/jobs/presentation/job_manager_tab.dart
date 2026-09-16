@@ -6,9 +6,11 @@ import '../../../core/services/estimate_service.dart';
 import '../../../core/services/scheduled_work_service.dart';
 import '../../../core/services/team_service.dart';
 import '../../../models/estimate.dart';
+import '../../../models/internal_note.dart';
 import '../../../models/scheduled_work.dart';
 import '../../../models/team.dart';
 import '../../../shared/widgets/get_directions_button.dart';
+import '../../../shared/widgets/internal_notes_section.dart';
 
 /// owner-only visual weekly calendar: long-press-drag a job chip to a
 /// different day/hour cell to reschedule it via [ScheduledWorkService.rescheduleWork].
@@ -109,6 +111,7 @@ class _JobManagerTabState extends State<JobManagerTab> {
   void _showJobDetails(ScheduledWork job) {
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       builder: (_) => _JobDetailsSheet(job: job),
     );
   }
@@ -619,7 +622,8 @@ class _JobDetailsSheet extends StatelessWidget {
       _ => 'Scheduled',
     };
 
-    return Padding(
+    return SingleChildScrollView(
+      child: Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -687,7 +691,14 @@ class _JobDetailsSheet extends StatelessWidget {
               Text('\$${job.total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700)),
             ],
           ),
+          const SizedBox(height: 16),
+          InternalNotesSection(
+            entityType: InternalNoteEntityType.scheduledWork,
+            entityId: job.id,
+            role: 'owner',
+          ),
         ],
+      ),
       ),
     );
   }

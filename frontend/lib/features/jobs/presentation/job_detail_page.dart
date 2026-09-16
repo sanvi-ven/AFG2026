@@ -10,10 +10,12 @@ import '../../../core/services/scheduled_work_service.dart';
 import '../../../core/state/employee_session.dart';
 import '../../../models/equipment_basket.dart';
 import '../../../models/equipment_reservation.dart';
+import '../../../models/internal_note.dart';
 import '../../../models/job_completion_form.dart';
 import '../../../models/scheduled_work.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/get_directions_button.dart';
+import '../../../shared/widgets/internal_notes_section.dart';
 import '../../equipment/presentation/equipment_basket_card.dart';
 
 /// job detail + one-time completion form (start/end time, notes, before/after photos)
@@ -232,6 +234,17 @@ class _JobDetailPageState extends State<JobDetailPage> {
         ],
         const SizedBox(height: 16),
         _buildEquipmentSection(context, job),
+        const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: InternalNotesSection(
+              entityType: InternalNoteEntityType.scheduledWork,
+              entityId: job.id,
+              role: widget.role,
+            ),
+          ),
+        ),
         const SizedBox(height: 16),
         if (existingForm != null)
           Card(

@@ -16,6 +16,7 @@ import '../../../core/services/team_service.dart';
 import '../../../core/state/client_session.dart';
 import '../../../models/client_profile.dart';
 import '../../../models/employee_profile.dart';
+import '../../../models/internal_note.dart';
 import '../../../models/invoice.dart';
 import '../../../models/scheduled_work.dart';
 import '../../../models/team.dart';
@@ -24,6 +25,7 @@ import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/archived_badge.dart';
 import '../../../shared/widgets/google_calendar_booking_button.dart';
 import '../../../shared/widgets/google_calendar_widget.dart';
+import '../../../shared/widgets/internal_notes_section.dart';
 import '../../../shared/widgets/quick_add_job_dialog.dart';
 import '../../../shared/widgets/sort_control.dart';
 
@@ -885,6 +887,14 @@ class _ScheduledWorkCardState extends State<_ScheduledWorkCard> {
                       ),
                     ],
                   ),
+              ],
+              if (widget.role != 'client') ...[
+                const SizedBox(height: 12),
+                InternalNotesSection(
+                  entityType: InternalNoteEntityType.scheduledWork,
+                  entityId: widget.work.id,
+                  role: widget.role,
+                ),
               ],
               const SizedBox(height: 12),
               // Download estimate PDF (both roles)

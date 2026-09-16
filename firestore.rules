@@ -242,6 +242,33 @@ service cloud.firestore {
       allow read, write: if isStaff();
     }
 
+    // Internal, staff-only notes attached to an Estimate or a ScheduledWork
+    // (scheduled_work covers Quick Add Job too — same entity, faster creation
+    // path). A separate top-level collection, not a field on estimates/
+    // scheduled_work: both grant isOwnClient() a full document read, so a
+    // field on the parent doc would leak to the client via the Firestore SDK
+    // regardless of what the Flutter UI renders. Append-only (no update) —
+    // correcting a note means deleting and reposting. Unlike the fully-
+    // permissive staff-shared collections above, create also pins authorRole/
+    // authorId to the caller's own identity — an unenforced authorId would
+    // let one staff member forge another's name on a note, which would
+    // undermine the entire point of the feature.
+    match /internal_notes/{noteId} {
+      allow read: if isStaff();
+      allow create: if isStaff() &&
+        request.resource.data.keys().hasOnly(
+          ['id', 'entityType', 'entityId', 'text', 'authorId', 'authorName', 'authorRole', 'createdAt']) &&
+        request.resource.data.entityType in ['estimate', 'scheduledWork'] &&
+        request.resource.data.text is string && request.resource.data.text.size() > 0 &&
+        request.resource.data.authorRole == role() &&
+        ((role() == 'owner' && request.resource.data.authorId == 'owner') ||
+         (role() == 'employee' && request.resource.data.authorId == profileId()));
+      allow update: if false;
+      // author or owner may delete; an employee can only delete their own
+      allow delete: if isOwner() ||
+        (isSignedIn() && role() == 'employee' && resource.data.authorId == profileId());
+    }
+
     // Owner-only administrative data. No employee submission path exists
     // for expenses in the frontend today; service_catalog/checklist_templates
     // are only ever read by owner-facing UI.
