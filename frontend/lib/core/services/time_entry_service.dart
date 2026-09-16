@@ -5,21 +5,21 @@ import 'package:intl/intl.dart';
 import '../../models/time_entry.dart';
 
 /// manages employee shift clock in/out records
-/// one doc per employee per calendar day, keyed by a deterministic id
+/// one doc PER SHIFT (auto-generated id) — an employee can clock in/out
+/// multiple times in a calendar day (e.g. morning + afternoon shifts), so
+/// unlike the original design this is no longer one doc per employee per
+/// day. `date` stays a plain field for range queries; it is not part of any
+/// doc's identity.
 class TimeEntryService {
   TimeEntryService._();
 
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final CollectionReference<Map<String, dynamic>> _collection =
       _firestore.collection('time_entries');
-  static final DateFormat _dateFormat = DateFormat('yyyyMMdd');
   static final DateFormat _isoDateFormat = DateFormat('yyyy-MM-dd');
 
-  static String _docIdFor(String employeeId, DateTime date) =>
-      '${employeeId}_${_dateFormat.format(date)}';
-
-  /// One employee's entry for one day, addressed by an employeeId-scoped
-  /// QUERY rather than by document id.
+  /// All of one employee's shifts for one day, addressed by an
+  /// employeeId-scoped QUERY rather than by document id.
   ///
   /// This is load-bearing, not a style preference. `firestore.rules` gates a
   /// time_entries read on `isOwnEmployee(resource.data.employeeId)`, and on a
@@ -35,19 +35,18 @@ class TimeEntryService {
   /// Both filters are equality-only, which Firestore serves from the
   /// single-field indexes via a zig-zag merge join — no composite index is
   /// needed. Verified against the live deployed rules on 2026-09-16.
-  static Query<Map<String, dynamic>> _entryQueryFor(String employeeId, DateTime date) {
+  static Query<Map<String, dynamic>> _entriesQueryFor(String employeeId, DateTime date) {
     return _collection
         .where('employeeId', isEqualTo: employeeId)
-        .where('date', isEqualTo: _isoDateFormat.format(date))
-        .limit(1);
+        .where('date', isEqualTo: _isoDateFormat.format(date));
   }
 
-  static Future<QueryDocumentSnapshot<Map<String, dynamic>>?> _entryFor(
+  static Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _entriesFor(
     String employeeId,
     DateTime date,
   ) async {
-    final snapshot = await _entryQueryFor(employeeId, date).get();
-    return snapshot.docs.isEmpty ? null : snapshot.docs.first;
+    final snapshot = await _entriesQueryFor(employeeId, date).get();
+    return snapshot.docs;
   }
 
   /// The Firestore Web SDK's internal credential cache can lag a freshly
@@ -76,55 +75,68 @@ class TimeEntryService {
     }
   }
 
-  /// stream today's clock in/out entry for an employee (null if not clocked in yet)
-  static Stream<TimeEntry?> watchTodayEntry(String employeeId) {
-    return _entryQueryFor(employeeId, DateTime.now()).snapshots().map((snapshot) {
-      if (snapshot.docs.isEmpty) return null;
-      final doc = snapshot.docs.first;
-      return TimeEntry.fromMap({...doc.data(), 'id': doc.id});
+  /// stream all of today's shifts for an employee, earliest first — an
+  /// employee can clock in/out more than once in a day (e.g. morning and
+  /// afternoon shifts), so this is a list rather than a single entry.
+  static Stream<List<TimeEntry>> watchTodayEntries(String employeeId) {
+    return _entriesQueryFor(employeeId, DateTime.now()).snapshots().map((snapshot) {
+      final entries = snapshot.docs
+          .map((doc) => TimeEntry.fromMap({...doc.data(), 'id': doc.id}))
+          .toList();
+      entries.sort((a, b) => (a.clockInAt ?? DateTime(0)).compareTo(b.clockInAt ?? DateTime(0)));
+      return entries;
     });
   }
 
   static Future<void> clockIn(String employeeId) async {
     final now = DateTime.now();
-    final existing = await _entryFor(employeeId, now);
-    if (existing != null && existing.data()['clockInAt'] != null) {
-      throw Exception('Already clocked in today.');
-    }
+    final todaysEntries = await _entriesFor(employeeId, now);
 
-    if (existing == null) {
-      final docId = _docIdFor(employeeId, now);
-      await _write(() => _collection.doc(docId).set({
-            'id': docId,
-            'employeeId': employeeId,
-            'date': _isoDateFormat.format(now),
+    // an "open" row is one with no clockOutAt yet — either a real in-progress
+    // shift, or (defensively) a blank placeholder with no clockInAt either,
+    // in case one is ever created some other way (e.g. directly by the
+    // owner). Either way an employee can have at most one open row at a
+    // time, so clocking in again means starting a brand-new shift doc, never
+    // reusing an already-completed one.
+    final open = todaysEntries.where((doc) => doc.data()['clockOutAt'] == null).toList();
+    if (open.isNotEmpty) {
+      final doc = open.first;
+      if (doc.data()['clockInAt'] != null) {
+        throw Exception('Already clocked in. Clock out first to start a new shift.');
+      }
+      // Only clockInAt/clockOutAt/updatedAt may change on an employee's own
+      // update per firestore.rules — re-sending id/employeeId/date/createdAt
+      // here would trip onlyChanged() and be denied.
+      await _write(() => doc.reference.update({
             'clockInAt': now,
-            'clockOutAt': null,
-            'createdAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true)));
+          }));
       return;
     }
 
-    // A row already exists for today but carries no clock-in (e.g. the owner
-    // opened the day's shift from the Employees tab). Only clockInAt /
-    // clockOutAt / updatedAt may change on an employee's own update per
-    // firestore.rules — re-sending id/employeeId/date/createdAt here would
-    // trip onlyChanged() and be denied.
-    await _write(() => existing.reference.update({
+    final doc = _collection.doc();
+    await _write(() => doc.set({
+          'id': doc.id,
+          'employeeId': employeeId,
+          'date': _isoDateFormat.format(now),
           'clockInAt': now,
+          'clockOutAt': null,
+          'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         }));
   }
 
   static Future<void> clockOut(String employeeId) async {
     final now = DateTime.now();
-    final existing = await _entryFor(employeeId, now);
-    if (existing == null || existing.data()['clockInAt'] == null) {
+    final todaysEntries = await _entriesFor(employeeId, now);
+    final open = todaysEntries
+        .where((doc) => doc.data()['clockInAt'] != null && doc.data()['clockOutAt'] == null)
+        .toList();
+    if (open.isEmpty) {
       throw Exception('Not clocked in yet today.');
     }
 
-    await _write(() => existing.reference.update({
+    await _write(() => open.first.reference.update({
           'clockOutAt': now,
           'updatedAt': FieldValue.serverTimestamp(),
         }));
@@ -162,6 +174,15 @@ class TimeEntryService {
     });
   }
 
+  /// most-recent-first comparator that also orders same-day shifts
+  /// sensibly (latest shift of the day first) now that a day can hold more
+  /// than one entry.
+  static int _newestFirst(TimeEntry a, TimeEntry b) {
+    final byDate = b.date.compareTo(a.date);
+    if (byDate != 0) return byDate;
+    return (b.clockInAt ?? DateTime(0)).compareTo(a.clockInAt ?? DateTime(0));
+  }
+
   /// owner review: entries for a specific employee, most recent first
   static Stream<List<TimeEntry>> watchEntriesForEmployee(String employeeId) {
     return _collection
@@ -169,7 +190,7 @@ class TimeEntryService {
         .snapshots()
         .map((snapshot) {
       final entries = snapshot.docs.map((doc) => TimeEntry.fromMap(doc.data())).toList();
-      entries.sort((a, b) => b.date.compareTo(a.date));
+      entries.sort(_newestFirst);
       return entries;
     });
   }
@@ -182,7 +203,7 @@ class TimeEntryService {
         .snapshots()
         .map((snapshot) {
       final entries = snapshot.docs.map((doc) => TimeEntry.fromMap(doc.data())).toList();
-      entries.sort((a, b) => b.date.compareTo(a.date));
+      entries.sort(_newestFirst);
       return entries;
     });
   }

@@ -66,11 +66,11 @@ class _MyHoursPageState extends State<MyHoursPage> {
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    StreamBuilder<TimeEntry?>(
-                      stream: TimeEntryService.watchTodayEntry(employeeId),
+                    StreamBuilder<List<TimeEntry>>(
+                      stream: TimeEntryService.watchTodayEntries(employeeId),
                       builder: (context, snapshot) {
-                        final entry = snapshot.data;
-                        final isClockedIn = entry?.isClockedIn ?? false;
+                        final todaysEntries = snapshot.data ?? const <TimeEntry>[];
+                        final isClockedIn = todaysEntries.any((e) => e.isClockedIn);
 
                         return Card(
                           child: Padding(
@@ -78,28 +78,33 @@ class _MyHoursPageState extends State<MyHoursPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text("Today's shift", style: Theme.of(context).textTheme.titleMedium),
+                                Text("Today's shifts", style: Theme.of(context).textTheme.titleMedium),
                                 const SizedBox(height: 10),
-                                if (entry?.clockInAt != null)
-                                  Text('Clocked in: ${DateFormat('h:mm a').format(entry!.clockInAt!)}'),
-                                if (entry?.clockOutAt != null)
-                                  Text('Clocked out: ${DateFormat('h:mm a').format(entry!.clockOutAt!)}'),
-                                const SizedBox(height: 12),
+                                if (todaysEntries.isEmpty)
+                                  const Text('No shifts yet today.')
+                                else
+                                  for (final entry in todaysEntries)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 4),
+                                      child: Text(
+                                        '${entry.clockInAt == null ? '—' : DateFormat('h:mm a').format(entry.clockInAt!)}'
+                                        ' – ${entry.clockOutAt == null ? 'in progress' : DateFormat('h:mm a').format(entry.clockOutAt!)}',
+                                      ),
+                                    ),
+                                const SizedBox(height: 8),
                                 FilledButton.icon(
                                   onPressed: _isSubmitting
                                       ? null
                                       : isClockedIn
                                           ? () => _clockOut(employeeId)
-                                          : entry?.clockOutAt != null
-                                              ? null
-                                              : () => _clockIn(employeeId),
+                                          : () => _clockIn(employeeId),
                                   icon: Icon(isClockedIn ? Icons.logout : Icons.login),
                                   label: Text(
-                                    entry?.clockOutAt != null
-                                        ? 'Shift complete'
-                                        : isClockedIn
-                                            ? 'Clock out'
-                                            : 'Clock in',
+                                    isClockedIn
+                                        ? 'Clock out'
+                                        : todaysEntries.isEmpty
+                                            ? 'Clock in'
+                                            : 'Clock in (new shift)',
                                   ),
                                 ),
                               ],
