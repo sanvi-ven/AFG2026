@@ -16,12 +16,27 @@ class ContractService {
   static final CollectionReference<Map<String, dynamic>> _collection =
       _firestore.collection('employment_contracts');
 
+  /// One employee's contract, addressed by an employeeId-scoped QUERY rather
+  /// than by document id — same load-bearing reason as
+  /// `TimeEntryService._entryQueryFor` (see the long comment there).
+  /// `firestore.rules` gates an employment_contracts read on
+  /// `isOwnEmployee(resource.data.employeeId)`; on a document that does not
+  /// exist `resource` is null, so the rule denies and a plain
+  /// `.doc(employeeId).get()` fails with "Missing or insufficient
+  /// permissions" for every employee who has not been issued a contract yet.
+  /// A query returns an empty result set instead, and is still denied if it
+  /// ever asked for somebody else's contract. Confirmed live 2026-09-16.
+  static Query<Map<String, dynamic>> _contractQueryFor(String employeeId) {
+    return _collection
+        .where('employeeId', isEqualTo: employeeId.trim())
+        .limit(1);
+  }
+
   static Stream<EmploymentContract?> watchContractForEmployee(String employeeId) {
-    final normalizedId = employeeId.trim();
-    return _collection.doc(normalizedId).snapshots().map((snapshot) {
-      final data = snapshot.data();
-      if (!snapshot.exists || data == null) return null;
-      return EmploymentContract.fromMap({...data, 'id': snapshot.id});
+    return _contractQueryFor(employeeId).snapshots().map((snapshot) {
+      if (snapshot.docs.isEmpty) return null;
+      final doc = snapshot.docs.first;
+      return EmploymentContract.fromMap({...doc.data(), 'id': doc.id});
     });
   }
 
@@ -37,10 +52,10 @@ class ContractService {
   static Future<EmploymentContract?> fetchContractForEmployee(String employeeId) async {
     final normalizedId = employeeId.trim();
     if (normalizedId.isEmpty) return null;
-    final snapshot = await _collection.doc(normalizedId).get();
-    final data = snapshot.data();
-    if (!snapshot.exists || data == null) return null;
-    return EmploymentContract.fromMap({...data, 'id': snapshot.id});
+    final snapshot = await _contractQueryFor(normalizedId).get();
+    if (snapshot.docs.isEmpty) return null;
+    final doc = snapshot.docs.first;
+    return EmploymentContract.fromMap({...doc.data(), 'id': doc.id});
   }
 
   /// owner action: issue a new contract for an employee, snapshotting the
