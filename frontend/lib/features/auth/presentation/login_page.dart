@@ -51,6 +51,44 @@ class _LoginPageState extends State<LoginPage> {
     Navigator.pushNamed(context, AppRouter.claimAccount);
   }
 
+  /// Plain-language text for the FirebaseAuthException codes users actually hit.
+  ///
+  /// Firebase's own `error.message` for a simply-wrong password is "The supplied
+  /// auth credential is incorrect, malformed or has expired." — which reads like a
+  /// system fault rather than "wrong password," and has been reported as a bug on
+  /// that basis. Anything unrecognised still falls through to Firebase's message.
+  String _authErrorMessage(
+    FirebaseAuthException error, {
+    required String fallback,
+    bool isReset = false,
+  }) {
+    switch (error.code) {
+      case 'user-not-found':
+        // Only reachable on the reset path if email-enumeration protection is off.
+        if (isReset) {
+          return 'No account was found with that email address.';
+        }
+        continue wrongCredentials;
+      wrongCredentials:
+      case 'invalid-credential':
+      case 'invalid-login-credentials':
+      case 'wrong-password':
+        return 'Incorrect email or password. If you have forgotten your password, '
+            'use "Forgot password?" below.';
+      case 'invalid-email':
+        return 'That email address does not look valid. Check it and try again.';
+      case 'user-disabled':
+        return 'This account has been disabled. Contact your manager for help.';
+      case 'too-many-requests':
+        return 'Too many attempts. Wait a few minutes and try again, or reset your '
+            'password using "Forgot password?" below.';
+      case 'network-request-failed':
+        return 'Could not reach the server. Check your connection and try again.';
+      default:
+        return error.message ?? fallback;
+    }
+  }
+
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -103,7 +141,7 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
       setState(() {
-        _error = error.message ?? 'Could not sign in.';
+        _error = _authErrorMessage(error, fallback: 'Could not sign in.');
       });
     } catch (error) {
       if (!mounted) {
@@ -140,7 +178,13 @@ class _LoginPageState extends State<LoginPage> {
       );
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.message ?? 'Could not send reset email.');
+      setState(
+        () => _error = _authErrorMessage(
+          error,
+          fallback: 'Could not send reset email.',
+          isReset: true,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isSendingReset = false);
     }
