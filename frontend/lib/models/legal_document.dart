@@ -57,4 +57,10 @@ class LegalDocumentIds {
   /// content is copied (frozen) from — not shown pre-auth like the other
   /// three, only via the owner's Manage Legal Documents admin page.
   static const employmentContractTemplate = 'employment_contract_template';
+
+  /// the owner-editable fall cleanup policy (what's included in each plan,
+  /// leaf disposal, scheduling/weather, payment/cancellation, etc). Same
+  /// freeze-on-issue shape as [employmentContractTemplate]: its content is
+  /// copied onto each FallCleanupEstimate at creation, not shown pre-auth.
+  static const fallCleanupPolicy = 'fall_cleanup_policy';
 }

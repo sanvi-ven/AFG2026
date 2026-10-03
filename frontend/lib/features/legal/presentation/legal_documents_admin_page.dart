@@ -20,6 +20,7 @@ class LegalDocumentsAdminPage extends StatelessWidget {
     (id: LegalDocumentIds.termsOfService, title: 'Terms of Service'),
     (id: LegalDocumentIds.employeeDataNotice, title: 'Employee Data Privacy Notice'),
     (id: LegalDocumentIds.employmentContractTemplate, title: 'Employment Contract Template'),
+    (id: LegalDocumentIds.fallCleanupPolicy, title: 'Fall Cleanup Policy'),
   ];
 
   @override

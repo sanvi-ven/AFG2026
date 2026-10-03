@@ -306,6 +306,10 @@ class AppScaffold extends StatelessWidget {
           route: AppRouter.estimates,
           icon: Icons.request_quote_outlined),
       const _NavItem(
+          label: 'Fall Cleanup',
+          route: AppRouter.fallCleanupEstimates,
+          icon: Icons.eco_outlined),
+      const _NavItem(
           label: 'Appointments',
           route: AppRouter.appointments,
           icon: Icons.calendar_month),
@@ -331,6 +335,10 @@ class AppScaffold extends StatelessWidget {
             label: 'Estimates',
             route: AppRouter.estimates,
             icon: Icons.request_quote_outlined),
+        _NavItem(
+            label: 'Fall Cleanup',
+            route: AppRouter.fallCleanupEstimates,
+            icon: Icons.eco_outlined),
         _NavItem(
             label: 'Appointments',
             route: AppRouter.appointments,
@@ -427,6 +435,7 @@ const _ownerSidebarGroups = <_SidebarGroup>[
     routes: {
       AppRouter.requests,
       AppRouter.estimates,
+      AppRouter.fallCleanupEstimates,
       AppRouter.appointments,
       AppRouter.invoices,
     },

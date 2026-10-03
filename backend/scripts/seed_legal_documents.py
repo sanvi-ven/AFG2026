@@ -29,6 +29,7 @@ DOCUMENTS = [
     ("privacy_policy", "Privacy Policy", "privacy-policy.txt"),
     ("terms_of_service", "Terms of Service", "terms-of-service.txt"),
     ("employee_data_notice", "Employee Data Privacy Notice", "employee-data-notice.txt"),
+    ("fall_cleanup_policy", "Fall Cleanup Policy", "fall-cleanup-policy.txt"),
 ]
 
 

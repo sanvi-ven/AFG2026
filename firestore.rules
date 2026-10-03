@@ -110,6 +110,31 @@ service cloud.firestore {
          request.resource.data.status in ['approved', 'changes_requested']);
     }
 
+    // Fall cleanup estimates: a separate, fixed-menu estimate type (plan
+    // choice + price, leaf disposal, additional work) from the general
+    // `estimates` collection above — see CLAUDE.md. All three plans are
+    // always shown; a client approves exactly one by writing selectedPlan,
+    // which is write-once via the client SDK (the `resource.data.selectedPlan
+    // == null` guard) so their own session can't flip it afterward — a
+    // correction becomes owner-only, same reasoning as the
+    // employment_contracts signature guard above. A client can instead
+    // request changes, which never touches selectedPlan at all. The owner
+    // can always change anything (phone/text approval, edits, re-pricing).
+    match /fall_cleanup_estimates/{document=**} {
+      allow read: if isStaff() || isOwnClient(resource.data.clientId);
+      allow create, delete: if isStaff();
+      allow update: if isStaff() ||
+        (isOwnClient(resource.data.clientId) &&
+         (
+           (onlyChanged(['status', 'selectedPlan', 'updatedAt']) &&
+            resource.data.selectedPlan == null &&
+            request.resource.data.status == 'signed' &&
+            request.resource.data.selectedPlan in ['essential', 'premium', 'both']) ||
+           (onlyChanged(['status', 'changeRequestMessage', 'changeRequestedAt', 'updatedAt']) &&
+            request.resource.data.status == 'changes_requested')
+         ));
+    }
+
     // Two-way client/owner messaging. A client can only read their own
     // thread, and can only create a reply into their own thread as
     // themselves — today's client had no server-side check on either
