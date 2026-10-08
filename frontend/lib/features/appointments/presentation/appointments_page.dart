@@ -107,7 +107,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content:
-                Text('Invoice $invoiceNumber created and sent to client.')),
+                Text('Invoice ${Invoice.numberFromEstimate(invoiceNumber)} created and sent to client.')),
       );
     } catch (error) {
       if (!mounted) return;

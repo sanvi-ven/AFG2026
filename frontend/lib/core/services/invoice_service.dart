@@ -97,7 +97,7 @@ class InvoiceService {
 
     final invoice = Invoice(
       id: doc.id,
-      invoiceNumber: invoiceNumber.trim(),
+      invoiceNumber: Invoice.numberFromEstimate(invoiceNumber),
       clientId: clientId.trim(),
       services: services,
       total: total,
@@ -125,7 +125,7 @@ class InvoiceService {
 
     final invoice = Invoice(
       id: doc.id,
-      invoiceNumber: invoiceNumber.trim(),
+      invoiceNumber: Invoice.numberFromEstimate(invoiceNumber),
       clientId: clientId.trim(),
       services: services,
       total: total,

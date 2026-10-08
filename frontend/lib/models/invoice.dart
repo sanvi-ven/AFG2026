@@ -20,6 +20,14 @@ class Invoice {
 
   final String id;
   final String invoiceNumber;
+
+  /// an invoice reuses its source estimate's number with the EST prefix
+  /// swapped for INV (EST-0042 -> INV-0042). Applied both when an invoice is
+  /// created and when one is read, so invoices saved before this (still
+  /// stored as EST-....) display as INV-.... too, with no data migration.
+  static String numberFromEstimate(String estimateNumber) => estimateNumber
+      .trim()
+      .replaceFirst(RegExp(r'^EST', caseSensitive: false), 'INV');
   final String clientId;
   final List<InvoiceServiceItem> services;
   final double total;
@@ -63,7 +71,8 @@ class Invoice {
 
     return Invoice(
       id: (map['id'] as String? ?? '').trim(),
-      invoiceNumber: (map['invoiceNumber'] as String? ?? '').trim(),
+      invoiceNumber:
+          Invoice.numberFromEstimate(map['invoiceNumber'] as String? ?? ''),
       clientId: (map['clientId'] as String? ?? '').trim(),
       services: serviceRows,
       total: (map['total'] as num? ?? 0).toDouble(),
