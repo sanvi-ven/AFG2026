@@ -21,7 +21,6 @@ import '../../features/equipment/presentation/equipment_form_page.dart';
 import '../../features/equipment/presentation/equipment_kits_page.dart';
 import '../../features/estimates/estimates_page.dart';
 import '../../features/estimates/presentation/checklist_templates_page.dart';
-import '../../features/estimates/presentation/fall_cleanup_estimates_page.dart';
 import '../../features/estimates/presentation/service_catalog_page.dart';
 import '../../features/invoices/presentation/invoices_page.dart';
 import '../../features/jobs/presentation/employee_jobs_page.dart';
@@ -83,7 +82,6 @@ class AppRouter {
   static const appointments = '/appointments';
   static const invoices = '/invoices';
   static const estimates = '/estimates';
-  static const fallCleanupEstimates = '/estimates/fall-cleanup';
   static const messages = '/messages';
   static const availability = '/availability';
   static const myJobs = '/jobs';
@@ -167,15 +165,6 @@ class AppRouter {
             initialClientId: args['initialClientId'] as String?,
             initialNotes: args['initialNotes'] as String?,
             convertRequestId: args['convertRequestId'] as String?,
-          ),
-          settings: settings,
-        );
-      case fallCleanupEstimates:
-        return _NoAnimationPageRoute(
-          builder: (_) => FallCleanupEstimatesPage(
-            role: role,
-            authToken: authToken,
-            highlightId: highlightId,
           ),
           settings: settings,
         );

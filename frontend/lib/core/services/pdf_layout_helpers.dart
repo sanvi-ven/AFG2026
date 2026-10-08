@@ -13,6 +13,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../models/client_profile.dart';
+import '../../models/legal_document.dart';
 import '../../models/owner_settings.dart';
 
 class PdfLayoutHelpers {
@@ -213,6 +214,97 @@ class PdfLayoutHelpers {
         1: pw.Alignment.centerRight,
       },
     );
+  }
+
+  /// renders a legal_documents body (e.g. the Fall Cleanup Policy) with the
+  /// same mini-markup LegalDocumentBody uses in-app: "# " title, "## "
+  /// heading, "- " bullet, "**text**" bold, blank line = new paragraph
+  static List<pw.Widget> buildMarkup(String content) {
+    final widgets = <pw.Widget>[];
+    for (final block in LegalDocument.splitBlocks(content)) {
+      final trimmed = block.trim();
+      if (trimmed.isEmpty) continue;
+
+      if (trimmed.startsWith('# ')) {
+        widgets.add(pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 10),
+          child: pw.Text(trimmed.substring(2).trim(),
+              style: pw.TextStyle(
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                  color: accentColor)),
+        ));
+        continue;
+      }
+      if (trimmed.startsWith('## ')) {
+        widgets.add(pw.Padding(
+          padding: const pw.EdgeInsets.only(top: 10, bottom: 4),
+          child: pw.Text(trimmed.substring(3).trim(),
+              style: pw.TextStyle(
+                  fontSize: 12,
+                  fontWeight: pw.FontWeight.bold,
+                  color: accentColor)),
+        ));
+        continue;
+      }
+
+      final lines = trimmed.split('\n');
+      if (lines.every((line) => line.trimLeft().startsWith('- '))) {
+        for (final line in lines) {
+          widgets.add(pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 3, left: 4),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // drawn, since the built-in Helvetica has no "•" glyph
+                pw.Container(
+                  width: 3,
+                  height: 3,
+                  margin: const pw.EdgeInsets.only(top: 4.5, right: 7),
+                  decoration: const pw.BoxDecoration(
+                      color: PdfColors.black, shape: pw.BoxShape.circle),
+                ),
+                pw.Expanded(
+                  child: pw.RichText(
+                    text: pw.TextSpan(
+                        children:
+                            _inlineBold(line.trimLeft().substring(2).trim())),
+                  ),
+                ),
+              ],
+            ),
+          ));
+        }
+        widgets.add(pw.SizedBox(height: 4));
+        continue;
+      }
+
+      widgets.add(pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: 6),
+        child: pw.RichText(text: pw.TextSpan(children: _inlineBold(trimmed))),
+      ));
+    }
+    return widgets;
+  }
+
+  static List<pw.InlineSpan> _inlineBold(String text) {
+    const baseStyle = pw.TextStyle(fontSize: 10);
+    final spans = <pw.InlineSpan>[];
+    var lastEnd = 0;
+    for (final match in RegExp(r'\*\*(.+?)\*\*').allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(pw.TextSpan(
+            text: text.substring(lastEnd, match.start), style: baseStyle));
+      }
+      spans.add(pw.TextSpan(
+          text: match.group(1),
+          style: baseStyle.copyWith(fontWeight: pw.FontWeight.bold)));
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(pw.TextSpan(text: text.substring(lastEnd), style: baseStyle));
+    }
+    return spans;
   }
 
   /// replace `{Key}` placeholders in a file-name template with their values

@@ -101,38 +101,27 @@ service cloud.firestore {
     // enough — also pin `status` to the two values those two actions can
     // actually set, so a client can't write some other status value the
     // rest of the app doesn't expect via the raw SDK.
+    // A Fall Cleanup template estimate (type == 'fall_cleanup') carries a
+    // `fallCleanup` map of per-option prices plus a `selection`. A client
+    // approving one may also write their package/disposal/extras choice, but
+    // only `fallCleanup.selection`, never the prices, and only valid keys.
     match /estimates/{document=**} {
       allow read: if isStaff() || isOwnClient(resource.data.clientId);
       allow create, delete: if isStaff();
       allow update: if isStaff() ||
         (isOwnClient(resource.data.clientId) &&
-         onlyChanged(['status', 'changeRequestMessage', 'changeRequestedAt', 'updatedAt']) &&
-         request.resource.data.status in ['approved', 'changes_requested']);
-    }
-
-    // Fall cleanup estimates: a separate, fixed-menu estimate type (plan
-    // choice + price, leaf disposal, additional work) from the general
-    // `estimates` collection above — see CLAUDE.md. All three plans are
-    // always shown; a client approves exactly one by writing selectedPlan,
-    // which is write-once via the client SDK (the `resource.data.selectedPlan
-    // == null` guard) so their own session can't flip it afterward — a
-    // correction becomes owner-only, same reasoning as the
-    // employment_contracts signature guard above. A client can instead
-    // request changes, which never touches selectedPlan at all. The owner
-    // can always change anything (phone/text approval, edits, re-pricing).
-    match /fall_cleanup_estimates/{document=**} {
-      allow read: if isStaff() || isOwnClient(resource.data.clientId);
-      allow create, delete: if isStaff();
-      allow update: if isStaff() ||
-        (isOwnClient(resource.data.clientId) &&
-         (
-           (onlyChanged(['status', 'selectedPlan', 'updatedAt']) &&
-            resource.data.selectedPlan == null &&
-            request.resource.data.status == 'signed' &&
-            request.resource.data.selectedPlan in ['essential', 'premium', 'both']) ||
-           (onlyChanged(['status', 'changeRequestMessage', 'changeRequestedAt', 'updatedAt']) &&
-            request.resource.data.status == 'changes_requested')
-         ));
+         request.resource.data.status in ['approved', 'changes_requested'] &&
+         (onlyChanged(['status', 'changeRequestMessage', 'changeRequestedAt', 'updatedAt']) ||
+          (request.resource.data.status == 'approved' &&
+           resource.data.get('type', 'standard') == 'fall_cleanup' &&
+           onlyChanged(['status', 'fallCleanup', 'updatedAt']) &&
+           request.resource.data.fallCleanup.diff(resource.data.fallCleanup).affectedKeys().hasOnly(['selection']) &&
+           request.resource.data.fallCleanup.selection.keys().hasOnly(['package', 'disposal', 'extras']) &&
+           request.resource.data.fallCleanup.selection.package in ['essential', 'premium', 'both'] &&
+           request.resource.data.fallCleanup.selection.disposal in ['woods_curb', 'bag_leave', 'haul_away'] &&
+           request.resource.data.fallCleanup.selection.extras is list &&
+           request.resource.data.fallCleanup.selection.extras.hasOnly(
+             ['gutter_cleaning', 'aeration_overseeding', 'hardscape_weed_removal', 'asap_service']))));
     }
 
     // Two-way client/owner messaging. A client can only read their own

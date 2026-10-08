@@ -4,6 +4,7 @@ library;
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/estimate.dart';
+import '../../models/fall_cleanup.dart';
 import '../../models/invoice.dart';
 
 /// manages estimate data in firestore with real-time updates and status tracking
@@ -15,6 +16,15 @@ class EstimateService {
       _firestore.collection('estimates');
   static final DocumentReference<Map<String, dynamic>> _ownerSettingsDoc =
       _firestore.collection('owner_settings').doc('default');
+
+  /// standard: the sum of the line items; fall cleanup: selected options
+  /// plus additional work rows
+  static double _totalFor(
+      List<InvoiceServiceItem> services, FallCleanupDetails? fallCleanup) {
+    if (fallCleanup != null) return fallCleanup.knownTotal(services);
+    return services.fold<double>(
+        0, (runningTotal, item) => runningTotal + item.price);
+  }
 
   static String _formatEstimateNumber(int n) =>
       'EST-${n.toString().padLeft(4, '0')}';
@@ -107,10 +117,10 @@ class EstimateService {
     String notes = '',
     String terms = '',
     double? depositPercent,
+    FallCleanupDetails? fallCleanup,
   }) async {
     final now = DateTime.now();
-    final total = services.fold<double>(
-        0, (runningTotal, item) => runningTotal + item.price);
+    final total = _totalFor(services, fallCleanup);
     final doc = _collection.doc();
 
     final estimate = Estimate(
@@ -127,6 +137,10 @@ class EstimateService {
       notes: notes.trim(),
       terms: terms.trim(),
       depositPercent: depositPercent,
+      type: fallCleanup == null
+          ? EstimateType.standard
+          : EstimateType.fallCleanup,
+      fallCleanup: fallCleanup,
     );
 
     await doc.set(estimate.toMap());
@@ -190,13 +204,15 @@ class EstimateService {
     required List<InvoiceServiceItem> services,
     String? notes,
     String? terms,
+    FallCleanupDetails? fallCleanup,
   }) async {
     final now = DateTime.now();
-    final total = services.fold<double>(
-        0, (runningTotal, item) => runningTotal + item.price);
+    final total = _totalFor(services, fallCleanup ?? estimate.fallCleanup);
     final currentSnapshot = EstimateVersionSnapshot(
       version: estimate.revisionNumber,
-      services: estimate.services,
+      // a fall cleanup's options aren't in `services`, so snapshot the full
+      // billable list for the side-by-side revision comparison
+      services: estimate.billableServices,
       total: estimate.total,
       status: estimate.status,
       updatedAt: estimate.updatedAt,
@@ -218,6 +234,7 @@ class EstimateService {
         'originalVersion': originalVersionPayload,
         'notes': (notes ?? estimate.notes).trim(),
         'terms': (terms ?? estimate.terms).trim(),
+        if (fallCleanup != null) 'fallCleanup': fallCleanup.toMap(),
       },
       SetOptions(merge: true),
 
@@ -254,9 +271,9 @@ class EstimateService {
     required String notes,
     required String terms,
     double? depositPercent,
+    FallCleanupDetails? fallCleanup,
   }) async {
-    final total = services.fold<double>(
-        0, (runningTotal, item) => runningTotal + item.price);
+    final total = _totalFor(services, fallCleanup);
     await _collection.doc(estimateId).set(
       {
         'services': services.map((item) => item.toMap()).toList(),
@@ -264,6 +281,7 @@ class EstimateService {
         'notes': notes.trim(),
         'terms': terms.trim(),
         'depositPercent': depositPercent,
+        if (fallCleanup != null) 'fallCleanup': fallCleanup.toMap(),
         'updatedAt': DateTime.now(),
       },
       SetOptions(merge: true),
@@ -276,16 +294,45 @@ class EstimateService {
     required String estimateId,
     required String method,
     String note = '',
+    FallCleanupSelection? fallCleanupSelection,
   }) async {
     await _collection.doc(estimateId).set(
       {
         'status': InvoiceStatus.approved,
+        if (fallCleanupSelection != null)
+          'fallCleanup': {'selection': fallCleanupSelection.toMap()},
         'approvedByOwner': true,
         'ownerApprovalMethod': method,
         'ownerApprovalNote': note.trim(),
         'ownerApprovedAt': DateTime.now(),
         'updatedAt': DateTime.now(),
       },
+      SetOptions(merge: true),
+    );
+  }
+
+  /// client action: approve a fall cleanup estimate with their chosen
+  /// package, disposal, and extras. Writes only `fallCleanup.selection` (via a
+  /// field-path update, so the prices are untouched) — the Firestore rules
+  /// reject a client write to anything else in `fallCleanup`.
+  static Future<void> approveFallCleanup({
+    required String estimateId,
+    required FallCleanupSelection selection,
+  }) async {
+    await _collection.doc(estimateId).update({
+      'status': InvoiceStatus.approved,
+      'fallCleanup.selection': selection.toMap(),
+      'updatedAt': DateTime.now(),
+    });
+  }
+
+  /// owner action: link the visit-2 invoice of a two-visit fall cleanup
+  static Future<void> markSecondVisitInvoiced({
+    required String estimateId,
+    required String invoiceId,
+  }) async {
+    await _collection.doc(estimateId).set(
+      {'secondVisitInvoiceId': invoiceId, 'updatedAt': DateTime.now()},
       SetOptions(merge: true),
     );
   }

@@ -9,8 +9,11 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../../models/client_profile.dart';
 import '../../models/estimate.dart';
+import '../../models/legal_document.dart';
 import '../../models/owner_settings.dart';
 import 'client_profile_service.dart';
+import 'estimate_fall_cleanup_pdf.dart';
+import 'legal_document_service.dart';
 import 'owner_settings_service.dart';
 import 'pdf_download_service.dart';
 import 'pdf_layout_helpers.dart';
@@ -63,7 +66,10 @@ class EstimatePdfService {
   }
 
   /// builds complete pdf with company header, client info, estimate details,
-  /// services table, and total
+  /// services table, and total. A fall cleanup estimate uses its own body
+  /// (package/disposal cards, extras, additional work) under the same
+  /// header/footer, and always carries the Fall Cleanup Policy as trailing
+  /// pages, since its Terms say the policy is provided with the estimate.
   static Future<Uint8List> buildEstimatePdf(
       {required Estimate estimate}) async {
     OwnerSettings ownerSettings;
@@ -100,6 +106,17 @@ class EstimatePdfService {
     final depositAmount =
         depositPercent != null ? estimate.total * depositPercent / 100 : null;
 
+    LegalDocument? policy;
+    if (estimate.isFallCleanup) {
+      policy = await LegalDocumentService.fetchDocument(
+          LegalDocumentIds.fallCleanupPolicy);
+      if (policy == null || policy.content.trim().isEmpty) {
+        throw Exception(
+            'The Fall Cleanup Policy could not be loaded, so it could not be '
+            'attached. Check Owner Settings > Manage Legal Documents.');
+      }
+    }
+
     final pdf = pw.Document();
     pdf.addPage(
       pw.MultiPage(
@@ -112,7 +129,7 @@ class EstimatePdfService {
               ownerSettings: ownerSettings, logoBytes: logoBytes),
           pw.SizedBox(height: 18),
           pw.Text(
-            'ESTIMATE',
+            estimate.isFallCleanup ? 'FALL CLEANUP ESTIMATE' : 'ESTIMATE',
             style: pw.TextStyle(
                 fontSize: 22,
                 fontWeight: pw.FontWeight.bold,
@@ -123,8 +140,11 @@ class EstimatePdfService {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Expanded(
-                  child: PdfLayoutHelpers.buildBillTo(
-                      client: client, fallbackClientId: estimate.clientId)),
+                  child: estimate.isFallCleanup
+                      ? EstimateFallCleanupPdf.billTo(
+                          client: client, fallbackClientId: estimate.clientId)
+                      : PdfLayoutHelpers.buildBillTo(
+                          client: client, fallbackClientId: estimate.clientId)),
               pw.Expanded(
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
@@ -139,6 +159,9 @@ class EstimatePdfService {
             ],
           ),
           pw.SizedBox(height: 18),
+          if (estimate.isFallCleanup)
+            ...EstimateFallCleanupPdf.body(estimate)
+          else ...[
           PdfLayoutHelpers.buildItemsTable(
             headers: const <String>['Line Item', 'Amount'],
             data: estimate.services.map((item) {
@@ -182,6 +205,7 @@ class EstimatePdfService {
               ),
             ),
           ),
+          ],
           if (estimate.notes.trim().isNotEmpty) ...[
             pw.SizedBox(height: 16),
             pw.Text('Notes',
@@ -201,6 +225,19 @@ class EstimatePdfService {
         ],
       ),
     );
+
+    if (policy != null) {
+      // a second MultiPage always starts on a fresh page; page numbers in
+      // the shared footer count across the whole document
+      pdf.addPage(
+        pw.MultiPage(
+          pageTheme: PdfLayoutHelpers.pageTheme(),
+          footer: (context) =>
+              PdfLayoutHelpers.footer(context, ownerSettings: ownerSettings),
+          build: (context) => PdfLayoutHelpers.buildMarkup(policy!.content),
+        ),
+      );
+    }
 
     return pdf.save();
   }

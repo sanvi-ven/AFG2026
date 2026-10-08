@@ -10,8 +10,6 @@ class OwnerSettings {
     this.email = '',
     this.estimateFileNameTemplate = 'estimate_{EstimateNumber}',
     this.invoiceFileNameTemplate = 'invoice_{InvoiceNumber}',
-    this.nextFallCleanupNumber = 1,
-    this.fallCleanupFileNameTemplate = 'fall_cleanup_{EstimateNumber}',
   });
 
   final String companyName;
@@ -34,15 +32,6 @@ class OwnerSettings {
   /// filename template for downloaded invoice PDFs; supports {CompanyName},
   /// {InvoiceNumber}, {ClientName}, {Date} placeholders
   final String invoiceFileNameTemplate;
-
-  // Counter used to generate the next sequential fall cleanup estimate number
-  // (FC-0001, ...) — a separate series from nextEstimateNumber so the two
-  // don't interleave.
-  final int nextFallCleanupNumber;
-
-  /// filename template for downloaded fall cleanup estimate PDFs; supports
-  /// {CompanyName}, {EstimateNumber}, {ClientName}, {Date} placeholders
-  final String fallCleanupFileNameTemplate;
 
   bool get hasLogo =>
       (logoBase64 != null && logoBase64!.isNotEmpty) ||
@@ -73,13 +62,6 @@ class OwnerSettings {
           (map['invoice_file_name_template'] as String?)?.trim().isEmpty ?? true
               ? 'invoice_{InvoiceNumber}'
               : (map['invoice_file_name_template'] as String).trim(),
-      nextFallCleanupNumber:
-          (map['next_fall_cleanup_number'] as num?)?.toInt() ?? 1,
-      fallCleanupFileNameTemplate:
-          (map['fall_cleanup_file_name_template'] as String?)?.trim().isEmpty ??
-                  true
-              ? 'fall_cleanup_{EstimateNumber}'
-              : (map['fall_cleanup_file_name_template'] as String).trim(),
     );
   }
 
@@ -95,8 +77,6 @@ class OwnerSettings {
       'email': email.trim(),
       'estimate_file_name_template': estimateFileNameTemplate.trim(),
       'invoice_file_name_template': invoiceFileNameTemplate.trim(),
-      'next_fall_cleanup_number': nextFallCleanupNumber,
-      'fall_cleanup_file_name_template': fallCleanupFileNameTemplate.trim(),
     };
   }
 
@@ -112,8 +92,6 @@ class OwnerSettings {
     String? email,
     String? estimateFileNameTemplate,
     String? invoiceFileNameTemplate,
-    int? nextFallCleanupNumber,
-    String? fallCleanupFileNameTemplate,
   }) {
     return OwnerSettings(
       companyName: companyName ?? this.companyName,
@@ -127,10 +105,6 @@ class OwnerSettings {
           estimateFileNameTemplate ?? this.estimateFileNameTemplate,
       invoiceFileNameTemplate:
           invoiceFileNameTemplate ?? this.invoiceFileNameTemplate,
-      nextFallCleanupNumber:
-          nextFallCleanupNumber ?? this.nextFallCleanupNumber,
-      fallCleanupFileNameTemplate:
-          fallCleanupFileNameTemplate ?? this.fallCleanupFileNameTemplate,
     );
   }
 }

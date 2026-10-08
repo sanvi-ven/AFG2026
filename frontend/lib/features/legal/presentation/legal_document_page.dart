@@ -99,7 +99,7 @@ class LegalDocumentBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final blocks = content.split('\n\n');
+    final blocks = LegalDocument.splitBlocks(content);
     final children = <Widget>[];
 
     for (final block in blocks) {

@@ -8,6 +8,41 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// paragraph — see [LegalDocumentIds] for the fixed set of documents this app
 /// actually surfaces.
 class LegalDocument {
+  /// splits [content] into the markup's blocks, also breaking a block apart
+  /// wherever a heading line or a switch between bullet and plain lines sits
+  /// directly under another line with no blank line between them (e.g. the
+  /// Fall Cleanup Policy's "## What's Included" followed straight by text),
+  /// which would otherwise render the whole run as one heading or paragraph.
+  static List<String> splitBlocks(String content) {
+    final blocks = <String>[];
+    var current = <String>[];
+    String? currentKind;
+    void flush() {
+      if (current.isNotEmpty) blocks.add(current.join('\n'));
+      current = <String>[];
+      currentKind = null;
+    }
+
+    for (final line in content.split('\n')) {
+      final trimmed = line.trimLeft();
+      if (trimmed.isEmpty) {
+        flush();
+        continue;
+      }
+      final kind = trimmed.startsWith('#')
+          ? 'heading'
+          : trimmed.startsWith('- ')
+              ? 'bullet'
+              : 'text';
+      if (kind == 'heading' || kind != currentKind) flush();
+      current.add(line);
+      currentKind = kind;
+      if (kind == 'heading') flush();
+    }
+    flush();
+    return blocks;
+  }
+
   const LegalDocument({
     required this.id,
     required this.title,
@@ -58,9 +93,9 @@ class LegalDocumentIds {
   /// three, only via the owner's Manage Legal Documents admin page.
   static const employmentContractTemplate = 'employment_contract_template';
 
-  /// the owner-editable fall cleanup policy (what's included in each plan,
-  /// leaf disposal, scheduling/weather, payment/cancellation, etc). Same
-  /// freeze-on-issue shape as [employmentContractTemplate]: its content is
-  /// copied onto each FallCleanupEstimate at creation, not shown pre-auth.
+  /// the owner-editable fall cleanup policy (what's included in each
+  /// package, leaf disposal, scheduling/weather, payment/cancellation, etc).
+  /// Appended to every Fall Cleanup template estimate's PDF and linked from
+  /// the estimate in-app; its current content is used, not a frozen copy.
   static const fallCleanupPolicy = 'fall_cleanup_policy';
 }

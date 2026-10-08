@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'fall_cleanup.dart';
 import 'invoice.dart';
 
 /// represents a service estimate quote with revision and conversion tracking
@@ -31,6 +32,9 @@ class Estimate {
     this.notes = '',
     this.terms = '',
     this.depositPercent,
+    this.type = EstimateType.standard,
+    this.fallCleanup,
+    this.secondVisitInvoiceId,
   });
 
   final String id;
@@ -66,6 +70,26 @@ class Estimate {
   /// percentage (0-100) of the total due upfront to begin work; null means
   /// no deposit is required for this estimate
   final double? depositPercent;
+
+  /// [EstimateType.standard] or [EstimateType.fallCleanup]
+  final String type;
+
+  /// package/disposal/extras prices and selection; set only when [type] is
+  /// [EstimateType.fallCleanup]. [services] then holds the "Additional Work"
+  /// rows, and [total] is derived from both (see [FallCleanupDetails.knownTotal]).
+  final FallCleanupDetails? fallCleanup;
+
+  /// fall cleanup "Both (Two Visits)" only: the visit-2 invoice. The visit-1
+  /// invoice is [convertedInvoiceId], each billing 50% of the total.
+  final String? secondVisitInvoiceId;
+
+  bool get isFallCleanup =>
+      type == EstimateType.fallCleanup && fallCleanup != null;
+
+  /// the line items to invoice or schedule: [services] for a standard
+  /// estimate, or the selected fall cleanup options plus additional work
+  List<InvoiceServiceItem> get billableServices =>
+      isFallCleanup ? fallCleanup!.billableItems(services) : services;
 
   bool get isPending => status == InvoiceStatus.pending;
   bool get isApproved => status == InvoiceStatus.approved;
@@ -103,12 +127,24 @@ class Estimate {
       return null;
     }
 
+    final type = (map['type'] as String? ?? EstimateType.standard).trim();
+    final fallCleanupMap = map['fallCleanup'];
+    final fallCleanup = type == EstimateType.fallCleanup && fallCleanupMap is Map
+        ? FallCleanupDetails.fromMap(
+            fallCleanupMap.map((key, value) => MapEntry(key.toString(), value)))
+        : null;
+
     return Estimate(
       id: (map['id'] as String? ?? '').trim(),
       estimateNumber: (map['estimateNumber'] as String? ?? '').trim(),
       clientId: (map['clientId'] as String? ?? '').trim(),
       services: serviceRows,
-      total: (map['total'] as num? ?? 0).toDouble(),
+      // a fall cleanup total is always derived, never trusted from the doc:
+      // a client's approval writes only the selection (Firestore rules keep
+      // them off `total` and the prices), so a stored total can be stale
+      total: fallCleanup != null
+          ? fallCleanup.knownTotal(serviceRows)
+          : (map['total'] as num? ?? 0).toDouble(),
       status: (map['status'] as String? ?? InvoiceStatus.pending).trim(),
       createdAt: readDate(map['createdAt']),
       updatedAt: readDate(map['updatedAt']),
@@ -136,6 +172,9 @@ class Estimate {
       notes: (map['notes'] as String? ?? '').trim(),
       terms: (map['terms'] as String? ?? '').trim(),
       depositPercent: (map['depositPercent'] as num?)?.toDouble(),
+      type: type,
+      fallCleanup: fallCleanup,
+      secondVisitInvoiceId: (map['secondVisitInvoiceId'] as String?)?.trim(),
     );
   }
 
@@ -167,6 +206,9 @@ class Estimate {
       'notes': notes,
       'terms': terms,
       'depositPercent': depositPercent,
+      'type': type,
+      'fallCleanup': fallCleanup?.toMap(),
+      'secondVisitInvoiceId': secondVisitInvoiceId,
     };
   }
 }

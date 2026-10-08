@@ -22,6 +22,7 @@ import '../../models/checklist_template.dart';
 import '../../models/client_profile.dart';
 import '../../models/common_service.dart';
 import '../../models/estimate.dart';
+import '../../models/fall_cleanup.dart';
 import '../../models/internal_note.dart';
 import '../../models/invoice.dart';
 import '../../shared/utils/list_highlight_controller.dart';
@@ -29,6 +30,7 @@ import '../../shared/widgets/app_scaffold.dart';
 import '../../shared/widgets/internal_notes_section.dart';
 import '../../shared/widgets/sort_control.dart';
 import '../clients/presentation/quick_add_client_dialog.dart';
+import 'presentation/fall_cleanup_widgets.dart';
 
 /// page for viewing and managing estimates with client approval and owner conversion flows
 class EstimatesPage extends StatefulWidget {
@@ -67,6 +69,15 @@ class _EstimatesPageState extends State<EstimatesPage> {
   final _depositPercentController = TextEditingController();
   bool _requireDeposit = false;
   bool _notifyClientBySms = false;
+
+  /// which estimate template the create form is using
+  String _template = EstimateType.standard;
+  final _fallCleanupForm = FallCleanupFormController();
+
+  /// the fall cleanup default Terms last auto-filled, so switching back to
+  /// the standard template only clears Terms the owner hasn't edited
+  String? _autoFilledTerms;
+  String? _invoicingSecondVisitId;
   final List<_ServiceRowController> _serviceRows = [_ServiceRowController()];
   StreamSubscription<List<CommonService>>? _catalogSub;
   List<CommonService> _knownCatalog = const [];
@@ -171,10 +182,42 @@ class _EstimatesPageState extends State<EstimatesPage> {
     _notesController.dispose();
     _termsController.dispose();
     _depositPercentController.dispose();
+    _fallCleanupForm.dispose();
     for (final row in _serviceRows) {
       row.dispose();
     }
     super.dispose();
+  }
+
+  bool get _isFallCleanupTemplate => _template == EstimateType.fallCleanup;
+
+  /// switching to Fall Cleanup fills in its default Terms (from the Fall
+  /// Cleanup Policy) when Terms is empty; switching back clears them again
+  /// unless the owner has since edited them
+  Future<void> _onTemplateChanged(String template) async {
+    setState(() => _template = template);
+    if (template == EstimateType.fallCleanup) {
+      await _fillFallCleanupTerms();
+    } else if (_autoFilledTerms != null &&
+        _termsController.text.trim() == _autoFilledTerms!.trim()) {
+      _termsController.clear();
+      _autoFilledTerms = null;
+    }
+  }
+
+  Future<void> _fillFallCleanupTerms() async {
+    if (_termsController.text.trim().isNotEmpty) return;
+    var companyName = '';
+    try {
+      companyName = (await OwnerSettingsService.fetch()).companyName;
+    } catch (_) {
+      // fall back to the generic wording
+    }
+    if (!mounted || !_isFallCleanupTemplate) return;
+    if (_termsController.text.trim().isNotEmpty) return;
+    final terms = FallCleanupCatalog.defaultTerms(companyName);
+    _autoFilledTerms = terms;
+    _termsController.text = terms;
   }
 
   ///https://api.flutter.dev/flutter/widgets/TextEditingController-class.html
@@ -286,6 +329,18 @@ class _EstimatesPageState extends State<EstimatesPage> {
   }
 
   Future<void> _approveByOwner(Estimate estimate) async {
+    // a fall cleanup approval records which package/disposal/extras the
+    // client chose, so the policy's confirmation fields fill in
+    FallCleanupSelection? selection;
+    if (estimate.isFallCleanup) {
+      selection = await showFallCleanupSelectionDialog(
+        context,
+        details: estimate.fallCleanup!,
+        confirmLabel: 'Next',
+      );
+      if (selection == null || !mounted) return;
+    }
+
     final result = await showDialog<_OwnerApprovalResult>(
       context: context,
       builder: (_) => const _OwnerApprovalDialog(),
@@ -297,11 +352,40 @@ class _EstimatesPageState extends State<EstimatesPage> {
         estimateId: estimate.id,
         method: result.method,
         note: result.note,
+        fallCleanupSelection: selection,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Estimate approved on the client\'s behalf.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to approve estimate: $error')),
+      );
+    }
+  }
+
+  /// client approval: a fall cleanup estimate first asks which package,
+  /// disposal, and extras they want; a standard one approves as-is
+  Future<void> _approveAsClient(Estimate estimate) async {
+    if (!estimate.isFallCleanup) {
+      await _setEstimateStatus(estimate.id, InvoiceStatus.approved);
+      return;
+    }
+    final selection = await showFallCleanupSelectionDialog(
+      context,
+      details: estimate.fallCleanup!,
+      confirmLabel: 'Approve',
+    );
+    if (selection == null || !mounted) return;
+    try {
+      await EstimateService.approveFallCleanup(
+          estimateId: estimate.id, selection: selection);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Estimate approved. Thank you!')),
       );
     } catch (error) {
       if (!mounted) return;
@@ -321,18 +405,31 @@ class _EstimatesPageState extends State<EstimatesPage> {
       return;
     }
 
+    final isFallCleanup = _isFallCleanupTemplate;
     final services = <InvoiceServiceItem>[];
     for (final row in _serviceRows) {
+      // Additional Work is optional on a fall cleanup estimate
+      if (isFallCleanup && row.isBlank) continue;
       final item = row.toServiceItem();
       if (item == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content:
-                  Text('Each service needs a name and price greater than 0.')),
+          SnackBar(
+              content: Text(isFallCleanup
+                  ? 'Each additional work row needs a name and price greater than 0.'
+                  : 'Each service needs a name and price greater than 0.')),
         );
         return;
       }
       services.add(item);
+    }
+
+    FallCleanupDetails? fallCleanup;
+    if (isFallCleanup) {
+      fallCleanup = _fallCleanupForm.toDetails(
+        onError: (error) => ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error))),
+      );
+      if (fallCleanup == null) return;
     }
 
     setState(() => _isSubmitting = true);
@@ -362,9 +459,10 @@ class _EstimatesPageState extends State<EstimatesPage> {
         services: services,
         notes: _notesController.text.trim(),
         terms: _termsController.text.trim(),
-        depositPercent: _requireDeposit
+        depositPercent: _requireDeposit && !isFallCleanup
             ? double.tryParse(_depositPercentController.text.trim())
             : null,
+        fallCleanup: fallCleanup,
       );
       if (widget.convertRequestId != null) {
         await RequestService.markConverted(
@@ -380,7 +478,13 @@ class _EstimatesPageState extends State<EstimatesPage> {
         smsResult = await _sendEstimateReadySms(
           client: existingClient,
           estimateNumber: estimateNumber,
-          total: services.fold<double>(0, (sum, item) => sum + item.price),
+          // a fall cleanup sent as a menu (no package picked yet), or with
+          // an Upon Request item picked, has no single total to quote
+          total: fallCleanup == null
+              ? services.fold<double>(0, (sum, item) => sum + item.price)
+              : fallCleanup.hasPackage && !fallCleanup.hasUponRequestSelected
+                  ? fallCleanup.knownTotal(services)
+                  : null,
         );
       }
 
@@ -391,6 +495,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
       _depositPercentController.clear();
       _requireDeposit = false;
       _notifyClientBySms = false;
+      _autoFilledTerms = null;
+      _fallCleanupForm.reset();
       for (final row in _serviceRows) {
         row.dispose();
       }
@@ -405,6 +511,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
         _selectedClient = null;
         _clientSuggestions = const [];
       });
+      if (isFallCleanup) await _fillFallCleanupTerms();
+      if (!mounted) return;
 
       final message = switch (smsResult) {
         null => 'Estimate sent to client.',
@@ -437,7 +545,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
   Future<bool> _sendEstimateReadySms({
     required ClientProfile client,
     required String estimateNumber,
-    required double total,
+    required double? total,
   }) async {
     final phone = client.phoneNumber.trim();
     if (phone.isEmpty || !client.smsOptIn) return false;
@@ -449,8 +557,9 @@ class _EstimatesPageState extends State<EstimatesPage> {
 
     return CommsService.sendSms(
       to: phone,
-      body: '$businessName: A new estimate ($estimateNumber) for '
-          '\$${total.toStringAsFixed(2)} is ready for your review. '
+      body: '$businessName: A new estimate ($estimateNumber)'
+          '${total == null ? '' : ' for \$${total.toStringAsFixed(2)}'} '
+          'is ready for your review. '
           'Log in to your account to view it. Reply STOP to opt out.',
     );
   }
@@ -512,15 +621,16 @@ class _EstimatesPageState extends State<EstimatesPage> {
   }
 
   Future<void> _reviseAndResendEstimate(Estimate estimate) async {
-    final revisedServices = await showDialog<List<InvoiceServiceItem>>(
+    final revised = await showDialog<_ReviseEstimateResult>(
       context: context,
       builder: (_) => _ReviseEstimateDialog(
         estimateNumber: estimate.estimateNumber,
         currentVersion: estimate.revisionNumber,
         initialServices: estimate.services,
+        initialFallCleanup: estimate.fallCleanup,
       ),
     );
-    if (revisedServices == null) {
+    if (revised == null) {
       return;
     }
 
@@ -528,7 +638,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
     try {
       await EstimateService.reviseAndResendEstimate(
         estimate: estimate,
-        services: revisedServices,
+        services: revised.services,
+        fallCleanup: revised.fallCleanup,
       );
       if (!mounted) {
         return;
@@ -570,6 +681,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
         notes: result.notes,
         terms: result.terms,
         depositPercent: result.depositPercent,
+        fallCleanup: result.fallCleanup,
       );
       if (!mounted) {
         return;
@@ -645,7 +757,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
           estimateId: estimate.id,
           estimateNumber: estimate.estimateNumber,
           clientId: estimate.clientId,
-          services: estimate.services,
+          services: estimate.billableServices,
           total: estimate.total,
           scheduledDate: scheduledDateTime,
           address: address,
@@ -673,7 +785,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
             estimateId: estimate.id,
             estimateNumber: estimate.estimateNumber,
             clientId: estimate.clientId,
-            services: estimate.services,
+            services: estimate.billableServices,
             total: estimate.total,
             scheduledDate: occurrenceDate,
             address: address,
@@ -806,12 +918,31 @@ class _EstimatesPageState extends State<EstimatesPage> {
       return;
     }
 
+    final fallCleanup = estimate.fallCleanup;
+    if (estimate.isFallCleanup) {
+      final problem = !fallCleanup!.hasPackage
+          ? 'No package is selected on this estimate yet.'
+          : fallCleanup.hasUponRequestSelected
+              ? 'Set a price for every "Upon Request" item the client picked before invoicing (use Edit).'
+              : null;
+      if (problem != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(problem)));
+        return;
+      }
+    }
+    final isTwoVisit = estimate.isFallCleanup && fallCleanup!.isTwoVisit;
+
     setState(() => _convertingEstimateId = estimate.id);
     try {
       final invoiceId = await InvoiceService.createInvoiceFromEstimate(
-        invoiceNumber: estimate.estimateNumber,
+        invoiceNumber: isTwoVisit
+            ? '${estimate.estimateNumber}-1'
+            : estimate.estimateNumber,
         clientId: estimate.clientId,
-        services: estimate.services,
+        services: isTwoVisit
+            ? _halfForVisit(estimate.billableServices, visit: 1)
+            : estimate.billableServices,
         sourceEstimateId: estimate.id,
         notes: estimate.notes,
         terms: estimate.terms,
@@ -823,8 +954,10 @@ class _EstimatesPageState extends State<EstimatesPage> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(
-                '${estimate.estimateNumber} converted to invoice and sent to client.')),
+            content: Text(isTwoVisit
+                ? 'Visit 1 invoice (50%) for ${estimate.estimateNumber} sent to client. '
+                    'Invoice visit 2 once it\'s done.'
+                : '${estimate.estimateNumber} converted to invoice and sent to client.')),
       );
     } catch (error) {
       if (!mounted) {
@@ -837,6 +970,60 @@ class _EstimatesPageState extends State<EstimatesPage> {
       if (mounted) {
         setState(() => _convertingEstimateId = null);
       }
+    }
+  }
+
+  /// a two-visit fall cleanup bills 50% after each visit: every line item is
+  /// split in half, with visit 1 taking the odd cent so the two invoices
+  /// always add up to exactly the estimate's total
+  static List<InvoiceServiceItem> _halfForVisit(
+      List<InvoiceServiceItem> items,
+      {required int visit}) {
+    return [
+      for (final item in items)
+        InvoiceServiceItem(
+          name: item.name,
+          description: [
+            if (item.description.isNotEmpty) item.description,
+            '50% billed after visit $visit of 2 '
+                '(full price \$${item.price.toStringAsFixed(2)}).',
+          ].join('\n'),
+          price: () {
+            final cents = (item.price * 100).round();
+            final half = cents ~/ 2;
+            return (visit == 1 ? cents - half : half) / 100;
+          }(),
+        ),
+    ];
+  }
+
+  /// owner action: bill the second 50% of a two-visit fall cleanup
+  Future<void> _invoiceSecondVisit(Estimate estimate) async {
+    setState(() => _invoicingSecondVisitId = estimate.id);
+    try {
+      final invoiceId = await InvoiceService.createInvoiceFromEstimate(
+        invoiceNumber: '${estimate.estimateNumber}-2',
+        clientId: estimate.clientId,
+        services: _halfForVisit(estimate.billableServices, visit: 2),
+        sourceEstimateId: estimate.id,
+        notes: estimate.notes,
+        terms: estimate.terms,
+      );
+      await EstimateService.markSecondVisitInvoiced(
+          estimateId: estimate.id, invoiceId: invoiceId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                'Visit 2 invoice (50%) for ${estimate.estimateNumber} sent to client.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create visit 2 invoice: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _invoicingSecondVisitId = null);
     }
   }
 
@@ -939,6 +1126,9 @@ class _EstimatesPageState extends State<EstimatesPage> {
               onCreateClient: _openQuickAddClient,
               serviceRows: _serviceRows,
               catalog: _knownCatalog,
+              template: _template,
+              onTemplateChanged: _onTemplateChanged,
+              fallCleanupForm: _fallCleanupForm,
               notesController: _notesController,
               termsController: _termsController,
               requireDeposit: _requireDeposit,
@@ -1048,8 +1238,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
                           isEditing: _editingEstimateId == estimate.id,
                           isArchiving: _archivingEstimateId == estimate.id,
                           isDeleting: _deletingEstimateId == estimate.id,
-                          onApprove: () => _setEstimateStatus(
-                              estimate.id, InvoiceStatus.approved),
+                          onApprove: () => _approveAsClient(estimate),
                           onRequestChanges: () =>
                               _requestEstimateChanges(estimate),
                           onConvert: () => _convertToInvoice(estimate),
@@ -1070,6 +1259,10 @@ class _EstimatesPageState extends State<EstimatesPage> {
                           onViewInAppointments: () =>
                               _viewInAppointments(estimate),
                           onOwnerApprove: () => _approveByOwner(estimate),
+                          isInvoicingSecondVisit:
+                              _invoicingSecondVisitId == estimate.id,
+                          onInvoiceSecondVisit: () =>
+                              _invoiceSecondVisit(estimate),
                         ),
                       ),
                     );
@@ -1125,6 +1318,9 @@ class _OwnerEstimateForm extends StatelessWidget {
     required this.onCreateClient,
     required this.serviceRows,
     required this.catalog,
+    required this.template,
+    required this.onTemplateChanged,
+    required this.fallCleanupForm,
     required this.notesController,
     required this.termsController,
     required this.requireDeposit,
@@ -1148,6 +1344,9 @@ class _OwnerEstimateForm extends StatelessWidget {
   final VoidCallback onCreateClient;
   final List<_ServiceRowController> serviceRows;
   final List<CommonService> catalog;
+  final String template;
+  final ValueChanged<String> onTemplateChanged;
+  final FallCleanupFormController fallCleanupForm;
   final TextEditingController notesController;
   final TextEditingController termsController;
   final bool requireDeposit;
@@ -1170,6 +1369,26 @@ class _OwnerEstimateForm extends StatelessWidget {
           children: [
             Text('Create Estimate',
                 style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            Text('Template', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 6),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: EstimateType.standard,
+                  label: Text('Standard'),
+                  icon: Icon(Icons.request_quote_outlined),
+                ),
+                ButtonSegment(
+                  value: EstimateType.fallCleanup,
+                  label: Text('Fall Cleanup'),
+                  icon: Icon(Icons.eco_outlined),
+                ),
+              ],
+              selected: {template},
+              onSelectionChanged: (selection) =>
+                  onTemplateChanged(selection.first),
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: estimateNumberController,
@@ -1255,7 +1474,20 @@ class _OwnerEstimateForm extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 12),
-            Text('Services', style: Theme.of(context).textTheme.titleSmall),
+            if (template == EstimateType.fallCleanup) ...[
+              FallCleanupEditor(controller: fallCleanupForm),
+              const SizedBox(height: 12),
+            ],
+            Text(
+                template == EstimateType.fallCleanup
+                    ? 'Additional Work (optional)'
+                    : 'Services',
+                style: Theme.of(context).textTheme.titleSmall),
+            if (template == EstimateType.fallCleanup)
+              Text(
+                'One-off work on the same job (hedge trim, tree cuts). Leave blank for none.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             const SizedBox(height: 8),
             for (var i = 0; i < serviceRows.length; i++)
               _ServiceRowEditor(
@@ -1269,7 +1501,9 @@ class _OwnerEstimateForm extends StatelessWidget {
               child: TextButton.icon(
                 onPressed: onAddService,
                 icon: const Icon(Icons.add),
-                label: const Text('Add service'),
+                label: Text(template == EstimateType.fallCleanup
+                    ? 'Add line item'
+                    : 'Add service'),
               ),
             ),
             const SizedBox(height: 12),
@@ -1288,14 +1522,16 @@ class _OwnerEstimateForm extends StatelessWidget {
               decoration: const InputDecoration(
                   labelText: 'Terms (optional)', border: OutlineInputBorder()),
             ),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              value: requireDeposit,
-              onChanged: (value) => onRequireDepositChanged(value ?? false),
-              title: const Text('Require a deposit to begin work'),
-            ),
-            if (requireDeposit) ...[
+            // fall cleanup is due on completion per its policy, no deposit
+            if (template != EstimateType.fallCleanup)
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: requireDeposit,
+                onChanged: (value) => onRequireDepositChanged(value ?? false),
+                title: const Text('Require a deposit to begin work'),
+              ),
+            if (requireDeposit && template != EstimateType.fallCleanup) ...[
               TextField(
                 controller: depositPercentController,
                 keyboardType:
@@ -1362,6 +1598,8 @@ class _EstimateCard extends StatelessWidget {
     required this.onOwnerApprove,
     required this.isArchiving,
     required this.isDeleting,
+    required this.isInvoicingSecondVisit,
+    required this.onInvoiceSecondVisit,
     this.onArchive,
     this.onDeletePermanently,
   });
@@ -1390,6 +1628,8 @@ class _EstimateCard extends StatelessWidget {
   final VoidCallback onOwnerApprove;
   final VoidCallback? onArchive;
   final VoidCallback? onDeletePermanently;
+  final bool isInvoicingSecondVisit;
+  final VoidCallback onInvoiceSecondVisit;
 
   String _displayStatus(String status) {
     final statusKey = status.trim().toLowerCase();
@@ -1541,6 +1781,11 @@ class _EstimateCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
+              if (estimate.isFallCleanup)
+                Text('Fall Cleanup Estimate',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w700)),
               Text('Client ID: ${estimate.clientId}'),
               if (estimate.revisionNumber > 1) ...[
                 const SizedBox(height: 4),
@@ -1585,6 +1830,13 @@ class _EstimateCard extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 10),
+              if (estimate.isFallCleanup)
+                FallCleanupSummary(
+                  details: estimate.fallCleanup!,
+                  additionalWork: estimate.services,
+                  total: estimate.total,
+                )
+              else ...[
               Text('Services', style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 6),
               for (final item in estimate.services)
@@ -1620,6 +1872,7 @@ class _EstimateCard extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w700)),
                 ],
               ),
+              ],
               if (estimate.notes.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Text('Notes', style: Theme.of(context).textTheme.titleSmall),
@@ -1665,7 +1918,7 @@ class _EstimateCard extends StatelessWidget {
                           _versionColumn(
                             context,
                             title: newTitle,
-                            services: estimate.services,
+                            services: estimate.billableServices,
                             total: estimate.total,
                             status: estimate.status,
                           ),
@@ -1689,7 +1942,7 @@ class _EstimateCard extends StatelessWidget {
                           child: _versionColumn(
                             context,
                             title: newTitle,
-                            services: estimate.services,
+                            services: estimate.billableServices,
                             total: estimate.total,
                             status: estimate.status,
                           ),
@@ -1772,8 +2025,34 @@ class _EstimateCard extends StatelessWidget {
                                 child:
                                     CircularProgressIndicator(strokeWidth: 2))
                             : const Icon(Icons.download_outlined),
-                        label: const Text('Download Invoice PDF'),
+                        label: Text(estimate.isFallCleanup &&
+                                estimate.fallCleanup!.isTwoVisit
+                            ? 'Download Visit 1 Invoice PDF'
+                            : 'Download Invoice PDF'),
                       ),
+                      if (estimate.isFallCleanup &&
+                          estimate.fallCleanup!.isTwoVisit) ...[
+                        const SizedBox(height: 8),
+                        if (estimate.secondVisitInvoiceId == null)
+                          FilledButton.icon(
+                            onPressed: isInvoicingSecondVisit
+                                ? null
+                                : onInvoiceSecondVisit,
+                            icon: isInvoicingSecondVisit
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2))
+                                : const Icon(Icons.receipt_long_outlined),
+                            label: const Text('Invoice Visit 2 (50%)'),
+                          )
+                        else
+                          Text(
+                            'Visit 2 invoiced: ${estimate.secondVisitInvoiceId}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                      ],
                     ],
                   )
                 else ...[
@@ -2142,16 +2421,27 @@ class _RequestEstimateChangesDialogState
   }
 }
 
+/// result of [_ReviseEstimateDialog]; [fallCleanup] is set only when
+/// revising a fall cleanup estimate
+class _ReviseEstimateResult {
+  const _ReviseEstimateResult({required this.services, this.fallCleanup});
+
+  final List<InvoiceServiceItem> services;
+  final FallCleanupDetails? fallCleanup;
+}
+
 class _ReviseEstimateDialog extends StatefulWidget {
   const _ReviseEstimateDialog({
     required this.estimateNumber,
     required this.currentVersion,
     required this.initialServices,
+    this.initialFallCleanup,
   });
 
   final String estimateNumber;
   final int currentVersion;
   final List<InvoiceServiceItem> initialServices;
+  final FallCleanupDetails? initialFallCleanup;
 
   @override
   State<_ReviseEstimateDialog> createState() => _ReviseEstimateDialogState();
@@ -2159,6 +2449,10 @@ class _ReviseEstimateDialog extends StatefulWidget {
 
 class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
   final List<_ServiceRowController> _rows = [];
+  late final FallCleanupFormController? _fallCleanupForm =
+      widget.initialFallCleanup == null
+          ? null
+          : FallCleanupFormController(widget.initialFallCleanup);
   bool _isSaving = false;
 
   @override
@@ -2179,6 +2473,7 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
     for (final row in _rows) {
       row.dispose();
     }
+    _fallCleanupForm?.dispose();
     super.dispose();
   }
 
@@ -2197,8 +2492,10 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
   }
 
   void _submit() {
+    final fallCleanupForm = _fallCleanupForm;
     final parsed = <InvoiceServiceItem>[];
     for (final row in _rows) {
+      if (fallCleanupForm != null && row.isBlank) continue;
       final item = row.toServiceItem();
       if (item == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2211,8 +2508,18 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
       parsed.add(item);
     }
 
+    FallCleanupDetails? fallCleanup;
+    if (fallCleanupForm != null) {
+      fallCleanup = fallCleanupForm.toDetails(
+        onError: (error) => ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error))),
+      );
+      if (fallCleanup == null) return;
+    }
+
     setState(() => _isSaving = true);
-    Navigator.of(context).pop(parsed);
+    Navigator.of(context).pop(
+        _ReviseEstimateResult(services: parsed, fallCleanup: fallCleanup));
   }
 
   @override
@@ -2230,6 +2537,16 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (_fallCleanupForm != null) ...[
+                    FallCleanupEditor(controller: _fallCleanupForm),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Additional Work (optional)',
+                          style: Theme.of(context).textTheme.titleSmall),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   for (var i = 0; i < _rows.length; i++)
                     _ServiceRowEditor(
                       key: ObjectKey(_rows[i]),
@@ -2278,12 +2595,16 @@ class _EditEstimateResult {
     required this.notes,
     required this.terms,
     required this.depositPercent,
+    this.fallCleanup,
   });
 
   final List<InvoiceServiceItem> services;
   final String notes;
   final String terms;
   final double? depositPercent;
+
+  /// set only when editing a fall cleanup estimate
+  final FallCleanupDetails? fallCleanup;
 }
 
 /// owner-only editor for a still-pending estimate (not yet approved/denied
@@ -2311,6 +2632,10 @@ class _EditPendingEstimateDialogState
   late final _depositPercentController = TextEditingController(
       text: widget.estimate.depositPercent?.toStringAsFixed(0) ?? '');
   late bool _requireDeposit = widget.estimate.depositPercent != null;
+  late final FallCleanupFormController? _fallCleanupForm =
+      widget.estimate.isFallCleanup
+          ? FallCleanupFormController(widget.estimate.fallCleanup)
+          : null;
   bool _isSaving = false;
 
   @override
@@ -2333,6 +2658,7 @@ class _EditPendingEstimateDialogState
     _notesController.dispose();
     _termsController.dispose();
     _depositPercentController.dispose();
+    _fallCleanupForm?.dispose();
     super.dispose();
   }
 
@@ -2349,8 +2675,10 @@ class _EditPendingEstimateDialogState
   }
 
   void _submit() {
+    final fallCleanupForm = _fallCleanupForm;
     final parsed = <InvoiceServiceItem>[];
     for (final row in _rows) {
+      if (fallCleanupForm != null && row.isBlank) continue;
       final item = row.toServiceItem();
       if (item == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2362,14 +2690,24 @@ class _EditPendingEstimateDialogState
       parsed.add(item);
     }
 
+    FallCleanupDetails? fallCleanup;
+    if (fallCleanupForm != null) {
+      fallCleanup = fallCleanupForm.toDetails(
+        onError: (error) => ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error))),
+      );
+      if (fallCleanup == null) return;
+    }
+
     setState(() => _isSaving = true);
     Navigator.of(context).pop(_EditEstimateResult(
       services: parsed,
       notes: _notesController.text,
       terms: _termsController.text,
-      depositPercent: _requireDeposit
+      depositPercent: _requireDeposit && fallCleanupForm == null
           ? double.tryParse(_depositPercentController.text.trim())
           : null,
+      fallCleanup: fallCleanup,
     ));
   }
 
@@ -2388,6 +2726,13 @@ class _EditPendingEstimateDialogState
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (_fallCleanupForm != null) ...[
+                    FallCleanupEditor(controller: _fallCleanupForm),
+                    const SizedBox(height: 12),
+                    Text('Additional Work (optional)',
+                        style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                  ],
                   for (var i = 0; i < _rows.length; i++)
                     _ServiceRowEditor(
                       key: ObjectKey(_rows[i]),
@@ -2421,15 +2766,16 @@ class _EditPendingEstimateDialogState
                         labelText: 'Terms (optional)',
                         border: OutlineInputBorder()),
                   ),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    value: _requireDeposit,
-                    onChanged: (value) =>
-                        setState(() => _requireDeposit = value ?? false),
-                    title: const Text('Require a deposit to begin work'),
-                  ),
-                  if (_requireDeposit)
+                  if (_fallCleanupForm == null)
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: _requireDeposit,
+                      onChanged: (value) =>
+                          setState(() => _requireDeposit = value ?? false),
+                      title: const Text('Require a deposit to begin work'),
+                    ),
+                  if (_requireDeposit && _fallCleanupForm == null)
                     TextField(
                       controller: _depositPercentController,
                       keyboardType:
@@ -2501,6 +2847,12 @@ class _ServiceRowController {
   final TextEditingController quantityController;
   final TextEditingController unitController;
   bool isPerUnit;
+
+  /// nothing typed in at all (an unused Additional Work row)
+  bool get isBlank =>
+      nameController.text.trim().isEmpty &&
+      descriptionController.text.trim().isEmpty &&
+      priceController.text.trim().isEmpty;
 
   double? get computedPrice {
     if (isPerUnit) {
