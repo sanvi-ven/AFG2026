@@ -42,9 +42,13 @@ class InvoicePdfService {
       client = null;
     }
 
+    // an invoice reuses its estimate's number (EST-0042), so the file name
+    // swaps that prefix to INV (INV-0042) to tell the two downloads apart
     final invoicePart = invoice.invoiceNumber.trim().isEmpty
         ? invoice.id
-        : invoice.invoiceNumber.trim();
+        : invoice.invoiceNumber
+            .trim()
+            .replaceFirst(RegExp(r'^EST', caseSensitive: false), 'INV');
     final resolved = PdfLayoutHelpers.resolveFileNameTemplate(
       ownerSettings.invoiceFileNameTemplate,
       {
