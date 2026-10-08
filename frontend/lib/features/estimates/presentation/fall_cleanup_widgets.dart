@@ -19,7 +19,7 @@ String _formatPrice(double? price, {bool zeroIsIncluded = false}) {
 
 /// owner-side form state for a fall cleanup estimate: one price field per
 /// option (blank = Upon Request) plus the current selection
-class FallCleanupFormController {
+class FallCleanupFormController extends ChangeNotifier {
   FallCleanupFormController([FallCleanupDetails? initial]) {
     final details = initial ?? FallCleanupDetails.defaults();
     String text(double? price) => price == null ? '' : price.toStringAsFixed(2);
@@ -62,6 +62,39 @@ class FallCleanupFormController {
     disposal = null;
     extras = {};
     fresh.dispose();
+    notifyListeners();
+  }
+
+  /// every price field plus this controller's own selection changes, so a
+  /// live total can rebuild on any edit
+  Listenable get changes => Listenable.merge([
+        this,
+        ...packagePrices.values,
+        ...disposalPrices.values,
+        ...extraPrices.values,
+      ]);
+
+  /// the editor calls this after changing [package]/[disposal]/[extras]
+  void selectionChanged() => notifyListeners();
+
+  /// the details as typed so far, for a live total: an unparseable price is
+  /// treated like a blank one (Upon Request) instead of failing
+  FallCleanupDetails liveDetails() {
+    Map<String, double?> read(Map<String, TextEditingController> fields) => {
+          for (final entry in fields.entries)
+            entry.key: double.tryParse(
+                entry.value.text.trim().replaceAll(r'$', '')),
+        };
+    return FallCleanupDetails(
+      packagePrices: read(packagePrices),
+      disposalPrices: read(disposalPrices),
+      extraPrices: read(extraPrices),
+      selection: FallCleanupSelection(
+        package: package,
+        disposal: disposal,
+        extras: extras.toList(),
+      ),
+    );
   }
 
   /// the entered details, or null with [error] set when a price isn't a
@@ -109,6 +142,7 @@ class FallCleanupFormController {
     );
   }
 
+  @override
   void dispose() {
     for (final controller in [
       ...packagePrices.values,
@@ -117,6 +151,7 @@ class FallCleanupFormController {
     ]) {
       controller.dispose();
     }
+    super.dispose();
   }
 }
 
@@ -149,7 +184,10 @@ class _FallCleanupEditorState extends State<FallCleanupEditor> {
         children: [
           Checkbox(
             value: selected,
-            onChanged: (value) => setState(() => onSelected(value ?? false)),
+            onChanged: (value) {
+              setState(() => onSelected(value ?? false));
+              _c.selectionChanged();
+            },
           ),
           Expanded(
             child: Tooltip(

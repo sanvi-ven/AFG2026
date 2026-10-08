@@ -1553,7 +1553,16 @@ class _OwnerEstimateForm extends StatelessWidget {
               subtitle: const Text(
                   'Only sent if the client has a phone number on file and has opted in to text reminders.'),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
+            _LiveEstimateTotal(
+              rows: serviceRows,
+              fallCleanupForm:
+                  template == EstimateType.fallCleanup ? fallCleanupForm : null,
+              depositPercentController: depositPercentController,
+              requireDeposit:
+                  requireDeposit && template != EstimateType.fallCleanup,
+            ),
+            const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton(
@@ -2562,6 +2571,9 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
                       label: const Text('Add service'),
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  _LiveEstimateTotal(
+                      rows: _rows, fallCleanupForm: _fallCleanupForm),
                 ],
               );
             },
@@ -2786,6 +2798,14 @@ class _EditPendingEstimateDialogState
                         suffixText: '%',
                       ),
                     ),
+                  const SizedBox(height: 12),
+                  _LiveEstimateTotal(
+                    rows: _rows,
+                    fallCleanupForm: _fallCleanupForm,
+                    depositPercentController: _depositPercentController,
+                    requireDeposit:
+                        _requireDeposit && _fallCleanupForm == null,
+                  ),
                 ],
               );
             },
@@ -2811,6 +2831,102 @@ class _EditPendingEstimateDialogState
   }
 }
 
+/// running total shown just above the send/save button while composing an
+/// estimate, updating on every keystroke. Rows that aren't complete yet just
+/// count as $0. A fall cleanup estimate follows the same rules the client
+/// will see: no package picked means there's no total yet, and a picked
+/// "Upon Request" item adds "+ items upon request".
+class _LiveEstimateTotal extends StatelessWidget {
+  const _LiveEstimateTotal({
+    required this.rows,
+    this.fallCleanupForm,
+    this.depositPercentController,
+    this.requireDeposit = false,
+  });
+
+  final List<_ServiceRowController> rows;
+  final FallCleanupFormController? fallCleanupForm;
+  final TextEditingController? depositPercentController;
+  final bool requireDeposit;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallCleanupForm = this.fallCleanupForm;
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        for (final row in rows) row.priceChanges,
+        if (fallCleanupForm != null) fallCleanupForm.changes,
+        if (depositPercentController != null) depositPercentController,
+      ]),
+      builder: (context, _) {
+        final rowsTotal = rows.fold<double>(
+            0, (sum, row) => sum + (row.computedPrice ?? 0));
+        final details = fallCleanupForm?.liveDetails();
+        final theme = Theme.of(context);
+
+        String totalText;
+        String? detail;
+        if (details == null) {
+          totalText = '\$${rowsTotal.toStringAsFixed(2)}';
+          final percent =
+              double.tryParse(depositPercentController?.text.trim() ?? '');
+          if (requireDeposit && percent != null) {
+            detail = 'Deposit (${percent.toStringAsFixed(0)}%): '
+                '\$${(rowsTotal * percent / 100).toStringAsFixed(2)}';
+          }
+        } else if (!details.hasPackage) {
+          totalText = '—';
+          detail = 'No package picked: the client will choose, so the '
+              'estimate shows "Your total depends on the options you choose."';
+        } else {
+          final known = details.selectedLines
+                  .fold<double>(0, (sum, line) => sum + (line.price ?? 0)) +
+              rowsTotal;
+          totalText = '\$${known.toStringAsFixed(2)}'
+              '${details.hasUponRequestSelected ? ' + items upon request' : ''}';
+          if (details.isTwoVisit && !details.hasUponRequestSelected) {
+            detail =
+                'Billed 50% after each visit (\$${(known / 2).toStringAsFixed(2)} per visit)';
+          }
+        }
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                children: [
+                  Text('Current total', style: theme.textTheme.titleSmall),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      totalText,
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+              if (detail != null) ...[
+                const SizedBox(height: 4),
+                Text(detail,
+                    textAlign: TextAlign.end,
+                    style: theme.textTheme.bodySmall),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _ServiceRowController {
   _ServiceRowController({
     String name = '',
@@ -2818,8 +2934,9 @@ class _ServiceRowController {
     String price = '',
     String quantity = '',
     String unit = '',
-    this.isPerUnit = false,
-  })  : nameController = TextEditingController(text: name),
+    bool isPerUnit = false,
+  })  : _perUnit = ValueNotifier<bool>(isPerUnit),
+        nameController = TextEditingController(text: name),
         descriptionController = TextEditingController(text: description),
         priceController = TextEditingController(text: price),
         quantityController = TextEditingController(text: quantity),
@@ -2846,7 +2963,16 @@ class _ServiceRowController {
   final TextEditingController priceController;
   final TextEditingController quantityController;
   final TextEditingController unitController;
-  bool isPerUnit;
+
+  /// a notifier (not a plain bool) so the live total also updates when the
+  /// flat/per-unit toggle flips, not just on typing
+  final ValueNotifier<bool> _perUnit;
+  bool get isPerUnit => _perUnit.value;
+  set isPerUnit(bool value) => _perUnit.value = value;
+
+  /// anything that changes this row's price
+  Listenable get priceChanges =>
+      Listenable.merge([_perUnit, priceController, quantityController]);
 
   /// nothing typed in at all (an unused Additional Work row)
   bool get isBlank =>
@@ -2903,6 +3029,7 @@ class _ServiceRowController {
     priceController.dispose();
     quantityController.dispose();
     unitController.dispose();
+    _perUnit.dispose();
   }
 }
 

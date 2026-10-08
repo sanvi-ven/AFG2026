@@ -163,7 +163,15 @@ class AppScaffold extends StatelessWidget {
             ],
           ),
           body: body,
-          bottomNavigationBar: Theme(
+          // owner: grouped, collapsible bar; client/employee: unchanged
+          bottomNavigationBar: role == 'owner'
+              ? _OwnerMobileNav(
+                  items: items,
+                  selectedRoute: selectedRoute,
+                  onSelectRoute: (route) => onDestinationSelected(
+                      items.indexWhere((i) => i.route == route)),
+                )
+              : Theme(
             data: Theme.of(context).copyWith(
               textTheme: Theme.of(context).textTheme.apply(
                     fontSizeFactor: textScaleFactor,
@@ -529,6 +537,142 @@ class _OwnerGroupedSidebarState extends State<_OwnerGroupedSidebar> {
     }
 
     return ListView(children: rows);
+  }
+}
+
+/// owner-only narrow-layout bottom bar: the same Workflow/Contacts groups as
+/// [_OwnerGroupedSidebar], plus a "More" group holding every remaining page,
+/// so the bar has 4 roomy buttons instead of 12 squeezed ones. Tapping a
+/// group opens its pages in a panel just above the bar; tapping it again
+/// (or picking a page) closes it.
+class _OwnerMobileNav extends StatefulWidget {
+  const _OwnerMobileNav({
+    required this.items,
+    required this.selectedRoute,
+    required this.onSelectRoute,
+  });
+
+  final List<_NavItem> items;
+  final String selectedRoute;
+  final void Function(String route) onSelectRoute;
+
+  @override
+  State<_OwnerMobileNav> createState() => _OwnerMobileNavState();
+}
+
+class _OwnerMobileNavState extends State<_OwnerMobileNav> {
+  String? _openGroupKey;
+
+  /// bar entries in order: a standalone item (the dashboard) or a group
+  List<Object> _entries() {
+    final entries = <Object>[];
+    final added = <String>{};
+    final moreRoutes = <String>{};
+    for (final item in widget.items) {
+      final group = _ownerSidebarGroups
+          .where((g) => g.routes.contains(item.route))
+          .firstOrNull;
+      if (group != null) {
+        if (added.add(group.key)) entries.add(group);
+      } else if (item.route == AppRouter.dashboard) {
+        entries.add(item);
+      } else {
+        moreRoutes.add(item.route);
+      }
+    }
+    if (moreRoutes.isNotEmpty) {
+      entries.add(_SidebarGroup(
+        key: 'more',
+        label: 'More',
+        icon: Icons.more_horiz,
+        routes: moreRoutes,
+      ));
+    }
+    return entries;
+  }
+
+  bool _contains(Object entry, String route) => entry is _SidebarGroup
+      ? entry.routes.contains(route)
+      : (entry as _NavItem).route == route;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = _entries();
+    final selectedIndex =
+        entries.indexWhere((entry) => _contains(entry, widget.selectedRoute));
+    final openGroup = entries
+        .whereType<_SidebarGroup>()
+        .where((group) => group.key == _openGroupKey)
+        .firstOrNull;
+    final theme = Theme.of(context);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedSize(
+          duration: const Duration(milliseconds: 150),
+          alignment: Alignment.bottomCenter,
+          child: openGroup == null
+              ? const SizedBox(width: double.infinity)
+              : Material(
+                  color: theme.colorScheme.surfaceContainerLow,
+                  elevation: 4,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                        maxHeight: MediaQuery.sizeOf(context).height * 0.5),
+                    child: ListView(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      children: [
+                        for (final item in widget.items
+                            .where((i) => openGroup.routes.contains(i.route)))
+                          _SidebarRow(
+                            item: item,
+                            selected: item.route == widget.selectedRoute,
+                            onTap: () {
+                              setState(() => _openGroupKey = null);
+                              widget.onSelectRoute(item.route);
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+        ),
+        NavigationBar(
+          selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
+          onDestinationSelected: (index) {
+            final entry = entries[index];
+            if (entry is _SidebarGroup) {
+              setState(() => _openGroupKey =
+                  _openGroupKey == entry.key ? null : entry.key);
+              return;
+            }
+            setState(() => _openGroupKey = null);
+            widget.onSelectRoute((entry as _NavItem).route);
+          },
+          destinations: [
+            for (final entry in entries)
+              if (entry is _SidebarGroup)
+                NavigationDestination(
+                  // the icon becomes a chevron while the group's panel is
+                  // open, same cue as the desktop sidebar's group headers
+                  icon: Icon(entry.key == _openGroupKey
+                      ? Icons.expand_more
+                      : entry.icon),
+                  label: entry.label,
+                )
+              else
+                const NavigationDestination(
+                  icon: AppLogo(size: 20, fallbackIcon: Icons.dashboard),
+                  selectedIcon:
+                      AppLogo(size: 22, fallbackIcon: Icons.dashboard),
+                  label: 'Anchor',
+                ),
+          ],
+        ),
+      ],
+    );
   }
 }
 
