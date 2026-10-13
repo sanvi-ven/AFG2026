@@ -31,6 +31,7 @@ import '../../features/legal/presentation/legal_documents_admin_page.dart';
 import '../../features/messages/presentation/messages_page.dart';
 import '../../features/notifications/presentation/notifications_page.dart';
 import '../../features/reports/presentation/owner_reports_page.dart';
+import '../../features/applicants/presentation/applicants_page.dart';
 import '../../features/requests/presentation/request_form_page.dart';
 import '../../features/requests/presentation/requests_page.dart';
 import '../../features/time/presentation/my_hours_page.dart';
@@ -88,6 +89,7 @@ class AppRouter {
   static const jobDetail = '/jobs/detail';
   static const myHours = '/hours';
   static const teamAdmin = '/admin/team';
+  static const applicants = '/admin/applicants';
   static const clients = '/admin/clients';
   static const claimAccount = '/claim';
   static const reports = '/reports';
@@ -241,6 +243,11 @@ class AppRouter {
             initialPhone: (args['initialPhone'] as String?) ?? '',
             initialAddress: (args['initialAddress'] as String?) ?? '',
           ),
+          settings: settings,
+        );
+      case applicants:
+        return _NoAnimationPageRoute(
+          builder: (_) => ApplicantsPage(role: role, authToken: authToken),
           settings: settings,
         );
       case requests:

@@ -60,6 +60,29 @@ _TEMPLATES: dict[str, dict] = {
         ),
         "params": {"employee_name", "company_name", "sign_url", "expires_date"},
     },
+    # The next two are only sent by routes/integrations.py (job applications
+    # forwarded from the business website) — like guardian-contract-signature,
+    # deliberately absent from EmailTemplateName, so /comms/email can't send
+    # them. Recipients come from the signed website payload / owner_settings,
+    # never from an unauthenticated caller.
+    "owner-new-applicant": {
+        "subject": "New job application from {name}",
+        "body": (
+            "<p>New job application from {name} ({applicant_email}, {phone}).</p>"
+            "<p>Availability: {availability}</p>"
+            "<p>Open Anchor's Applicants page to see the full application.</p>"
+        ),
+        "params": {"name", "applicant_email", "phone", "availability"},
+    },
+    "application-received": {
+        "subject": "We received your application",
+        "body": (
+            "<p>Hi {name},</p>"
+            "<p>Thanks for applying to work with {company_name} — we received "
+            "your application and will be in touch soon.</p>"
+        ),
+        "params": {"name", "company_name"},
+    },
 }
 
 

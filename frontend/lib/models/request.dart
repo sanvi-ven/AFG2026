@@ -18,6 +18,8 @@ class Request {
     this.declineReason = '',
     this.smsOptIn = false,
     this.preferredContact = PreferredContactMethod.email,
+    this.services = const [],
+    this.source = RequestSource.app,
   });
 
   final String id;
@@ -49,6 +51,18 @@ class Request {
   /// default that doesn't imply a consent this app never captured).
   final String preferredContact;
 
+  /// the services the requester picked (e.g. "Hedging", "Weeding") — set by
+  /// the business website's quote form; empty for requests from this app's
+  /// own form, which only has a free-text description
+  final List<String> services;
+
+  /// where the request came from — [RequestSource.app] (this app's own
+  /// "Request a Quote" form) or [RequestSource.website] (forwarded by the
+  /// business website's backend, see backend routes/integrations.py)
+  final String source;
+
+  bool get isFromWebsite => source == RequestSource.website;
+
   bool get isNew => status == RequestStatus.newRequest;
   bool get isConverted => status == RequestStatus.converted;
   bool get isDeclined => status == RequestStatus.declined;
@@ -78,6 +92,9 @@ class Request {
       smsOptIn: map['smsOptIn'] as bool? ?? false,
       preferredContact:
           (map['preferredContact'] as String? ?? PreferredContactMethod.email).trim(),
+      services:
+          (map['services'] as List<dynamic>? ?? const <dynamic>[]).whereType<String>().toList(),
+      source: (map['source'] as String? ?? RequestSource.app).trim(),
     );
   }
 
@@ -98,8 +115,16 @@ class Request {
       'declineReason': declineReason,
       'smsOptIn': smsOptIn,
       'preferredContact': preferredContact,
+      'services': services,
+      'source': source,
     };
   }
+}
+
+/// plain string constants for where a request came from
+class RequestSource {
+  static const app = 'app';
+  static const website = 'website';
 }
 
 /// plain string constants for a requester's preferred contact method,

@@ -25,6 +25,15 @@ _TEMPLATES: dict[str, dict] = {
         "Address: {address}. \"{description}\" View: {link}",
         "params": {"name", "preferred_contact", "phone", "email", "address", "description", "link"},
     },
+    # sent to the owner's own number when a job application arrives from the
+    # business website (routes/integrations.py) — never via /comms/sms
+    # (deliberately not in SmsTemplateName), and never to the applicant, who
+    # gives no text-message consent on the careers form.
+    "owner-new-applicant": {
+        "body": "New job application: {name}. Phone: {phone}. Email: {email}. "
+        "Availability: {availability}. View: {link}",
+        "params": {"name", "phone", "email", "availability", "link"},
+    },
 }
 
 

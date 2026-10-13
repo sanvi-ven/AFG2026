@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_from_number: str = ""
 
+    # Shared secret for the business website (rplandscaping.org) forwarding
+    # its quote requests and job applications here — see
+    # routes/integrations.py. Server-to-server only: the website's backend
+    # signs every call with this (HMAC-SHA256), it's never in any browser.
+    # Empty = the integration routes refuse every call (503).
+    website_integration_secret: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property

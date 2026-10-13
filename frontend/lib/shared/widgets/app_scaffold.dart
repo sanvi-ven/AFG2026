@@ -360,6 +360,10 @@ class AppScaffold extends StatelessWidget {
             route: AppRouter.teamAdmin,
             icon: Icons.groups_outlined),
         _NavItem(
+            label: 'Applicants',
+            route: AppRouter.applicants,
+            icon: Icons.person_add_alt_outlined),
+        _NavItem(
             label: 'Crew Availability',
             route: AppRouter.crewAvailability,
             icon: Icons.event_available_outlined),

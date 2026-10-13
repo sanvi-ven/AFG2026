@@ -14,9 +14,12 @@ class RequestsPage extends StatelessWidget {
   final String? authToken;
 
   void _convertToEstimate(BuildContext context, Request request) {
-    final notes = request.clientId != null
+    final description = request.services.isEmpty
         ? request.description
-        : '${request.description}\n\nContact: ${request.name}, ${request.email}, ${request.phone}, ${request.address}';
+        : 'Services: ${request.services.join(', ')}\n\n${request.description}'.trim();
+    final notes = request.clientId != null
+        ? description
+        : '$description\n\nContact: ${request.name}, ${request.email}, ${request.phone}, ${request.address}';
 
     Navigator.pushNamed(
       context,
@@ -115,6 +118,15 @@ class _RequestCard extends StatelessWidget {
                 Expanded(
                   child: Text(request.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                 ),
+                if (request.isFromWebsite) ...[
+                  Chip(
+                    label: const Text('From website'),
+                    avatar: const Icon(Icons.language, size: 16),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Text(DateFormat('MMM d, yyyy').format(request.createdAt)),
               ],
             ),
@@ -126,8 +138,25 @@ class _RequestCard extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
             if (request.address.isNotEmpty) Text(request.address),
-            const SizedBox(height: 8),
-            Text(request.description),
+            if (request.services.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final service in request.services)
+                    Chip(
+                      label: Text(service),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                ],
+              ),
+            ],
+            if (request.description.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(request.description),
+            ],
             if (request.photoUrls.isNotEmpty) ...[
               const SizedBox(height: 8),
               Wrap(

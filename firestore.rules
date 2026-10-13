@@ -304,6 +304,15 @@ service cloud.firestore {
       allow read, update, delete: if isStaff();
     }
 
+    // Job applications forwarded from the business website's careers page.
+    // Created only server-side (backend routes/integrations.py, Admin SDK,
+    // which bypasses these rules), so no client gets a create path at all.
+    // Owner-only: applicant contact details and answers aren't for crew.
+    match /applicants/{document=**} {
+      allow create: if false;
+      allow read, update, delete: if isOwner();
+    }
+
     // Single global business-config doc (company name/address/logo, PDF
     // templates). Read must stay public: the pre-auth lead form reads the
     // owner's notification email, and both owner- and client-facing PDF
