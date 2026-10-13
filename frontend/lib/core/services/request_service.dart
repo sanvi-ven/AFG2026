@@ -88,7 +88,11 @@ class RequestService {
     try {
       final request = await fetchById(requestId);
       final phone = request?.phone.trim() ?? '';
-      if (request != null && phone.isNotEmpty && request.smsOptIn) {
+      // opted in, and didn't ask to be contacted by email instead
+      if (request != null &&
+          phone.isNotEmpty &&
+          request.smsOptIn &&
+          request.preferredContact != PreferredContactMethod.email) {
         final ownerSettings = await OwnerSettingsService.fetch();
         final businessName =
             ownerSettings.companyName.trim().isEmpty ? 'Your service provider' : ownerSettings.companyName.trim();

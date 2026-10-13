@@ -202,13 +202,17 @@ async def receive_website_request(request: Request) -> IntegrationResult:
             "description": summary,
         }))
 
-    if record["email"]:
+    # The requester's confirmation follows their preferred contact method:
+    # Email → confirmation email only; Text/Call → confirmation text only,
+    # and only with the explicit opt-in from the website form's
+    # unchecked-by-default consent checkbox ("preferred contact: text" alone
+    # is not consent). So someone who chose Text/Call but didn't opt in gets
+    # no automatic confirmation at all. The owner alerts above are unaffected.
+    wants_email = payload.preferred_contact == "email"
+    if record["email"] and wants_email:
         _try("request confirmation email", lambda: email_service.send_templated_email(
             record["email"], "request-confirmation", {"name": record["name"]}))
-    # only with the requester's explicit opt-in from the website form's
-    # unchecked-by-default consent checkbox; "preferred contact: text" alone
-    # is not consent
-    requester_phone = _to_e164(record["phone"]) if payload.sms_opt_in else None
+    requester_phone = _to_e164(record["phone"]) if payload.sms_opt_in and not wants_email else None
     if requester_phone:
         _try("request-received SMS", lambda: sms_service.send_templated_sms(
             requester_phone, "request-received", {"business_name": business_name}))

@@ -151,7 +151,11 @@ class _RequestFormPageState extends State<RequestFormPage> {
     final clientEmail = _emailController.text.trim();
     final description = _descriptionController.text.trim();
 
-    if (clientEmail.isNotEmpty) {
+    // the requester's confirmation follows their preferred contact method:
+    // only someone who chose Email gets the confirmation email (Text/Call
+    // get a text instead, if they opted in — see _sendIntakeSms). The
+    // owner's own new-lead email below is unaffected.
+    if (clientEmail.isNotEmpty && _preferredContact == PreferredContactMethod.email) {
       unawaited(CommsService.sendEmail(
         to: clientEmail,
         template: 'request-confirmation',
@@ -181,7 +185,9 @@ class _RequestFormPageState extends State<RequestFormPage> {
   /// for a brand-new lead.
   Future<void> _sendIntakeSms() async {
     final phone = _phoneController.text.trim();
-    if (phone.isEmpty || !_smsOptIn) return;
+    // needs the explicit opt-in, and never for someone who asked to be
+    // contacted by email
+    if (phone.isEmpty || !_smsOptIn || _preferredContact == PreferredContactMethod.email) return;
 
     try {
       final ownerSettings = await OwnerSettingsService.fetch();
