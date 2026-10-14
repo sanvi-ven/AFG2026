@@ -4,7 +4,7 @@ Effective date: October 14, 2026
 
 Ryan Prendergast, doing business as RP Landscaping ("RP Landscaping," "we," "us," or "our"), operates the Anchor app (the "App") to schedule and manage landscaping work for our clients and crew. This Privacy Policy explains what information we collect through the App, how we use it, who we share it with, and the choices you have.
 
-This policy applies to our clients, our employees, anyone who submits a quote request through the App before creating an account, and anyone who requests a quote or applies for a job on our business website, rplandscaping.org (see "Our Website" below).
+This policy applies to our clients, our employees, and anyone who submits a quote request through the App before creating an account. Our business website, rplandscaping.org (the "Website"), has its own privacy policy (see "Our Website" below).
 
 ## Information We Collect
 
@@ -46,8 +46,7 @@ We do not sell your personal information, and we do not share it for advertising
 - **Twilio** — delivers text message reminders
 - **Cloudinary** — stores and hosts uploaded photos
 - **Vercel** — hosts the App itself
-- **FlokiNET** — hosts our business website, rplandscaping.org, and stores the forms submitted on it
-- **Google Fonts** — supplies the fonts our website displays (your browser requests them directly from Google when a page loads)
+- **Google Fonts** — supplies the fonts the App displays (your browser requests them directly from Google when the App loads)
 - **OpenStreetMap Nominatim** — provides address suggestions as you type an address; the partial address text you type is sent to this service to generate suggestions
 
 We may also share information if required by law, to protect the rights and safety of RP Landscaping or others, or in connection with a sale or transfer of the business (in which case we'd tell you first).
@@ -56,7 +55,7 @@ We may also share information if required by law, to protect the rights and safe
 
 **No mobile information — including your phone number and your consent to receive text messages — will be sold, shared, or disclosed to any third party or affiliate for marketing or promotional purposes, under any circumstances.** This applies regardless of any other data-sharing described elsewhere in this policy.
 
-Text messages are optional. We only send you text messages if you check the box agreeing to receive them where we ask for your phone number (when you request a quote on the App or the Website, or create an account). Giving us your phone number on its own is not consent to receive texts, and you don't have to agree to texts to request a quote or use our services. If you opt in, RP Landscaping may text you about your quote request, appointments, and invoices using our SMS delivery provider, Twilio. Message frequency varies based on your scheduled jobs and account activity — these are account and service notifications, not recurring marketing messages. Message and data rates may apply. You can opt out at any time by replying STOP to any text, or by contacting us using the information below, and we will remove your number from future messages.
+Text messages are optional. We only send you text messages if you check the box agreeing to receive them where we ask for your phone number (when you request a quote on the App or the Website, or create an account; see the Website's privacy policy for the Website's form). Giving us your phone number on its own is not consent to receive texts, and you don't have to agree to texts to request a quote or use our services. If you opt in, RP Landscaping may text you about your quote request, appointments, and invoices using our SMS delivery provider, Twilio. Message frequency varies based on your scheduled jobs and account activity — these are account and service notifications, not recurring marketing messages. Message and data rates may apply. You can opt out at any time by replying STOP to any text, or by contacting us using the information below, and we will remove your number from future messages.
 
 Twilio processes your phone number and text-message consent only as our service provider, solely to deliver the messages described above on our behalf. Twilio does not use your number or consent for its own purposes, and does not share it with any other party — see "How We Share Your Information" above for our full list of service providers.
 
@@ -64,17 +63,9 @@ By providing your email address, you agree that RP Landscaping may email you quo
 
 ## Our Website
 
-This policy also covers our business website, rplandscaping.org (the "Website").
+Our business website, rplandscaping.org, has its own privacy policy at https://rplandscaping.org/privacy, which covers the information collected on the Website.
 
-**If you request a quote on the Website:** your name, phone number, email address, service address (optional), the services you're interested in, how you'd like us to contact you, any notes you add, and whether you checked the optional box to receive text message updates.
-
-**If you apply for a job on the Website:** your name, phone number, email address, and address; your answers about a driver's license, vehicle, landscaping experience, availability, and physical requirements; and a resume file (PDF or Word) if you choose to upload one.
-
-**Where it goes:** Website submissions are stored on the Website's own server and are automatically forwarded into the App, so we can respond to you, schedule work, and send the confirmations and updates described in this policy. Resume files stay on the Website's server and can only be opened by RP Landscaping through a password-protected page.
-
-**Text messages:** the Website's quote form has its own optional text-message checkbox, unchecked by default. We only text you about your request if you check it; choosing "Text" as your preferred contact method is not consent to automated texts. See "Text Messages and Email" above.
-
-**Cookies and other services:** the Website does not use tracking or advertising cookies and runs no analytics or ad-tracking software. The only cookie it sets is a login cookie for RP Landscaping's own password-protected staff page. Website pages load fonts from Google Fonts and placeholder profile images (on the reviews section) from placehold.co, so those services receive your browser's IP address when a page loads. We use the IP address a form is sent from only, temporarily, to block repeated spam submissions; it is not stored with your submission.
+Quote requests and job applications submitted on the Website are forwarded into the App. Once they are in the App, this policy applies to them too.
 
 ## Data Retention
 
