@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     # emails allowed to claim the "owner" role on signup — comma-separated.
     # nobody else can self-assign owner no matter what they send the API.
-    owner_emails_raw: str = "immc17289@gmail.com"
+    owner_emails_raw: str = "info@rplandscaping.org"
 
     resend_api_key: str = ""
     resend_from_email: str = ""
