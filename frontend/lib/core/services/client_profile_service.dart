@@ -222,6 +222,13 @@ class ClientProfileService {
   }
 
   /// resolve a clientId to a display name for sorting/labeling; falls back to the id itself
+  static ClientProfile? findIn(List<ClientProfile> profiles, String clientId) {
+    for (final profile in profiles) {
+      if (profile.signupId == clientId) return profile;
+    }
+    return null;
+  }
+
   static String displayNameFor(List<ClientProfile> profiles, String clientId) {
     for (final profile in profiles) {
       if (profile.signupId == clientId) {

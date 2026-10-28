@@ -28,6 +28,7 @@ import '../../models/invoice.dart';
 import '../../shared/utils/list_highlight_controller.dart';
 import '../../shared/widgets/app_scaffold.dart';
 import '../../shared/widgets/internal_notes_section.dart';
+import '../../shared/widgets/list_search_field.dart';
 import '../../shared/widgets/sort_control.dart';
 import '../clients/presentation/quick_add_client_dialog.dart';
 import 'presentation/fall_cleanup_widgets.dart';
@@ -98,6 +99,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
   ClientProfile? _selectedClient;
   bool _isLoadingClientSuggestions = true;
   ListSortMode _sortMode = ListSortMode.newestFirst;
+  final _listSearchController = TextEditingController();
+  String _listQuery = '';
   late final ListHighlightController _highlight =
       ListHighlightController(widget.highlightId);
   bool _appliedInitialClient = false;
@@ -174,6 +177,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
 
   @override
   void dispose() {
+    _listSearchController.dispose();
     _clientSearchDebounce?.cancel();
     _clientsSub?.cancel();
     _catalogSub?.cancel();
@@ -1174,9 +1178,24 @@ class _EstimatesPageState extends State<EstimatesPage> {
                 }
 
                 final allEstimates = snapshot.data ?? const <Estimate>[];
-                var estimates =
-                    allEstimates.where((e) => !e.isArchived).toList();
-                var archived = allEstimates.where((e) => e.isArchived).toList();
+                bool matches(Estimate e) => matchesListSearch(_listQuery, [
+                      e.estimateNumber,
+                      e.status,
+                      e.notes,
+                      if (e.isFallCleanup) 'fall cleanup',
+                      ...clientSearchFields(
+                          ClientProfileService.findIn(
+                              _knownClients, e.clientId),
+                          e.clientId),
+                      for (final s in e.services) ...[s.name, s.description],
+                    ]);
+                final hasAnyEstimates = allEstimates.isNotEmpty;
+                var estimates = allEstimates
+                    .where((e) => !e.isArchived && matches(e))
+                    .toList();
+                var archived = allEstimates
+                    .where((e) => e.isArchived && matches(e))
+                    .toList();
 
                 void applySort(List<Estimate> list) {
                   switch (_sortMode) {
@@ -1207,7 +1226,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
                   },
                 );
 
-                if (estimates.isEmpty && archived.isEmpty) {
+                if (!hasAnyEstimates) {
                   return Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -1224,6 +1243,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
                         padding: const EdgeInsets.only(bottom: 12),
                         child: _EstimateCard(
                           estimate: estimate,
+                          client: ClientProfileService.findIn(
+                              _knownClients, estimate.clientId),
                           role: widget.role,
                           isHighlighted: _highlight.isHighlighted(estimate.id),
                           isConverting: _convertingEstimateId == estimate.id,
@@ -1269,13 +1290,28 @@ class _EstimatesPageState extends State<EstimatesPage> {
 
                 return Column(
                   children: [
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: SortControl(
-                        value: _sortMode,
-                        onChanged: (mode) => setState(() => _sortMode = mode),
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ListSearchField(
+                            controller: _listSearchController,
+                            onChanged: (value) =>
+                                setState(() => _listQuery = value),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SortControl(
+                          value: _sortMode,
+                          onChanged: (mode) => setState(() => _sortMode = mode),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 12),
+                    if (estimates.isEmpty && archived.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('No estimates match your search.'),
+                      ),
                     for (final estimate in estimates) estimateCard(estimate),
                     if (widget.role == 'owner' && archived.isNotEmpty) ...[
                       const SizedBox(height: 4),
@@ -1586,6 +1622,7 @@ class _OwnerEstimateForm extends StatelessWidget {
 class _EstimateCard extends StatelessWidget {
   const _EstimateCard({
     required this.estimate,
+    required this.client,
     required this.role,
     required this.isHighlighted,
     required this.isConverting,
@@ -1614,6 +1651,7 @@ class _EstimateCard extends StatelessWidget {
   });
 
   final Estimate estimate;
+  final ClientProfile? client;
   final String role;
   final bool isHighlighted;
   final bool isConverting;
@@ -1795,7 +1833,7 @@ class _EstimateCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.w700)),
-              Text('Client ID: ${estimate.clientId}'),
+              ClientInfoLine(client: client, clientId: estimate.clientId),
               if (estimate.revisionNumber > 1) ...[
                 const SizedBox(height: 4),
                 Text(

@@ -26,6 +26,7 @@ import '../../../shared/widgets/archived_badge.dart';
 import '../../../shared/widgets/google_calendar_booking_button.dart';
 import '../../../shared/widgets/google_calendar_widget.dart';
 import '../../../shared/widgets/internal_notes_section.dart';
+import '../../../shared/widgets/list_search_field.dart';
 import '../../../shared/widgets/quick_add_job_dialog.dart';
 import '../../../shared/widgets/sort_control.dart';
 
@@ -59,6 +60,14 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   ListSortMode _sortMode = ListSortMode.newestFirst;
   late final ListHighlightController _highlight =
       ListHighlightController(widget.highlightId);
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _openGoogleCalendar() async {
     const url = 'https://calendar.google.com/calendar/u/0/r/week';
@@ -430,11 +439,27 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                               },
                             );
 
+                            bool matches(ScheduledWork w) =>
+                                matchesListSearch(_query, [
+                                  w.estimateNumber,
+                                  w.status,
+                                  w.address,
+                                  w.phoneNumber,
+                                  ...clientSearchFields(
+                                      ClientProfileService.findIn(
+                                          clients, w.clientId),
+                                      w.clientId),
+                                  for (final s in w.services) ...[
+                                    s.name,
+                                    s.description
+                                  ],
+                                ]);
+
                             final active = sorted
-                                .where((item) => !item.isArchived)
+                                .where((item) => !item.isArchived && matches(item))
                                 .toList();
                             final archived = sorted
-                                .where((item) => item.isArchived)
+                                .where((item) => item.isArchived && matches(item))
                                 .toList();
 
                             Widget workCard(ScheduledWork item) => KeyedSubtree(
@@ -443,6 +468,8 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                                     padding: const EdgeInsets.only(bottom: 12),
                                     child: _ScheduledWorkCard(
                                       work: item,
+                                      client: ClientProfileService.findIn(
+                                          clients, item.clientId),
                                       role: widget.role,
                                       teams: teams,
                                       employees: employees,
@@ -484,14 +511,30 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
 
                             return Column(
                               children: [
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: SortControl(
-                                    value: _sortMode,
-                                    onChanged: (mode) =>
-                                        setState(() => _sortMode = mode),
-                                  ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ListSearchField(
+                                        controller: _searchController,
+                                        onChanged: (value) =>
+                                            setState(() => _query = value),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    SortControl(
+                                      value: _sortMode,
+                                      onChanged: (mode) =>
+                                          setState(() => _sortMode = mode),
+                                    ),
+                                  ],
                                 ),
+                                const SizedBox(height: 12),
+                                if (active.isEmpty && archived.isEmpty)
+                                  const Padding(
+                                    padding: EdgeInsets.all(16),
+                                    child: Text(
+                                        'No appointments match your search.'),
+                                  ),
                                 for (final item in active) workCard(item),
                                 if (widget.role == 'owner' &&
                                     archived.isNotEmpty) ...[
@@ -562,6 +605,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
 class _ScheduledWorkCard extends StatefulWidget {
   const _ScheduledWorkCard({
     required this.work,
+    required this.client,
     required this.role,
     required this.teams,
     required this.employees,
@@ -584,6 +628,7 @@ class _ScheduledWorkCard extends StatefulWidget {
   });
 
   final ScheduledWork work;
+  final ClientProfile? client;
   final String role;
   final List<Team> teams;
   final List<EmployeeProfile> employees;
@@ -762,7 +807,11 @@ class _ScheduledWorkCardState extends State<_ScheduledWorkCard> {
               ),
               if (widget.role == 'owner') ...[
                 const SizedBox(height: 4),
-                Text('Client ID: ${work.clientId}'),
+                ClientInfoLine(
+                  client: widget.client,
+                  clientId: work.clientId,
+                  address: work.address,
+                ),
                 const SizedBox(height: 8),
                 SegmentedButton<bool>(
                   segments: const [

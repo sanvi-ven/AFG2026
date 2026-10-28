@@ -12,6 +12,7 @@ import '../../../models/client_profile.dart';
 import '../../../models/invoice.dart';
 import '../../../shared/utils/list_highlight_controller.dart';
 import '../../../shared/widgets/app_scaffold.dart';
+import '../../../shared/widgets/list_search_field.dart';
 import '../../../shared/widgets/sort_control.dart';
 
 /// page for viewing and managing invoices with pdf download and payment tracking
@@ -33,6 +34,14 @@ class _InvoicesPageState extends State<InvoicesPage> {
   String? _archivingInvoiceId;
   String? _deletingInvoiceId;
   ListSortMode _sortMode = ListSortMode.newestFirst;
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
   late final ListHighlightController _highlight =
       ListHighlightController(widget.highlightId);
 
@@ -252,10 +261,22 @@ class _InvoicesPageState extends State<InvoicesPage> {
                       }
                     }
 
-                    final active =
-                        invoices.where((i) => !i.isArchived).toList();
-                    final archived =
-                        invoices.where((i) => i.isArchived).toList();
+                    bool matches(Invoice i) => matchesListSearch(_query, [
+                          i.invoiceNumber,
+                          i.status,
+                          i.notes,
+                          ...clientSearchFields(
+                              ClientProfileService.findIn(clients, i.clientId),
+                              i.clientId),
+                          for (final s in i.services) ...[s.name, s.description],
+                        ]);
+
+                    final active = invoices
+                        .where((i) => !i.isArchived && matches(i))
+                        .toList();
+                    final archived = invoices
+                        .where((i) => i.isArchived && matches(i))
+                        .toList();
                     applySort(active);
                     applySort(archived);
 
@@ -272,6 +293,8 @@ class _InvoicesPageState extends State<InvoicesPage> {
                             padding: const EdgeInsets.only(bottom: 12),
                             child: _InvoiceCard(
                               invoice: invoice,
+                              client: ClientProfileService.findIn(
+                                  clients, invoice.clientId),
                               role: widget.role,
                               isDownloadingPdf:
                                   _downloadingInvoiceId == invoice.id,
@@ -300,14 +323,29 @@ class _InvoicesPageState extends State<InvoicesPage> {
 
                     return Column(
                       children: [
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: SortControl(
-                            value: _sortMode,
-                            onChanged: (mode) =>
-                                setState(() => _sortMode = mode),
-                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ListSearchField(
+                                controller: _searchController,
+                                onChanged: (value) =>
+                                    setState(() => _query = value),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            SortControl(
+                              value: _sortMode,
+                              onChanged: (mode) =>
+                                  setState(() => _sortMode = mode),
+                            ),
+                          ],
                         ),
+                        const SizedBox(height: 12),
+                        if (active.isEmpty && archived.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text('No invoices match your search.'),
+                          ),
                         for (final invoice in active) invoiceCard(invoice),
                         if (widget.role == 'owner' && archived.isNotEmpty) ...[
                           const SizedBox(height: 4),
@@ -346,6 +384,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
 class _InvoiceCard extends StatelessWidget {
   const _InvoiceCard({
     required this.invoice,
+    required this.client,
     required this.role,
     required this.isDownloadingPdf,
     required this.isMarkingPaid,
@@ -360,6 +399,7 @@ class _InvoiceCard extends StatelessWidget {
   });
 
   final Invoice invoice;
+  final ClientProfile? client;
   final String role;
   final bool isDownloadingPdf;
   final bool isMarkingPaid;
@@ -466,7 +506,7 @@ class _InvoiceCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              Text('Client ID: ${invoice.clientId}'),
+              ClientInfoLine(client: client, clientId: invoice.clientId),
               const SizedBox(height: 10),
               Text('Services', style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 6),
