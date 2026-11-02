@@ -69,6 +69,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
   final _termsController = TextEditingController();
   final _depositPercentController = TextEditingController();
   bool _requireDeposit = false;
+  final _discount = _DiscountController();
   bool _notifyClientBySms = false;
 
   /// which estimate template the create form is using
@@ -186,6 +187,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
     _notesController.dispose();
     _termsController.dispose();
     _depositPercentController.dispose();
+    _discount.dispose();
     _fallCleanupForm.dispose();
     for (final row in _serviceRows) {
       row.dispose();
@@ -296,7 +298,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
       if (sourceRequest != null) {
         final nameParts = sourceRequest.name.trim().split(RegExp(r'\s+'));
         initialFirstName = nameParts.isNotEmpty ? nameParts.first : '';
-        initialLastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+        initialLastName =
+            nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
         initialPhone = sourceRequest.phone;
         initialSmsOptIn = sourceRequest.smsOptIn;
       }
@@ -419,8 +422,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(isFallCleanup
-                  ? 'Each additional work row needs a name and price greater than 0.'
-                  : 'Each service needs a name and price greater than 0.')),
+                  ? 'Each additional work row needs a name and a price (0 or more).'
+                  : 'Each service needs a name and a price (0 or more).')),
         );
         return;
       }
@@ -428,12 +431,23 @@ class _EstimatesPageState extends State<EstimatesPage> {
     }
 
     FallCleanupDetails? fallCleanup;
+    EstimateDiscount? discount;
     if (isFallCleanup) {
       fallCleanup = _fallCleanupForm.toDetails(
         onError: (error) => ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error))),
       );
       if (fallCleanup == null) return;
+    } else {
+      final subtotal =
+          services.fold<double>(0, (sum, item) => sum + item.price);
+      final error = _discount.validate(subtotal);
+      if (error != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error)));
+        return;
+      }
+      discount = _discount.discount;
     }
 
     setState(() => _isSubmitting = true);
@@ -467,6 +481,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
             ? double.tryParse(_depositPercentController.text.trim())
             : null,
         fallCleanup: fallCleanup,
+        discount: discount,
       );
       if (widget.convertRequestId != null) {
         await RequestService.markConverted(
@@ -485,7 +500,11 @@ class _EstimatesPageState extends State<EstimatesPage> {
           // a fall cleanup sent as a menu (no package picked yet), or with
           // an Upon Request item picked, has no single total to quote
           total: fallCleanup == null
-              ? services.fold<double>(0, (sum, item) => sum + item.price)
+              ? () {
+                  final subtotal =
+                      services.fold<double>(0, (sum, item) => sum + item.price);
+                  return subtotal - (discount?.amountFor(subtotal) ?? 0);
+                }()
               : fallCleanup.hasPackage && !fallCleanup.hasUponRequestSelected
                   ? fallCleanup.knownTotal(services)
                   : null,
@@ -498,6 +517,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
       _termsController.clear();
       _depositPercentController.clear();
       _requireDeposit = false;
+      _discount.reset();
       _notifyClientBySms = false;
       _autoFilledTerms = null;
       _fallCleanupForm.reset();
@@ -631,6 +651,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
         estimateNumber: estimate.estimateNumber,
         currentVersion: estimate.revisionNumber,
         initialServices: estimate.services,
+        initialDiscount: estimate.discount,
         initialFallCleanup: estimate.fallCleanup,
       ),
     );
@@ -644,6 +665,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
         estimate: estimate,
         services: revised.services,
         fallCleanup: revised.fallCleanup,
+        discount: revised.discount,
       );
       if (!mounted) {
         return;
@@ -686,6 +708,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
         terms: result.terms,
         depositPercent: result.depositPercent,
         fallCleanup: result.fallCleanup,
+        discount: result.discount,
       );
       if (!mounted) {
         return;
@@ -980,8 +1003,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
   /// a two-visit fall cleanup bills 50% after each visit: every line item is
   /// split in half, with visit 1 taking the odd cent so the two invoices
   /// always add up to exactly the estimate's total
-  static List<InvoiceServiceItem> _halfForVisit(
-      List<InvoiceServiceItem> items,
+  static List<InvoiceServiceItem> _halfForVisit(List<InvoiceServiceItem> items,
       {required int visit}) {
     return [
       for (final item in items)
@@ -1139,6 +1161,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
               onRequireDepositChanged: (value) =>
                   setState(() => _requireDeposit = value),
               depositPercentController: _depositPercentController,
+              discount: _discount,
               notifyClientBySms: _notifyClientBySms,
               onNotifyClientBySmsChanged: (value) =>
                   setState(() => _notifyClientBySms = value),
@@ -1362,6 +1385,7 @@ class _OwnerEstimateForm extends StatelessWidget {
     required this.requireDeposit,
     required this.onRequireDepositChanged,
     required this.depositPercentController,
+    required this.discount,
     required this.notifyClientBySms,
     required this.onNotifyClientBySmsChanged,
     required this.isSubmitting,
@@ -1388,6 +1412,7 @@ class _OwnerEstimateForm extends StatelessWidget {
   final bool requireDeposit;
   final ValueChanged<bool> onRequireDepositChanged;
   final TextEditingController depositPercentController;
+  final _DiscountController discount;
   final bool notifyClientBySms;
   final ValueChanged<bool> onNotifyClientBySmsChanged;
   final bool isSubmitting;
@@ -1558,6 +1583,10 @@ class _OwnerEstimateForm extends StatelessWidget {
               decoration: const InputDecoration(
                   labelText: 'Terms (optional)', border: OutlineInputBorder()),
             ),
+            // a fall cleanup total depends on the client's pick, so there's
+            // no fixed subtotal to discount
+            if (template != EstimateType.fallCleanup)
+              _DiscountEditor(controller: discount),
             // fall cleanup is due on completion per its policy, no deposit
             if (template != EstimateType.fallCleanup)
               CheckboxListTile(
@@ -1597,6 +1626,7 @@ class _OwnerEstimateForm extends StatelessWidget {
               depositPercentController: depositPercentController,
               requireDeposit:
                   requireDeposit && template != EstimateType.fallCleanup,
+              discount: template == EstimateType.fallCleanup ? null : discount,
             ),
             const SizedBox(height: 12),
             Align(
@@ -1719,7 +1749,7 @@ class _EstimateCard extends StatelessWidget {
                   Expanded(
                       child: Text(item.name,
                           maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  Text('\$${item.price.toStringAsFixed(2)}'),
+                  Text(item.priceLabel),
                 ],
               ),
             ),
@@ -1884,41 +1914,60 @@ class _EstimateCard extends StatelessWidget {
                   total: estimate.total,
                 )
               else ...[
-              Text('Services', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 6),
-              for (final item in estimate.services)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(child: Text(item.name)),
-                          Text('\$${item.price.toStringAsFixed(2)}'),
-                        ],
-                      ),
-                      if (item.description.isNotEmpty)
-                        Text(item.description,
-                            style: Theme.of(context).textTheme.bodySmall),
-                      if (item.isPerUnit)
-                        Text(
-                          '${item.quantity} ${item.unit?.isEmpty ?? true ? 'unit(s)' : item.unit} × \$${item.unitPrice!.toStringAsFixed(2)}',
-                          style: Theme.of(context).textTheme.bodySmall,
+                Text('Services', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 6),
+                for (final item in estimate.services)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: Text(item.name)),
+                            Text(item.priceLabel),
+                          ],
                         ),
+                        if (item.description.isNotEmpty)
+                          Text(item.description,
+                              style: Theme.of(context).textTheme.bodySmall),
+                        if (item.isPerUnit)
+                          Text(
+                            '${item.quantity} ${item.unit?.isEmpty ?? true ? 'unit(s)' : item.unit} × \$${item.unitPrice!.toStringAsFixed(2)}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                      ],
+                    ),
+                  ),
+                const Divider(height: 16),
+                if (estimate.discountAmount > 0) ...[
+                  Row(
+                    children: [
+                      const Expanded(child: Text('Subtotal')),
+                      Text('\$${estimate.subtotal.toStringAsFixed(2)}'),
                     ],
                   ),
-                ),
-              const Divider(height: 16),
-              Row(
-                children: [
-                  const Expanded(
-                      child: Text('Total',
-                          style: TextStyle(fontWeight: FontWeight.w700))),
-                  Text('\$${estimate.total.toStringAsFixed(2)}',
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                          child: Text(estimate.discount!.label,
+                              style: const TextStyle(color: Colors.green))),
+                      Text('-\$${estimate.discountAmount.toStringAsFixed(2)}',
+                          style: const TextStyle(color: Colors.green)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
                 ],
-              ),
+                Row(
+                  children: [
+                    const Expanded(
+                        child: Text('Total',
+                            style: TextStyle(fontWeight: FontWeight.w700))),
+                    Text('\$${estimate.total.toStringAsFixed(2)}',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                  ],
+                ),
               ],
               if (estimate.notes.isNotEmpty) ...[
                 const SizedBox(height: 10),
@@ -2471,10 +2520,14 @@ class _RequestEstimateChangesDialogState
 /// result of [_ReviseEstimateDialog]; [fallCleanup] is set only when
 /// revising a fall cleanup estimate
 class _ReviseEstimateResult {
-  const _ReviseEstimateResult({required this.services, this.fallCleanup});
+  const _ReviseEstimateResult(
+      {required this.services, this.fallCleanup, this.discount});
 
   final List<InvoiceServiceItem> services;
   final FallCleanupDetails? fallCleanup;
+
+  /// standard estimates only; null means no discount
+  final EstimateDiscount? discount;
 }
 
 class _ReviseEstimateDialog extends StatefulWidget {
@@ -2483,12 +2536,14 @@ class _ReviseEstimateDialog extends StatefulWidget {
     required this.currentVersion,
     required this.initialServices,
     this.initialFallCleanup,
+    this.initialDiscount,
   });
 
   final String estimateNumber;
   final int currentVersion;
   final List<InvoiceServiceItem> initialServices;
   final FallCleanupDetails? initialFallCleanup;
+  final EstimateDiscount? initialDiscount;
 
   @override
   State<_ReviseEstimateDialog> createState() => _ReviseEstimateDialogState();
@@ -2500,6 +2555,7 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
       widget.initialFallCleanup == null
           ? null
           : FallCleanupFormController(widget.initialFallCleanup);
+  late final _discount = _DiscountController(widget.initialDiscount);
   bool _isSaving = false;
 
   @override
@@ -2521,6 +2577,7 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
       row.dispose();
     }
     _fallCleanupForm?.dispose();
+    _discount.dispose();
     super.dispose();
   }
 
@@ -2547,8 +2604,8 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
       if (item == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content:
-                  Text('Each revised service must have a name and price > 0.')),
+              content: Text(
+                  'Each revised service needs a name and a price (0 or more).')),
         );
         return;
       }
@@ -2562,11 +2619,22 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
             .showSnackBar(SnackBar(content: Text(error))),
       );
       if (fallCleanup == null) return;
+    } else {
+      final error = _discount
+          .validate(parsed.fold<double>(0, (sum, item) => sum + item.price));
+      if (error != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error)));
+        return;
+      }
     }
 
     setState(() => _isSaving = true);
-    Navigator.of(context).pop(
-        _ReviseEstimateResult(services: parsed, fallCleanup: fallCleanup));
+    Navigator.of(context).pop(_ReviseEstimateResult(
+      services: parsed,
+      fallCleanup: fallCleanup,
+      discount: fallCleanupForm == null ? _discount.discount : null,
+    ));
   }
 
   @override
@@ -2609,9 +2677,14 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
                       label: const Text('Add service'),
                     ),
                   ),
+                  if (_fallCleanupForm == null)
+                    _DiscountEditor(controller: _discount),
                   const SizedBox(height: 8),
                   _LiveEstimateTotal(
-                      rows: _rows, fallCleanupForm: _fallCleanupForm),
+                    rows: _rows,
+                    fallCleanupForm: _fallCleanupForm,
+                    discount: _fallCleanupForm == null ? _discount : null,
+                  ),
                 ],
               );
             },
@@ -2646,12 +2719,16 @@ class _EditEstimateResult {
     required this.terms,
     required this.depositPercent,
     this.fallCleanup,
+    this.discount,
   });
 
   final List<InvoiceServiceItem> services;
   final String notes;
   final String terms;
   final double? depositPercent;
+
+  /// standard estimates only; null means no discount
+  final EstimateDiscount? discount;
 
   /// set only when editing a fall cleanup estimate
   final FallCleanupDetails? fallCleanup;
@@ -2682,6 +2759,7 @@ class _EditPendingEstimateDialogState
   late final _depositPercentController = TextEditingController(
       text: widget.estimate.depositPercent?.toStringAsFixed(0) ?? '');
   late bool _requireDeposit = widget.estimate.depositPercent != null;
+  late final _discount = _DiscountController(widget.estimate.discount);
   late final FallCleanupFormController? _fallCleanupForm =
       widget.estimate.isFallCleanup
           ? FallCleanupFormController(widget.estimate.fallCleanup)
@@ -2708,6 +2786,7 @@ class _EditPendingEstimateDialogState
     _notesController.dispose();
     _termsController.dispose();
     _depositPercentController.dispose();
+    _discount.dispose();
     _fallCleanupForm?.dispose();
     super.dispose();
   }
@@ -2733,7 +2812,8 @@ class _EditPendingEstimateDialogState
       if (item == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Each service must have a name and price > 0.')),
+              content:
+                  Text('Each service needs a name and a price (0 or more).')),
         );
         return;
       }
@@ -2747,6 +2827,14 @@ class _EditPendingEstimateDialogState
             .showSnackBar(SnackBar(content: Text(error))),
       );
       if (fallCleanup == null) return;
+    } else {
+      final error = _discount
+          .validate(parsed.fold<double>(0, (sum, item) => sum + item.price));
+      if (error != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error)));
+        return;
+      }
     }
 
     setState(() => _isSaving = true);
@@ -2758,6 +2846,7 @@ class _EditPendingEstimateDialogState
           ? double.tryParse(_depositPercentController.text.trim())
           : null,
       fallCleanup: fallCleanup,
+      discount: fallCleanupForm == null ? _discount.discount : null,
     ));
   }
 
@@ -2817,6 +2906,8 @@ class _EditPendingEstimateDialogState
                         border: OutlineInputBorder()),
                   ),
                   if (_fallCleanupForm == null)
+                    _DiscountEditor(controller: _discount),
+                  if (_fallCleanupForm == null)
                     CheckboxListTile(
                       contentPadding: EdgeInsets.zero,
                       controlAffinity: ListTileControlAffinity.leading,
@@ -2841,8 +2932,8 @@ class _EditPendingEstimateDialogState
                     rows: _rows,
                     fallCleanupForm: _fallCleanupForm,
                     depositPercentController: _depositPercentController,
-                    requireDeposit:
-                        _requireDeposit && _fallCleanupForm == null,
+                    requireDeposit: _requireDeposit && _fallCleanupForm == null,
+                    discount: _fallCleanupForm == null ? _discount : null,
                   ),
                 ],
               );
@@ -2880,12 +2971,16 @@ class _LiveEstimateTotal extends StatelessWidget {
     this.fallCleanupForm,
     this.depositPercentController,
     this.requireDeposit = false,
+    this.discount,
   });
 
   final List<_ServiceRowController> rows;
   final FallCleanupFormController? fallCleanupForm;
   final TextEditingController? depositPercentController;
   final bool requireDeposit;
+
+  /// standard estimates only
+  final _DiscountController? discount;
 
   @override
   Widget build(BuildContext context) {
@@ -2895,23 +2990,33 @@ class _LiveEstimateTotal extends StatelessWidget {
         for (final row in rows) row.priceChanges,
         if (fallCleanupForm != null) fallCleanupForm.changes,
         if (depositPercentController != null) depositPercentController,
+        if (discount != null) discount!.changes,
       ]),
       builder: (context, _) {
-        final rowsTotal = rows.fold<double>(
-            0, (sum, row) => sum + (row.computedPrice ?? 0));
+        final rowsTotal =
+            rows.fold<double>(0, (sum, row) => sum + (row.computedPrice ?? 0));
         final details = fallCleanupForm?.liveDetails();
         final theme = Theme.of(context);
 
         String totalText;
         String? detail;
         if (details == null) {
-          totalText = '\$${rowsTotal.toStringAsFixed(2)}';
+          final liveDiscount = discount?.discount;
+          final discountAmount = liveDiscount?.amountFor(rowsTotal) ?? 0;
+          final total = rowsTotal - discountAmount;
+          totalText = '\$${total.toStringAsFixed(2)}';
+          final lines = <String>[
+            if (discountAmount > 0)
+              'Subtotal \$${rowsTotal.toStringAsFixed(2)} · '
+                  '${liveDiscount!.label} -\$${discountAmount.toStringAsFixed(2)}',
+          ];
           final percent =
               double.tryParse(depositPercentController?.text.trim() ?? '');
           if (requireDeposit && percent != null) {
-            detail = 'Deposit (${percent.toStringAsFixed(0)}%): '
-                '\$${(rowsTotal * percent / 100).toStringAsFixed(2)}';
+            lines.add('Deposit (${percent.toStringAsFixed(0)}%): '
+                '\$${(total * percent / 100).toStringAsFixed(2)}');
           }
+          if (lines.isNotEmpty) detail = lines.join('\n');
         } else if (!details.hasPackage) {
           totalText = '—';
           detail = 'No package picked: the client will choose, so the '
@@ -2954,11 +3059,131 @@ class _LiveEstimateTotal extends StatelessWidget {
               if (detail != null) ...[
                 const SizedBox(height: 4),
                 Text(detail,
-                    textAlign: TextAlign.end,
-                    style: theme.textTheme.bodySmall),
+                    textAlign: TextAlign.end, style: theme.textTheme.bodySmall),
               ],
             ],
           ),
+        );
+      },
+    );
+  }
+}
+
+/// form state for an estimate's optional discount: on/off, flat vs percent,
+/// and the amount. [changes] drives the live total.
+class _DiscountController {
+  _DiscountController([EstimateDiscount? initial])
+      : enabled = ValueNotifier(initial != null),
+        type = ValueNotifier(initial?.type ?? EstimateDiscount.flat),
+        valueController = TextEditingController(
+            text: initial == null ? '' : _formatValue(initial.value));
+
+  final ValueNotifier<bool> enabled;
+  final ValueNotifier<String> type;
+  final TextEditingController valueController;
+
+  Listenable get changes => Listenable.merge([enabled, type, valueController]);
+
+  static String _formatValue(double value) => value == value.roundToDouble()
+      ? value.toStringAsFixed(0)
+      : value.toStringAsFixed(2);
+
+  /// the discount as currently entered; null when off or not a positive number
+  EstimateDiscount? get discount {
+    if (!enabled.value) return null;
+    final value = double.tryParse(valueController.text.trim());
+    if (value == null || value <= 0) return null;
+    return EstimateDiscount(type: type.value, value: value);
+  }
+
+  /// an error message to show, or null if the discount is valid (or off)
+  String? validate(double subtotal) {
+    if (!enabled.value) return null;
+    final value = double.tryParse(valueController.text.trim());
+    if (value == null || value <= 0) {
+      return 'Enter a discount greater than 0, or uncheck "Apply a discount".';
+    }
+    if (type.value == EstimateDiscount.percent && value > 100) {
+      return 'A percentage discount can\'t be more than 100%.';
+    }
+    if (type.value == EstimateDiscount.flat && value > subtotal) {
+      return 'The discount can\'t be more than the services subtotal '
+          '(\$${subtotal.toStringAsFixed(2)}).';
+    }
+    return null;
+  }
+
+  void reset() {
+    enabled.value = false;
+    type.value = EstimateDiscount.flat;
+    valueController.clear();
+  }
+
+  void dispose() {
+    enabled.dispose();
+    type.dispose();
+    valueController.dispose();
+  }
+}
+
+/// "Apply a discount" checkbox plus a $ / % toggle and amount field
+class _DiscountEditor extends StatelessWidget {
+  const _DiscountEditor({required this.controller});
+
+  final _DiscountController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([controller.enabled, controller.type]),
+      builder: (context, _) {
+        final isPercent = controller.type.value == EstimateDiscount.percent;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: controller.enabled.value,
+              onChanged: (value) => controller.enabled.value = value ?? false,
+              title: const Text('Apply a discount'),
+            ),
+            if (controller.enabled.value) ...[
+              Row(
+                children: [
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                          value: EstimateDiscount.flat, label: Text('\$')),
+                      ButtonSegment(
+                          value: EstimateDiscount.percent, label: Text('%')),
+                    ],
+                    selected: {controller.type.value},
+                    showSelectedIcon: false,
+                    onSelectionChanged: (selection) =>
+                        controller.type.value = selection.first,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: controller.valueController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: isPercent
+                            ? 'Discount percentage'
+                            : 'Discount amount',
+                        border: const OutlineInputBorder(),
+                        prefixText: isPercent ? null : '\$',
+                        suffixText: isPercent ? '%' : null,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+          ],
         );
       },
     );
@@ -3048,7 +3273,7 @@ class _ServiceRowController {
   InvoiceServiceItem? toServiceItem() {
     final name = nameController.text.trim();
     final total = computedPrice;
-    if (name.isEmpty || total == null || total <= 0) return null;
+    if (name.isEmpty || total == null || total < 0) return null;
     return InvoiceServiceItem(
       name: name,
       description: descriptionController.text.trim(),

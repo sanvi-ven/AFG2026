@@ -162,49 +162,59 @@ class EstimatePdfService {
           if (estimate.isFallCleanup)
             ...EstimateFallCleanupPdf.body(estimate)
           else ...[
-          PdfLayoutHelpers.buildItemsTable(
-            headers: const <String>['Line Item', 'Amount'],
-            data: estimate.services.map((item) {
-              final lines = <String>[item.name];
-              if (item.description.isNotEmpty) lines.add(item.description);
-              if (item.isPerUnit) {
-                lines.add(
-                    '${item.quantity} ${item.unit ?? 'unit'} x ${currency.format(item.unitPrice!)}');
-              }
-              return <String>[lines.join('\n'), currency.format(item.price)];
-            }).toList(),
-          ),
-          pw.SizedBox(height: 14),
-          pw.Align(
-            alignment: pw.Alignment.centerRight,
-            child: pw.Container(
-              padding:
-                  const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(
-                    color: PdfLayoutHelpers.accentColor, width: 1),
-                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
-              ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  pw.Text(
-                    'Total: ${currency.format(estimate.total)}',
-                    style: pw.TextStyle(
-                        fontSize: 14, fontWeight: pw.FontWeight.bold),
-                  ),
-                  if (depositAmount != null) ...[
-                    pw.SizedBox(height: 4),
+            PdfLayoutHelpers.buildItemsTable(
+              headers: const <String>['Line Item', 'Amount'],
+              data: estimate.services.map((item) {
+                final lines = <String>[item.name];
+                if (item.description.isNotEmpty) lines.add(item.description);
+                if (item.isPerUnit) {
+                  lines.add(
+                      '${item.quantity} ${item.unit ?? 'unit'} x ${currency.format(item.unitPrice!)}');
+                }
+                return <String>[lines.join('\n'), currency.format(item.price)];
+              }).toList(),
+            ),
+            pw.SizedBox(height: 14),
+            pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Container(
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(
+                      color: PdfLayoutHelpers.accentColor, width: 1),
+                  borderRadius:
+                      const pw.BorderRadius.all(pw.Radius.circular(4)),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    if (estimate.discountAmount > 0) ...[
+                      pw.Text('Subtotal: ${currency.format(estimate.subtotal)}',
+                          style: const pw.TextStyle(fontSize: 11)),
+                      pw.Text(
+                          '${estimate.discount!.label}: '
+                          '-${currency.format(estimate.discountAmount)}',
+                          style: const pw.TextStyle(fontSize: 11)),
+                      pw.SizedBox(height: 4),
+                    ],
                     pw.Text(
-                      'Deposit due to begin work (${depositPercent!.toStringAsFixed(0)}%): '
-                      '${currency.format(depositAmount)}',
-                      style: const pw.TextStyle(fontSize: 11),
+                      'Total: ${currency.format(estimate.total)}',
+                      style: pw.TextStyle(
+                          fontSize: 14, fontWeight: pw.FontWeight.bold),
                     ),
+                    if (depositAmount != null) ...[
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'Deposit due to begin work (${depositPercent!.toStringAsFixed(0)}%): '
+                        '${currency.format(depositAmount)}',
+                        style: const pw.TextStyle(fontSize: 11),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
-          ),
           ],
           if (estimate.notes.trim().isNotEmpty) ...[
             pw.SizedBox(height: 16),

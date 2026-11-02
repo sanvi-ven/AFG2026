@@ -126,6 +126,11 @@ class InvoiceServiceItem {
 
   bool get isPerUnit => unitPrice != null && quantity != null;
 
+  /// "\$12.50", or "-\$12.50" for a discount line
+  String get priceLabel => price < 0
+      ? '-\$${(-price).toStringAsFixed(2)}'
+      : '\$${price.toStringAsFixed(2)}';
+
   /// create service item from firestore map
   factory InvoiceServiceItem.fromMap(Map<String, dynamic> map) {
     return InvoiceServiceItem(

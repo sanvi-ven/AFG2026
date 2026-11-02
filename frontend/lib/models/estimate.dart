@@ -35,6 +35,7 @@ class Estimate {
     this.type = EstimateType.standard,
     this.fallCleanup,
     this.secondVisitInvoiceId,
+    this.discount,
   });
 
   final String id;
@@ -83,13 +84,35 @@ class Estimate {
   /// invoice is [convertedInvoiceId], each billing 50% of the total.
   final String? secondVisitInvoiceId;
 
+  /// optional flat or percent discount off the services subtotal; standard
+  /// estimates only (a fall cleanup's total is derived from the client's
+  /// selection, so there's no fixed subtotal to discount)
+  final EstimateDiscount? discount;
+
+  /// sum of the line items before any discount
+  double get subtotal => services.fold<double>(
+      0, (runningTotal, item) => runningTotal + item.price);
+
+  /// dollar amount taken off by [discount]; 0 when there's none
+  double get discountAmount =>
+      isFallCleanup ? 0 : discount?.amountFor(subtotal) ?? 0;
+
   bool get isFallCleanup =>
       type == EstimateType.fallCleanup && fallCleanup != null;
 
   /// the line items to invoice or schedule: [services] for a standard
-  /// estimate, or the selected fall cleanup options plus additional work
-  List<InvoiceServiceItem> get billableServices =>
-      isFallCleanup ? fallCleanup!.billableItems(services) : services;
+  /// estimate, or the selected fall cleanup options plus additional work.
+  /// A discount is carried as a trailing negative line, so an invoice or job
+  /// built from these items totals to exactly the discounted [total].
+  List<InvoiceServiceItem> get billableServices {
+    if (isFallCleanup) return fallCleanup!.billableItems(services);
+    final amount = discountAmount;
+    if (amount <= 0) return services;
+    return [
+      ...services,
+      InvoiceServiceItem(name: discount!.label, price: -amount),
+    ];
+  }
 
   bool get isPending => status == InvoiceStatus.pending;
   bool get isApproved => status == InvoiceStatus.approved;
@@ -129,7 +152,8 @@ class Estimate {
 
     final type = (map['type'] as String? ?? EstimateType.standard).trim();
     final fallCleanupMap = map['fallCleanup'];
-    final fallCleanup = type == EstimateType.fallCleanup && fallCleanupMap is Map
+    final fallCleanup = type == EstimateType.fallCleanup &&
+            fallCleanupMap is Map
         ? FallCleanupDetails.fromMap(
             fallCleanupMap.map((key, value) => MapEntry(key.toString(), value)))
         : null;
@@ -175,6 +199,9 @@ class Estimate {
       type: type,
       fallCleanup: fallCleanup,
       secondVisitInvoiceId: (map['secondVisitInvoiceId'] as String?)?.trim(),
+      discount: fallCleanup == null
+          ? EstimateDiscount.fromMapOrNull(map['discount'])
+          : null,
     );
   }
 
@@ -209,8 +236,57 @@ class Estimate {
       'type': type,
       'fallCleanup': fallCleanup?.toMap(),
       'secondVisitInvoiceId': secondVisitInvoiceId,
+      'discount': discount?.toMap(),
     };
   }
+}
+
+/// a discount off an estimate's subtotal: either a flat dollar amount or a
+/// percentage
+class EstimateDiscount {
+  const EstimateDiscount({required this.type, required this.value});
+
+  static const flat = 'flat';
+  static const percent = 'percent';
+
+  /// [flat] or [percent]
+  final String type;
+
+  /// dollars for [flat], 0-100 for [percent]
+  final double value;
+
+  bool get isPercent => type == percent;
+
+  /// line-item name shown on estimates, invoices, and PDFs
+  String get label =>
+      isPercent ? 'Discount (${_trimNumber(value)}%)' : 'Discount';
+
+  /// dollars taken off [subtotal], rounded to the cent and never more than
+  /// the subtotal itself
+  double amountFor(double subtotal) {
+    if (subtotal <= 0 || value <= 0) return 0;
+    final raw = isPercent ? subtotal * value / 100 : value;
+    final cents = (raw * 100).round();
+    final capped =
+        cents > (subtotal * 100).round() ? (subtotal * 100).round() : cents;
+    return capped / 100;
+  }
+
+  static String _trimNumber(double n) => n == n.roundToDouble()
+      ? n.toStringAsFixed(0)
+      : n.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '');
+
+  static EstimateDiscount? fromMapOrNull(dynamic map) {
+    if (map is! Map) return null;
+    final value = (map['value'] as num?)?.toDouble() ?? 0;
+    if (value <= 0) return null;
+    return EstimateDiscount(
+      type: map['type'] == percent ? percent : flat,
+      value: value,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {'type': type, 'value': value};
 }
 
 class EstimateVersionSnapshot {

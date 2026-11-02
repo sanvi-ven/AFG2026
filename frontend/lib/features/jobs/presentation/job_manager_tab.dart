@@ -86,7 +86,7 @@ class _JobManagerTabState extends State<JobManagerTab> {
         estimateId: estimate.id,
         estimateNumber: estimate.estimateNumber,
         clientId: estimate.clientId,
-        services: estimate.services,
+        services: estimate.billableServices,
         total: estimate.total,
         scheduledDate: scheduledDateTime,
         address: client?.address ?? '',
@@ -680,7 +680,7 @@ class _JobDetailsSheet extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(child: Text(item.name)),
-                  Text('\$${item.price.toStringAsFixed(2)}'),
+                  Text(item.priceLabel),
                 ],
               ),
             ),

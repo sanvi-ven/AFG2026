@@ -894,7 +894,7 @@ class _ScheduledWorkCardState extends State<_ScheduledWorkCard> {
                   child: Row(
                     children: [
                       Expanded(child: Text(item.name)),
-                      Text('\$${item.price.toStringAsFixed(2)}'),
+                      Text(item.priceLabel),
                     ],
                   ),
                 ),

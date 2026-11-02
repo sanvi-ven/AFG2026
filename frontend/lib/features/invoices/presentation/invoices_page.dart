@@ -519,7 +519,7 @@ class _InvoiceCard extends StatelessWidget {
                       Row(
                         children: [
                           Expanded(child: Text(item.name)),
-                          Text('\$${item.price.toStringAsFixed(2)}'),
+                          Text(item.priceLabel),
                         ],
                       ),
                       if (item.description.isNotEmpty)
