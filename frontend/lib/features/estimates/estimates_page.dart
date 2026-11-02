@@ -1170,6 +1170,8 @@ class _EstimatesPageState extends State<EstimatesPage> {
               isSubmitting: _isSubmitting,
               onAddService: _addServiceRow,
               onRemoveService: _removeServiceRow,
+              onReorderService: (oldIndex, newIndex) => setState(
+                  () => _ServiceRowList.move(_serviceRows, oldIndex, newIndex)),
               onSubmit: _submitEstimate,
             ),
             const SizedBox(height: 16),
@@ -1396,6 +1398,7 @@ class _OwnerEstimateForm extends StatelessWidget {
     required this.isSubmitting,
     required this.onAddService,
     required this.onRemoveService,
+    required this.onReorderService,
     required this.onSubmit,
   });
 
@@ -1423,6 +1426,7 @@ class _OwnerEstimateForm extends StatelessWidget {
   final bool isSubmitting;
   final VoidCallback onAddService;
   final void Function(int index) onRemoveService;
+  final void Function(int oldIndex, int newIndex) onReorderService;
   final VoidCallback onSubmit;
 
   @override
@@ -1555,13 +1559,12 @@ class _OwnerEstimateForm extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             const SizedBox(height: 8),
-            for (var i = 0; i < serviceRows.length; i++)
-              _ServiceRowEditor(
-                key: ObjectKey(serviceRows[i]),
-                row: serviceRows[i],
-                onRemove: () => onRemoveService(i),
-                catalog: catalog,
-              ),
+            _ServiceRowList(
+              rows: serviceRows,
+              catalog: catalog,
+              onRemove: onRemoveService,
+              onReorder: onReorderService,
+            ),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
@@ -2667,13 +2670,13 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
                     ),
                     const SizedBox(height: 8),
                   ],
-                  for (var i = 0; i < _rows.length; i++)
-                    _ServiceRowEditor(
-                      key: ObjectKey(_rows[i]),
-                      row: _rows[i],
-                      onRemove: () => _removeRow(i),
-                      catalog: catalog,
-                    ),
+                  _ServiceRowList(
+                    rows: _rows,
+                    catalog: catalog,
+                    onRemove: _removeRow,
+                    onReorder: (oldIndex, newIndex) => setState(
+                        () => _ServiceRowList.move(_rows, oldIndex, newIndex)),
+                  ),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
@@ -2877,13 +2880,13 @@ class _EditPendingEstimateDialogState
                         style: Theme.of(context).textTheme.titleSmall),
                     const SizedBox(height: 8),
                   ],
-                  for (var i = 0; i < _rows.length; i++)
-                    _ServiceRowEditor(
-                      key: ObjectKey(_rows[i]),
-                      row: _rows[i],
-                      onRemove: () => _removeRow(i),
-                      catalog: catalog,
-                    ),
+                  _ServiceRowList(
+                    rows: _rows,
+                    catalog: catalog,
+                    onRemove: _removeRow,
+                    onReorder: (oldIndex, newIndex) => setState(
+                        () => _ServiceRowList.move(_rows, oldIndex, newIndex)),
+                  ),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
@@ -3301,6 +3304,70 @@ class _ServiceRowController {
   }
 }
 
+/// the service rows of an estimate form, each with move-up/move-down
+/// buttons. The owner keeps [rows] and applies [onReorder] in its setState;
+/// row order is the line-item order on the estimate, PDF, and invoice.
+/// (Not a ReorderableListView: shrink-wrapped inside these scrolling forms,
+/// its drag animation crashes the page's LayoutBuilder.)
+class _ServiceRowList extends StatelessWidget {
+  const _ServiceRowList({
+    required this.rows,
+    required this.catalog,
+    required this.onRemove,
+    required this.onReorder,
+  });
+
+  final List<_ServiceRowController> rows;
+  final List<CommonService> catalog;
+  final void Function(int index) onRemove;
+
+  /// [newIndex] is the row's final position
+  final void Function(int oldIndex, int newIndex) onReorder;
+
+  /// move a row in place, for owners' onReorder handlers
+  static void move(
+      List<_ServiceRowController> rows, int oldIndex, int newIndex) {
+    rows.insert(newIndex, rows.removeAt(oldIndex));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < rows.length; i++)
+          _ServiceRowEditor(
+            key: ObjectKey(rows[i]),
+            row: rows[i],
+            onRemove: () => onRemove(i),
+            catalog: catalog,
+            reorderButtons: rows.length > 1
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: i == 0 ? null : () => onReorder(i, i - 1),
+                        icon: const Icon(Icons.keyboard_arrow_up),
+                        tooltip: 'Move up',
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      IconButton(
+                        onPressed: i == rows.length - 1
+                            ? null
+                            : () => onReorder(i, i + 1),
+                        icon: const Icon(Icons.keyboard_arrow_down),
+                        tooltip: 'Move down',
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  )
+                : null,
+          ),
+      ],
+    );
+  }
+}
+
 /// shared per-row editor used by both the create-estimate form and the
 /// revise dialog: name (with catalog-search autocomplete), description,
 /// flat-vs-per-unit toggle, and a "save to catalog" shortcut.
@@ -3310,11 +3377,16 @@ class _ServiceRowEditor extends StatefulWidget {
     required this.row,
     required this.onRemove,
     required this.catalog,
+    this.reorderButtons,
   });
 
   final _ServiceRowController row;
   final VoidCallback onRemove;
   final List<CommonService> catalog;
+
+  /// move-up/down buttons shown before the name field when there's more
+  /// than one row
+  final Widget? reorderButtons;
 
   @override
   State<_ServiceRowEditor> createState() => _ServiceRowEditorState();
@@ -3405,6 +3477,7 @@ class _ServiceRowEditorState extends State<_ServiceRowEditor> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (widget.reorderButtons != null) widget.reorderButtons!,
               Expanded(
                 child: TextField(
                   controller: row.nameController,
