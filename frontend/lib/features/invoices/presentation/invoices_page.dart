@@ -11,6 +11,7 @@ import '../../../core/state/client_session.dart';
 import '../../../models/client_profile.dart';
 import '../../../models/invoice.dart';
 import '../../../shared/utils/list_highlight_controller.dart';
+import '../../../shared/utils/stream_cache.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/list_search_field.dart';
 import '../../../shared/widgets/sort_control.dart';
@@ -29,6 +30,7 @@ class InvoicesPage extends StatefulWidget {
 }
 
 class _InvoicesPageState extends State<InvoicesPage> {
+  final _streams = StreamCache();
   String? _downloadingInvoiceId;
   String? _markingPaidInvoiceId;
   String? _archivingInvoiceId;
@@ -202,15 +204,23 @@ class _InvoicesPageState extends State<InvoicesPage> {
               // a client session only ever needs to resolve its own name,
               // and doesn't have access to read the rest once Firestore
               // rules are scoped by role.
-              stream: widget.role == 'owner'
-                  ? ClientProfileService.watchAllProfiles()
-                  : Stream.value(profile != null ? [profile] : const <ClientProfile>[]),
+              stream: _streams.get(
+                  'clients',
+                  (widget.role, profile?.signupId),
+                  () => widget.role == 'owner'
+                      ? ClientProfileService.watchAllProfiles()
+                      : Stream.value(profile != null
+                          ? [profile]
+                          : const <ClientProfile>[])),
               builder: (context, clientsSnapshot) {
                 final clients = clientsSnapshot.data ?? const <ClientProfile>[];
 
                 return StreamBuilder<List<Invoice>>(
-                  stream: InvoiceService.watchInvoices(
-                      role: widget.role, clientId: clientId),
+                  stream: _streams.get(
+                      'invoices',
+                      (widget.role, clientId),
+                      () => InvoiceService.watchInvoices(
+                          role: widget.role, clientId: clientId)),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());

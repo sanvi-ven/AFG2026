@@ -26,6 +26,7 @@ import '../../models/fall_cleanup.dart';
 import '../../models/internal_note.dart';
 import '../../models/invoice.dart';
 import '../../shared/utils/list_highlight_controller.dart';
+import '../../shared/utils/stream_cache.dart';
 import '../../shared/widgets/app_scaffold.dart';
 import '../../shared/widgets/internal_notes_section.dart';
 import '../../shared/widgets/list_search_field.dart';
@@ -101,6 +102,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
   bool _isLoadingClientSuggestions = true;
   ListSortMode _sortMode = ListSortMode.newestFirst;
   final _listSearchController = TextEditingController();
+  final _streams = StreamCache();
   String _listQuery = '';
   late final ListHighlightController _highlight =
       ListHighlightController(widget.highlightId);
@@ -1183,8 +1185,11 @@ class _EstimatesPageState extends State<EstimatesPage> {
             )
           else
             StreamBuilder<List<Estimate>>(
-              stream: EstimateService.watchEstimates(
-                  role: widget.role, clientId: clientId),
+              stream: _streams.get(
+                  'estimates',
+                  (widget.role, clientId),
+                  () => EstimateService.watchEstimates(
+                      role: widget.role, clientId: clientId)),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());

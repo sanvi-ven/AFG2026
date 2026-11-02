@@ -21,6 +21,7 @@ import '../../../models/invoice.dart';
 import '../../../models/scheduled_work.dart';
 import '../../../models/team.dart';
 import '../../../shared/utils/list_highlight_controller.dart';
+import '../../../shared/utils/stream_cache.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/archived_badge.dart';
 import '../../../shared/widgets/google_calendar_booking_button.dart';
@@ -44,6 +45,7 @@ class AppointmentsPage extends StatefulWidget {
 }
 
 class _AppointmentsPageState extends State<AppointmentsPage> {
+  final _streams = StreamCache();
   static const String _calendarUrl =
       'https://calendar.google.com/calendar/embed?mode=WEEK&height=600&wkst=1&ctz=America%2FNew_York&showPrint=0&showTitle=0&showNav=1&showTabs=1&showCalendars=0&showTz=0&src=immc17289%40gmail.com&color=%23039BE5';
 
@@ -346,16 +348,22 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
             )
           else
             StreamBuilder<List<Team>>(
-              stream: widget.role == 'owner'
-                  ? TeamService.watchAllTeams()
-                  : const Stream.empty(),
+              stream: _streams.get(
+                  'teams',
+                  widget.role,
+                  () => widget.role == 'owner'
+                      ? TeamService.watchAllTeams()
+                      : const Stream.empty()),
               builder: (context, teamsSnapshot) {
                 final teams = teamsSnapshot.data ?? const <Team>[];
 
                 return StreamBuilder<List<EmployeeProfile>>(
-                  stream: widget.role == 'owner'
-                      ? EmployeeProfileService.watchAllProfiles()
-                      : const Stream.empty(),
+                  stream: _streams.get(
+                      'employees',
+                      widget.role,
+                      () => widget.role == 'owner'
+                          ? EmployeeProfileService.watchAllProfiles()
+                          : const Stream.empty()),
                   builder: (context, employeesSnapshot) {
                     final employees =
                         employeesSnapshot.data ?? const <EmployeeProfile>[];
@@ -365,19 +373,26 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                       // names; a client session only ever needs its own name,
                       // and doesn't have access to read the rest once
                       // Firestore rules are scoped by role.
-                      stream: widget.role == 'owner'
-                          ? ClientProfileService.watchAllProfiles()
-                          : Stream.value(profile != null
-                              ? [profile]
-                              : const <ClientProfile>[]),
+                      stream: _streams.get(
+                          'clients',
+                          (widget.role, profile?.signupId),
+                          () => widget.role == 'owner'
+                              ? ClientProfileService.watchAllProfiles()
+                              : Stream.value(profile != null
+                                  ? [profile]
+                                  : const <ClientProfile>[])),
                       builder: (context, clientsSnapshot) {
                         final clients =
                             clientsSnapshot.data ?? const <ClientProfile>[];
 
                         return StreamBuilder<List<ScheduledWork>>(
-                          stream: ScheduledWorkService.watchScheduledWork(
-                            role: widget.role,
-                            clientId: clientId,
+                          stream: _streams.get(
+                            'work',
+                            (widget.role, clientId),
+                            () => ScheduledWorkService.watchScheduledWork(
+                              role: widget.role,
+                              clientId: clientId,
+                            ),
                           ),
                           builder: (context, snapshot) {
                             if (snapshot.connectionState ==
