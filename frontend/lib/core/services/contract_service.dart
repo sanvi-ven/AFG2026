@@ -69,15 +69,21 @@ class ContractService {
   /// to "adult" in that case and this is the one place that gap is closed:
   /// the owner is prompted to pick explicitly rather than it happening
   /// silently (see ContractsTab._issueContract).
+  ///
+  /// [replaceExisting] is the owner's "Re-send contract": the current
+  /// contract and its amendments are deleted and a fresh, unsigned one is
+  /// issued from today's template and profile info. The template is checked
+  /// first, so a missing template never leaves the employee with no contract.
   static Future<void> issueContract({
     required EmployeeProfile employee,
     required String issuedBy,
     bool? isMinorOverride,
+    bool replaceExisting = false,
   }) async {
     final normalizedId = employee.employeeId.trim();
     final doc = _collection.doc(normalizedId);
     final existing = await doc.get();
-    if (existing.exists) {
+    if (existing.exists && !replaceExisting) {
       throw Exception('This employee already has a contract on file.');
     }
 
@@ -88,6 +94,7 @@ class ContractService {
       throw Exception(
           'Set up the employment contract template first, in Owner Settings → Manage Legal Documents.');
     }
+    if (existing.exists) await deleteContract(normalizedId);
 
     final isMinor = isMinorOverride ?? employee.isMinor;
     final now = DateTime.now();

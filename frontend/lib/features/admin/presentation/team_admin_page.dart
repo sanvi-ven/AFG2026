@@ -1180,9 +1180,12 @@ class _ContractsTab extends StatefulWidget {
 }
 
 class _ContractsTabState extends State<_ContractsTab> {
-  Future<void> _issueContract(EmployeeProfile employee) async {
-    // isMinor silently defaults to "adult" when dateOfBirth is unset — ask
-    // explicitly here instead of letting that happen without anyone noticing.
+  /// isMinor silently defaults to "adult" when dateOfBirth is unset — ask
+  /// explicitly instead of letting that happen without anyone noticing.
+  /// Returns false if the owner backed out or a minor has no guardian email;
+  /// otherwise [onDecided] gets the override (null when a birth date is on file).
+  Future<bool> _resolveMinorStatus(
+      EmployeeProfile employee, void Function(bool? isMinorOverride) onDecided) async {
     bool? isMinorOverride;
     if (employee.dateOfBirth == null) {
       isMinorOverride = await showDialog<bool>(
@@ -1206,16 +1209,23 @@ class _ContractsTabState extends State<_ContractsTab> {
           ],
         ),
       );
-      if (isMinorOverride == null) return; // dialog dismissed without a choice
+      if (isMinorOverride == null) return false; // dialog dismissed without a choice
       if (isMinorOverride == true && employee.guardianEmail.trim().isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text(
                   'Add a guardian email in Contract Info before issuing a contract to a minor.')));
         }
-        return;
+        return false;
       }
     }
+    onDecided(isMinorOverride);
+    return true;
+  }
+
+  Future<void> _issueContract(EmployeeProfile employee) async {
+    bool? isMinorOverride;
+    if (!await _resolveMinorStatus(employee, (value) => isMinorOverride = value)) return;
 
     try {
       await ContractService.issueContract(
@@ -1297,22 +1307,25 @@ class _ContractsTabState extends State<_ContractsTab> {
     }
   }
 
-  Future<void> _deleteContract(EmployeeProfile employee) async {
+  /// owner action: withdraw the contract entirely (it and any amendments
+  /// are deleted); "Issue contract" or an upload can replace it later
+  Future<void> _cancelContract(EmployeeProfile employee, EmploymentContract contract) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete Contract'),
+        title: const Text('Cancel Contract'),
         content: Text(
-          "Permanently delete ${employee.fullName}'s contract (and any amendments on it)? "
-          "This can't be undone — you'll be able to issue or upload a new one afterward.",
+          "Cancel ${employee.fullName}'s contract? It and any amendments on it are deleted"
+          '${contract.employeeSignature != null || contract.guardianSignature != null ? ', including the signatures already on it' : ''}'
+          ". This can't be undone — you can issue or upload a new one afterward.",
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+              onPressed: () => Navigator.of(context).pop(false), child: const Text('Keep')),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
-            child: const Text('Delete'),
+            child: const Text('Cancel contract'),
           ),
         ],
       ),
@@ -1323,7 +1336,55 @@ class _ContractsTabState extends State<_ContractsTab> {
       await ContractService.deleteContract(employee.employeeId);
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("${employee.fullName}'s contract deleted.")));
+            .showSnackBar(SnackBar(content: Text("${employee.fullName}'s contract cancelled.")));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+      }
+    }
+  }
+
+  /// owner action: replace the contract with a fresh, unsigned copy of the
+  /// current template and the employee's current DOB/guardian info
+  Future<void> _resendContract(EmployeeProfile employee, EmploymentContract contract) async {
+    final hasSignatures =
+        contract.employeeSignature != null || contract.guardianSignature != null;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Re-send Contract'),
+        content: Text(
+          "Replace ${employee.fullName}'s contract with a fresh copy of the current template? "
+          '${hasSignatures ? 'The signatures already on it are removed and they' : 'They'} '
+          'will need to sign again${contract.guardianRequired || employee.isMinor ? ', and so will their guardian' : ''}. '
+          'Any amendments on the old contract are deleted.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Re-send'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    bool? isMinorOverride;
+    if (!await _resolveMinorStatus(employee, (value) => isMinorOverride = value)) return;
+
+    try {
+      await ContractService.issueContract(
+        employee: employee,
+        issuedBy: 'owner',
+        isMinorOverride: isMinorOverride,
+        replaceExisting: true,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('A new contract was issued to ${employee.fullName} to sign.')));
       }
     } catch (error) {
       if (mounted) {
@@ -1521,10 +1582,13 @@ class _ContractsTabState extends State<_ContractsTab> {
                     OutlinedButton(
                         onPressed: () => _draftAmendment(contract),
                         child: const Text('Draft amendment')),
+                  OutlinedButton(
+                      onPressed: () => _resendContract(employee, contract),
+                      child: const Text('Re-send contract')),
                   TextButton(
-                    onPressed: () => _deleteContract(employee),
+                    onPressed: () => _cancelContract(employee, contract),
                     style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
-                    child: const Text('Delete contract'),
+                    child: const Text('Cancel contract'),
                   ),
                 ],
                 TextButton(

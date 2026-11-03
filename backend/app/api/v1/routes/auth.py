@@ -1,4 +1,5 @@
-from datetime import datetime
+import logging
+from datetime import date, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
@@ -24,6 +25,63 @@ users_service = UsersService()
 client_repo = FirestoreRepository("client_signups")
 employee_repo = FirestoreRepository("employee_signups")
 invite_code_repo = FirestoreRepository("invite_codes")
+contracts_repo = FirestoreRepository("employment_contracts")
+legal_documents_repo = FirestoreRepository("legal_documents")
+
+logger = logging.getLogger(__name__)
+
+# matches LegalDocumentIds.employmentContractTemplate in the frontend
+_CONTRACT_TEMPLATE_ID = "employment_contract_template"
+
+
+def _is_minor(date_of_birth: datetime) -> bool:
+    today = date.today()
+    dob = date_of_birth.date()
+    age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    return age < 18
+
+
+def _issue_contract_on_signup(employee: dict, date_of_birth: Optional[datetime]) -> None:
+    """auto-issue a new employee's contract, in the same shape as the
+    frontend's ContractService.issueContract (doc id == employee id, frozen
+    copy of the current template). Skipped, leaving the owner's manual
+    "Issue contract" button, when there's no birth date (adult vs. minor
+    decides whether a guardian must co-sign, and the owner's flow asks
+    rather than guessing) or no template has been written yet. Best-effort:
+    a failure here never fails the signup itself."""
+    if date_of_birth is None:
+        return
+    try:
+        template = legal_documents_repo.get_by_id(_CONTRACT_TEMPLATE_ID) or {}
+        content = str(template.get("content") or "").strip()
+        if not content or contracts_repo.get_by_id(employee["id"]):
+            return
+        is_minor = _is_minor(date_of_birth)
+        now = datetime.utcnow()
+        contracts_repo.create_with_id(employee["id"], {
+            "employeeId": employee["id"],
+            "content": content,
+            "contractVersion": 1,
+            "isMinorAtSigning": is_minor,
+            "guardianRequired": is_minor,
+            "guardianName": employee.get("guardian_name", ""),
+            "guardianEmail": employee.get("guardian_email", ""),
+            "guardianPhone": employee.get("guardian_phone", ""),
+            "status": "pending_employee_signature",
+            "employeeSignature": None,
+            "guardianSignature": None,
+            "guardianSignToken": None,
+            "guardianSignTokenExpiresAt": None,
+            "guardianSignTokenSentAt": None,
+            "guardianReminderCount": 0,
+            "employeeSmsReminderSentAt": None,
+            "uploadedFile": None,
+            "createdAt": now,
+            "createdBy": "signup",
+            "updatedAt": now,
+        })
+    except Exception:
+        logger.exception("Auto-issuing a contract at signup failed for %s", employee.get("id"))
 
 
 def _verify_token(authorization: Optional[str]) -> dict:
@@ -122,6 +180,7 @@ def complete_signup(
             "guardian_phone": payload.guardian_phone.strip(),
             "sms_opt_in": payload.sms_opt_in,
         })
+        _issue_contract_on_signup(record, date_of_birth)
     else:
         # owner has no separate profile collection — the users record above
         # (email, display name, role) is the whole of their identity
