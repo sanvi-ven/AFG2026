@@ -313,6 +313,55 @@ service cloud.firestore {
       allow read, update, delete: if isOwner();
     }
 
+    // Crew Points Program. Every staff member sees everything (the
+    // leaderboard is the point), so reads are a plain isStaff() — which also
+    // keeps a .doc(id).get() of a not-yet-created doc (today's crews, my
+    // challenge) from tripping the null-`resource` trap. Names live on the
+    // season roster because employees can't read employee_signups.
+    match /points_seasons/{seasonId} {
+      allow read: if isStaff();
+      allow write: if isOwner();
+    }
+    match /points_crews/{crewDayId} {
+      allow read: if isStaff();
+      allow write: if isOwner();
+    }
+    match /points_events/{eventId} {
+      allow read: if isStaff();
+      allow update, delete: if isOwner();
+      // an employee may only submit a +1 teamwork call-out, as themselves,
+      // as pending — it doesn't count until the owner approves it
+      allow create: if isOwner() || (
+        isSignedIn() && role() == 'employee'
+        && request.resource.data.keys().hasOnly(['id', 'seasonId', 'day', 'category',
+             'points', 'employeeIds', 'status', 'createdBy', 'createdByName', 'createdAt',
+             'crewId', 'crewName', 'note', 'clientId', 'reviewedAt', 'reviewNote'])
+        && request.resource.data.id == eventId
+        && request.resource.data.category == 'teamwork_callout'
+        && request.resource.data.points == 1
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdBy == profileId()
+        && request.resource.data.clientId == null
+        && request.resource.data.reviewedAt == null
+        && !(profileId() in request.resource.data.employeeIds)
+      );
+    }
+    // one challenge token per employee per season: the doc id is fixed to
+    // <seasonId>_<profile_id> and an employee can only create, never update,
+    // so a second challenge is a denied update rather than a new doc
+    match /points_challenges/{challengeId} {
+      allow read: if isStaff();
+      allow update, delete: if isOwner();
+      allow create: if isOwner() || (
+        isOwnEmployee(request.resource.data.employeeId)
+        && challengeId == request.resource.data.seasonId + '_' + profileId()
+        && request.resource.data.id == challengeId
+        && request.resource.data.keys().hasOnly(['id', 'seasonId', 'employeeId',
+             'employeeName', 'eventId', 'eventSummary', 'reason', 'status', 'createdAt'])
+        && request.resource.data.status == 'pending'
+      );
+    }
+
     // Single global business-config doc (company name/address/logo, PDF
     // templates). Read must stay public: the pre-auth lead form reads the
     // owner's notification email, and both owner- and client-facing PDF

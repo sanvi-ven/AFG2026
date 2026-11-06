@@ -20,6 +20,7 @@ import '../../features/equipment/presentation/equipment_detail_page.dart';
 import '../../features/equipment/presentation/equipment_form_page.dart';
 import '../../features/equipment/presentation/equipment_kits_page.dart';
 import '../../features/estimates/estimates_page.dart';
+import '../../features/crew_points/presentation/crew_points_page.dart';
 import '../../features/estimates/presentation/checklist_templates_page.dart';
 import '../../features/estimates/presentation/service_catalog_page.dart';
 import '../../features/invoices/presentation/invoices_page.dart';
@@ -108,6 +109,7 @@ class AppRouter {
   static const legalDocumentsAdmin = '/legal/admin';
   static const legalDocumentEdit = '/legal/admin/edit';
   static const crewAvailability = '/crew-availability';
+  static const crewPoints = '/crew-points';
   static const contractDetail = '/contracts/detail';
   // only ever reached via a cold external link (the emailed guardian link) —
   // see _resolveInitialHome() in app.dart, same shape as legalDocument's
@@ -319,6 +321,11 @@ class AppRouter {
             documentId: (args['documentId'] as String?) ?? '',
             documentTitle: (args['documentTitle'] as String?) ?? '',
           ),
+          settings: settings,
+        );
+      case crewPoints:
+        return _NoAnimationPageRoute(
+          builder: (_) => CrewPointsPage(role: role, authToken: authToken),
           settings: settings,
         );
       case crewAvailability:

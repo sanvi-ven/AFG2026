@@ -138,6 +138,18 @@ The business website (separate repo, an Express/EJS app on a VPS) forwards every
 - **The website is now a fourth SMS opt-in surface** — documented in `frontend/web/index.html`'s `<noscript>` block and `frontend/web/legal/sms-consent.html`. The Twilio campaign's registered `message_flow` must be updated to match before relying on it.
 - **Local testing**: run this backend with `USE_MOCK_FIRESTORE=true`, `WEBSITE_INTEGRATION_SECRET=<test value>`, and the Twilio/Resend keys **blanked in the environment** (env vars override `.env`), and point the website's `ANCHOR_API_URL` at `http://localhost:8000/api/v1/integrations/website`.
 
+### Crew Points Program (added 2026-11-06)
+The Fall 2026 crew bonus program, from the owner's two-page rules PDF and promo video: crews earn and lose points together each day, the points belong to each person, and a point is paid at `pointValue` dollars at season end. One nav item, `AppRouter.crewPoints` (`/crew-points`): `CrewPointsPage` renders `CrewPointsAdminPage` for the owner and the crew board for employees. Model `crew_points.dart` (`PointsCatalog` holds every category; **its keys are stored on events, so never rename one**). Service `crew_points_service.dart`. UI in `features/crew_points/presentation/`.
+- **Four collections**:
+  - `points_seasons`: dates, `pointValue`, the roster with names copied in, `finalizedAt`.
+  - `points_crews`: doc id `<seasonId>_<yyyy-MM-dd>`, that day's crews.
+  - `points_events`: every award or deduction, with an `employeeIds` snapshot of who gets it.
+  - `points_challenges`: doc id `<seasonId>_<employeeId>`.
+  - **Names live on the season roster because employees can't read `employee_signups`.** The leaderboard needs everyone's name, and widening that read would expose DOB, allergies and guardian info.
+- **Daily checks have deterministic ids** (`PointsEvent.dailyCheckId`), so toggling one writes or deletes the same doc. On time and late clear each other. `saveCrews` re-points that day's checks at the crew's new members (and drops the checks of a deleted crew); every other event keeps its original snapshot. Totals are computed client-side in `PointsMath.standings`, which is pure and tested in `test/crew_points_test.dart`: only `approved` events count, ties share a rank, and the shown and paid total is floored at 0 per the rules (`rawPoints` keeps the real sum).
+- **Rules** (verified live 2026-11-06 with a minted employee token, 14/14 cases): reads are `isStaff()`, which also avoids the null-`resource` trap for not-yet-created docs, and owner writes everything. An employee can create only a `pending`, +1 `teamwork_callout`, as themselves, for a crew they aren't on; it counts once the owner approves it. They can create their own challenge doc and never update it, which is what makes the token single-use. Upholding a challenge reverses the event (`status: reversed`, kept for the record).
+- Google review points are capped at one per client (`clientId` checked in the add dialog). Photo-of-the-day crew voting is not built; the owner picks. The employee page remembers the last-seen total in `shared_preferences` to play the "+N" and confetti on the next visit.
+
 ### Third-party service live status (as of 2026-09-01/02) — don't assume, verify
 Each of these was independently confirmed against the provider's own API (not just "the env var looks set") — worth re-verifying the same way if something seems off, rather than assuming the state below is still current:
 
