@@ -440,17 +440,15 @@ class _EstimatesPageState extends State<EstimatesPage> {
             .showSnackBar(SnackBar(content: Text(error))),
       );
       if (fallCleanup == null) return;
-    } else {
-      final subtotal =
-          services.fold<double>(0, (sum, item) => sum + item.price);
-      final error = _discount.validate(subtotal);
-      if (error != null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error)));
-        return;
-      }
-      discount = _discount.discount;
     }
+    final discountError = _discount
+        .validate(_discountCap(services: services, fallCleanup: fallCleanup));
+    if (discountError != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(discountError)));
+      return;
+    }
+    discount = _discount.discount;
 
     setState(() => _isSubmitting = true);
     try {
@@ -508,7 +506,10 @@ class _EstimatesPageState extends State<EstimatesPage> {
                   return subtotal - (discount?.amountFor(subtotal) ?? 0);
                 }()
               : fallCleanup.hasPackage && !fallCleanup.hasUponRequestSelected
-                  ? fallCleanup.knownTotal(services)
+                  ? () {
+                      final known = fallCleanup!.knownTotal(services);
+                      return known - (discount?.amountFor(known) ?? 0);
+                    }()
                   : null,
         );
       }
@@ -1014,7 +1015,7 @@ class _EstimatesPageState extends State<EstimatesPage> {
           description: [
             if (item.description.isNotEmpty) item.description,
             '50% billed after visit $visit of 2 '
-                '(full price \$${item.price.toStringAsFixed(2)}).',
+                '(full price ${item.priceLabel}).',
           ].join('\n'),
           price: () {
             final cents = (item.price * 100).round();
@@ -1591,10 +1592,7 @@ class _OwnerEstimateForm extends StatelessWidget {
               decoration: const InputDecoration(
                   labelText: 'Terms (optional)', border: OutlineInputBorder()),
             ),
-            // a fall cleanup total depends on the client's pick, so there's
-            // no fixed subtotal to discount
-            if (template != EstimateType.fallCleanup)
-              _DiscountEditor(controller: discount),
+            _DiscountEditor(controller: discount),
             // fall cleanup is due on completion per its policy, no deposit
             if (template != EstimateType.fallCleanup)
               CheckboxListTile(
@@ -1634,7 +1632,7 @@ class _OwnerEstimateForm extends StatelessWidget {
               depositPercentController: depositPercentController,
               requireDeposit:
                   requireDeposit && template != EstimateType.fallCleanup,
-              discount: template == EstimateType.fallCleanup ? null : discount,
+              discount: discount,
             ),
             const SizedBox(height: 12),
             Align(
@@ -1920,6 +1918,8 @@ class _EstimateCard extends StatelessWidget {
                   details: estimate.fallCleanup!,
                   additionalWork: estimate.services,
                   total: estimate.total,
+                  discount: estimate.discount,
+                  discountAmount: estimate.discountAmount,
                 )
               else ...[
                 Text('Services', style: Theme.of(context).textTheme.titleSmall),
@@ -2534,7 +2534,7 @@ class _ReviseEstimateResult {
   final List<InvoiceServiceItem> services;
   final FallCleanupDetails? fallCleanup;
 
-  /// standard estimates only; null means no discount
+  /// null means no discount
   final EstimateDiscount? discount;
 }
 
@@ -2627,21 +2627,20 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
             .showSnackBar(SnackBar(content: Text(error))),
       );
       if (fallCleanup == null) return;
-    } else {
-      final error = _discount
-          .validate(parsed.fold<double>(0, (sum, item) => sum + item.price));
-      if (error != null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error)));
-        return;
-      }
+    }
+    final discountError = _discount
+        .validate(_discountCap(services: parsed, fallCleanup: fallCleanup));
+    if (discountError != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(discountError)));
+      return;
     }
 
     setState(() => _isSaving = true);
     Navigator.of(context).pop(_ReviseEstimateResult(
       services: parsed,
       fallCleanup: fallCleanup,
-      discount: fallCleanupForm == null ? _discount.discount : null,
+      discount: _discount.discount,
     ));
   }
 
@@ -2685,13 +2684,12 @@ class _ReviseEstimateDialogState extends State<_ReviseEstimateDialog> {
                       label: const Text('Add service'),
                     ),
                   ),
-                  if (_fallCleanupForm == null)
-                    _DiscountEditor(controller: _discount),
+                  _DiscountEditor(controller: _discount),
                   const SizedBox(height: 8),
                   _LiveEstimateTotal(
                     rows: _rows,
                     fallCleanupForm: _fallCleanupForm,
-                    discount: _fallCleanupForm == null ? _discount : null,
+                    discount: _discount,
                   ),
                 ],
               );
@@ -2735,7 +2733,7 @@ class _EditEstimateResult {
   final String terms;
   final double? depositPercent;
 
-  /// standard estimates only; null means no discount
+  /// null means no discount
   final EstimateDiscount? discount;
 
   /// set only when editing a fall cleanup estimate
@@ -2835,14 +2833,13 @@ class _EditPendingEstimateDialogState
             .showSnackBar(SnackBar(content: Text(error))),
       );
       if (fallCleanup == null) return;
-    } else {
-      final error = _discount
-          .validate(parsed.fold<double>(0, (sum, item) => sum + item.price));
-      if (error != null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error)));
-        return;
-      }
+    }
+    final discountError = _discount
+        .validate(_discountCap(services: parsed, fallCleanup: fallCleanup));
+    if (discountError != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(discountError)));
+      return;
     }
 
     setState(() => _isSaving = true);
@@ -2854,7 +2851,7 @@ class _EditPendingEstimateDialogState
           ? double.tryParse(_depositPercentController.text.trim())
           : null,
       fallCleanup: fallCleanup,
-      discount: fallCleanupForm == null ? _discount.discount : null,
+      discount: _discount.discount,
     ));
   }
 
@@ -2913,8 +2910,7 @@ class _EditPendingEstimateDialogState
                         labelText: 'Terms (optional)',
                         border: OutlineInputBorder()),
                   ),
-                  if (_fallCleanupForm == null)
-                    _DiscountEditor(controller: _discount),
+                  _DiscountEditor(controller: _discount),
                   if (_fallCleanupForm == null)
                     CheckboxListTile(
                       contentPadding: EdgeInsets.zero,
@@ -2941,7 +2937,7 @@ class _EditPendingEstimateDialogState
                     fallCleanupForm: _fallCleanupForm,
                     depositPercentController: _depositPercentController,
                     requireDeposit: _requireDeposit && _fallCleanupForm == null,
-                    discount: _fallCleanupForm == null ? _discount : null,
+                    discount: _discount,
                   ),
                 ],
               );
@@ -3027,18 +3023,27 @@ class _LiveEstimateTotal extends StatelessWidget {
           if (lines.isNotEmpty) detail = lines.join('\n');
         } else if (!details.hasPackage) {
           totalText = '—';
+          final liveDiscount = discount?.discount;
           detail = 'No package picked: the client will choose, so the '
-              'estimate shows "Your total depends on the options you choose."';
+              'estimate shows "Your total depends on the options you choose."'
+              '${liveDiscount == null ? '' : '\n${liveDiscount.offText} applies to whatever they pick.'}';
         } else {
           final known = details.selectedLines
                   .fold<double>(0, (sum, line) => sum + (line.price ?? 0)) +
               rowsTotal;
-          totalText = '\$${known.toStringAsFixed(2)}'
+          final liveDiscount = discount?.discount;
+          final discountAmount = liveDiscount?.amountFor(known) ?? 0;
+          final total = known - discountAmount;
+          totalText = '\$${total.toStringAsFixed(2)}'
               '${details.hasUponRequestSelected ? ' + items upon request' : ''}';
-          if (details.isTwoVisit && !details.hasUponRequestSelected) {
-            detail =
-                'Billed 50% after each visit (\$${(known / 2).toStringAsFixed(2)} per visit)';
-          }
+          final lines = <String>[
+            if (discountAmount > 0)
+              'Subtotal \$${known.toStringAsFixed(2)} · '
+                  '${liveDiscount!.label} -\$${discountAmount.toStringAsFixed(2)}',
+            if (details.isTwoVisit && !details.hasUponRequestSelected)
+              'Billed 50% after each visit (\$${(total / 2).toStringAsFixed(2)} per visit)',
+          ];
+          if (lines.isNotEmpty) detail = lines.join('\n');
         }
 
         return Container(
@@ -3077,6 +3082,21 @@ class _LiveEstimateTotal extends StatelessWidget {
   }
 }
 
+/// the most a flat discount may take off: the services subtotal, or for a
+/// fall cleanup the picked options plus additional work. Null (no cap
+/// checked) for a fall cleanup with no package picked yet, since the client
+/// hasn't chosen what the discount comes off of; [EstimateDiscount.amountFor]
+/// still caps it at whatever they pick.
+double? _discountCap({
+  required List<InvoiceServiceItem> services,
+  FallCleanupDetails? fallCleanup,
+}) {
+  if (fallCleanup == null) {
+    return services.fold<double>(0, (sum, item) => sum + item.price);
+  }
+  return fallCleanup.hasPackage ? fallCleanup.knownTotal(services) : null;
+}
+
 /// form state for an estimate's optional discount: on/off, flat vs percent,
 /// and the amount. [changes] drives the live total.
 class _DiscountController {
@@ -3105,7 +3125,8 @@ class _DiscountController {
   }
 
   /// an error message to show, or null if the discount is valid (or off)
-  String? validate(double subtotal) {
+  /// [subtotal] null skips the "more than the subtotal" check
+  String? validate(double? subtotal) {
     if (!enabled.value) return null;
     final value = double.tryParse(valueController.text.trim());
     if (value == null || value <= 0) {
@@ -3114,8 +3135,10 @@ class _DiscountController {
     if (type.value == EstimateDiscount.percent && value > 100) {
       return 'A percentage discount can\'t be more than 100%.';
     }
-    if (type.value == EstimateDiscount.flat && value > subtotal) {
-      return 'The discount can\'t be more than the services subtotal '
+    if (subtotal != null &&
+        type.value == EstimateDiscount.flat &&
+        value > subtotal) {
+      return 'The discount can\'t be more than the subtotal '
           '(\$${subtotal.toStringAsFixed(2)}).';
     }
     return null;

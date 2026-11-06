@@ -84,18 +84,20 @@ class Estimate {
   /// invoice is [convertedInvoiceId], each billing 50% of the total.
   final String? secondVisitInvoiceId;
 
-  /// optional flat or percent discount off the services subtotal; standard
-  /// estimates only (a fall cleanup's total is derived from the client's
-  /// selection, so there's no fixed subtotal to discount)
+  /// optional flat or percent discount off [subtotal]. On a fall cleanup
+  /// it applies to whatever the client picks, so a percent discount scales
+  /// with their choice and a flat one is capped at it.
   final EstimateDiscount? discount;
 
-  /// sum of the line items before any discount
-  double get subtotal => services.fold<double>(
-      0, (runningTotal, item) => runningTotal + item.price);
+  /// total before any discount: the line items, or for a fall cleanup the
+  /// priced selected options plus additional work
+  double get subtotal => isFallCleanup
+      ? fallCleanup!.knownTotal(services)
+      : services.fold<double>(
+          0, (runningTotal, item) => runningTotal + item.price);
 
   /// dollar amount taken off by [discount]; 0 when there's none
-  double get discountAmount =>
-      isFallCleanup ? 0 : discount?.amountFor(subtotal) ?? 0;
+  double get discountAmount => discount?.amountFor(subtotal) ?? 0;
 
   bool get isFallCleanup =>
       type == EstimateType.fallCleanup && fallCleanup != null;
@@ -105,11 +107,12 @@ class Estimate {
   /// A discount is carried as a trailing negative line, so an invoice or job
   /// built from these items totals to exactly the discounted [total].
   List<InvoiceServiceItem> get billableServices {
-    if (isFallCleanup) return fallCleanup!.billableItems(services);
+    final items =
+        isFallCleanup ? fallCleanup!.billableItems(services) : services;
     final amount = discountAmount;
-    if (amount <= 0) return services;
+    if (amount <= 0) return items;
     return [
-      ...services,
+      ...items,
       InvoiceServiceItem(name: discount!.label, price: -amount),
     ];
   }
@@ -151,6 +154,7 @@ class Estimate {
     }
 
     final type = (map['type'] as String? ?? EstimateType.standard).trim();
+    final discount = EstimateDiscount.fromMapOrNull(map['discount']);
     final fallCleanupMap = map['fallCleanup'];
     final fallCleanup = type == EstimateType.fallCleanup &&
             fallCleanupMap is Map
@@ -167,7 +171,10 @@ class Estimate {
       // a client's approval writes only the selection (Firestore rules keep
       // them off `total` and the prices), so a stored total can be stale
       total: fallCleanup != null
-          ? fallCleanup.knownTotal(serviceRows)
+          ? () {
+              final known = fallCleanup.knownTotal(serviceRows);
+              return known - (discount?.amountFor(known) ?? 0);
+            }()
           : (map['total'] as num? ?? 0).toDouble(),
       status: (map['status'] as String? ?? InvoiceStatus.pending).trim(),
       createdAt: readDate(map['createdAt']),
@@ -199,9 +206,7 @@ class Estimate {
       type: type,
       fallCleanup: fallCleanup,
       secondVisitInvoiceId: (map['secondVisitInvoiceId'] as String?)?.trim(),
-      discount: fallCleanup == null
-          ? EstimateDiscount.fromMapOrNull(map['discount'])
-          : null,
+      discount: discount,
     );
   }
 
@@ -271,6 +276,12 @@ class EstimateDiscount {
         cents > (subtotal * 100).round() ? (subtotal * 100).round() : cents;
     return capped / 100;
   }
+
+  /// "10% off" or "\$50.00 off", for when there's no total to show the
+  /// dollar amount against yet (a fall cleanup the client hasn't picked)
+  String get offText => isPercent
+      ? '${_trimNumber(value)}% off'
+      : '\$${value.toStringAsFixed(2)} off';
 
   static String _trimNumber(double n) => n == n.roundToDouble()
       ? n.toStringAsFixed(0)

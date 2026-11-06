@@ -7,6 +7,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../../core/router/app_router.dart';
+import '../../../models/estimate.dart';
 import '../../../models/fall_cleanup.dart';
 import '../../../models/invoice.dart';
 import '../../../models/legal_document.dart';
@@ -82,8 +83,8 @@ class FallCleanupFormController extends ChangeNotifier {
   FallCleanupDetails liveDetails() {
     Map<String, double?> read(Map<String, TextEditingController> fields) => {
           for (final entry in fields.entries)
-            entry.key: double.tryParse(
-                entry.value.text.trim().replaceAll(r'$', '')),
+            entry.key:
+                double.tryParse(entry.value.text.trim().replaceAll(r'$', '')),
         };
     return FallCleanupDetails(
       packagePrices: read(packagePrices),
@@ -282,12 +283,18 @@ class FallCleanupSummary extends StatelessWidget {
     required this.details,
     required this.additionalWork,
     required this.total,
+    this.discount,
+    this.discountAmount = 0,
     super.key,
   });
 
   final FallCleanupDetails details;
   final List<InvoiceServiceItem> additionalWork;
+
+  /// already discounted
   final double total;
+  final EstimateDiscount? discount;
+  final double discountAmount;
 
   Widget _option(BuildContext context,
       {required FallCleanupOption option,
@@ -366,7 +373,7 @@ class FallCleanupSummary extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(child: Text(item.name)),
-                      Text('\$${item.price.toStringAsFixed(2)}'),
+                      Text(item.priceLabel),
                     ],
                   ),
                   if (item.description.isNotEmpty)
@@ -377,16 +384,38 @@ class FallCleanupSummary extends StatelessWidget {
             ),
         ],
         const Divider(height: 16),
-        if (!details.hasPackage)
+        if (!details.hasPackage) ...[
           const Text('Your total depends on the options you choose.',
-              style: TextStyle(fontStyle: FontStyle.italic))
-        else ...[
+              style: TextStyle(fontStyle: FontStyle.italic)),
+          if (discount != null)
+            Text('${discount!.offText} your total.',
+                style: const TextStyle(
+                    color: Colors.green, fontWeight: FontWeight.w600)),
+        ] else ...[
           for (final line in lines)
             Row(
               children: [
                 Expanded(child: Text('${line.category}: ${line.option.name}')),
                 Text(_formatPrice(line.price,
                     zeroIsIncluded: line.category == 'Disposal')),
+              ],
+            ),
+          if (additionalWork.isNotEmpty)
+            Row(
+              children: [
+                const Expanded(child: Text('Additional work')),
+                Text(
+                    '\$${additionalWork.fold<double>(0, (sum, item) => sum + item.price).toStringAsFixed(2)}'),
+              ],
+            ),
+          if (discountAmount > 0)
+            Row(
+              children: [
+                Expanded(
+                    child: Text(discount!.label,
+                        style: const TextStyle(color: Colors.green))),
+                Text('-\$${discountAmount.toStringAsFixed(2)}',
+                    style: const TextStyle(color: Colors.green)),
               ],
             ),
           const SizedBox(height: 4),

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:anchor/models/estimate.dart';
+import 'package:anchor/models/fall_cleanup.dart';
 import 'package:anchor/models/invoice.dart';
 
 void main() {
@@ -41,5 +42,37 @@ void main() {
     final e = build(const EstimateDiscount(type: 'percent', value: 12.5));
     final back = Estimate.fromMap(e.toMap());
     expect(back.discount?.label, 'Discount (12.5%)');
+  });
+
+  Map<String, dynamic> fallCleanupDoc(Map<String, dynamic>? selection) => {
+        'id': 'f',
+        'type': EstimateType.fallCleanup,
+        'services': [
+          {'name': 'Extra pile', 'price': 50},
+        ],
+        'total': 999, // stale on purpose: a fall cleanup total is derived
+        'fallCleanup': {
+          'packagePrices': {'essential': 300, 'premium': 450, 'both': 700},
+          'disposalPrices': {'woods_curb': 0, 'bag_leave': 40, 'haul_away': 100},
+          'extraPrices': <String, dynamic>{},
+          if (selection != null) 'selection': selection,
+        },
+        'discount': {'type': 'percent', 'value': 10},
+      };
+
+  test('fall cleanup discount follows the client\'s pick', () {
+    final e = Estimate.fromMap(fallCleanupDoc(
+        {'package': 'premium', 'disposal': 'haul_away', 'extras': []}));
+    expect(e.subtotal, 600); // 450 + 100 + 50 additional work
+    expect(e.discountAmount, 60);
+    expect(e.total, 540);
+    final lines = e.billableServices;
+    expect(lines.last.price, -60);
+    expect(lines.fold<double>(0, (s, i) => s + i.price), 540);
+  });
+
+  test('fall cleanup with no package keeps its discount for later', () {
+    final e = Estimate.fromMap(fallCleanupDoc(null));
+    expect(e.discount?.offText, '10% off');
   });
 }

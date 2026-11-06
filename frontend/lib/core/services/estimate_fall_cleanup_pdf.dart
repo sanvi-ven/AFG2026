@@ -294,10 +294,21 @@ class EstimateFallCleanupPdf {
   /// with no package picked, the "depends on your options" line instead
   static pw.Widget _total(Estimate estimate, FallCleanupDetails details) {
     if (!details.hasPackage) {
+      final discount = estimate.discount;
       return pw.Align(
         alignment: pw.Alignment.centerRight,
-        child: pw.Text('Your total depends on the options you choose.',
-            style: pw.TextStyle(fontSize: 11, fontStyle: pw.FontStyle.italic)),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          children: [
+            pw.Text('Your total depends on the options you choose.',
+                style:
+                    pw.TextStyle(fontSize: 11, fontStyle: pw.FontStyle.italic)),
+            if (discount != null)
+              pw.Text('${discount.offText} your total.',
+                  style: pw.TextStyle(
+                      fontSize: 11, fontWeight: pw.FontWeight.bold)),
+          ],
+        ),
       );
     }
 
@@ -313,6 +324,11 @@ class EstimateFallCleanupPdf {
           'Additional work',
           currency.format(estimate.services
               .fold<double>(0, (sum, item) => sum + item.price)),
+        ],
+      if (estimate.discountAmount > 0)
+        [
+          estimate.discount!.label,
+          '-${currency.format(estimate.discountAmount)}',
         ],
     ];
     final totalText = 'Total: ${currency.format(estimate.total)}'

@@ -17,13 +17,14 @@ class EstimateService {
   static final DocumentReference<Map<String, dynamic>> _ownerSettingsDoc =
       _firestore.collection('owner_settings').doc('default');
 
-  /// standard: the sum of the line items less any discount; fall cleanup:
-  /// selected options plus additional work rows
+  /// standard: the sum of the line items; fall cleanup: selected options
+  /// plus additional work rows. Either way, less any discount.
   static double _totalFor(List<InvoiceServiceItem> services,
       FallCleanupDetails? fallCleanup, EstimateDiscount? discount) {
-    if (fallCleanup != null) return fallCleanup.knownTotal(services);
-    final subtotal = services.fold<double>(
-        0, (runningTotal, item) => runningTotal + item.price);
+    final subtotal = fallCleanup != null
+        ? fallCleanup.knownTotal(services)
+        : services.fold<double>(
+            0, (runningTotal, item) => runningTotal + item.price);
     return subtotal - (discount?.amountFor(subtotal) ?? 0);
   }
 
@@ -143,7 +144,7 @@ class EstimateService {
           ? EstimateType.standard
           : EstimateType.fallCleanup,
       fallCleanup: fallCleanup,
-      discount: fallCleanup == null ? discount : null,
+      discount: discount,
     );
 
     await doc.set(estimate.toMap());
@@ -211,9 +212,8 @@ class EstimateService {
     EstimateDiscount? discount,
   }) async {
     final now = DateTime.now();
-    final isFallCleanup = fallCleanup != null || estimate.fallCleanup != null;
-    final total = _totalFor(services, fallCleanup ?? estimate.fallCleanup,
-        isFallCleanup ? null : discount);
+    final total =
+        _totalFor(services, fallCleanup ?? estimate.fallCleanup, discount);
     final currentSnapshot = EstimateVersionSnapshot(
       version: estimate.revisionNumber,
       // a fall cleanup's options aren't in `services`, so snapshot the full
@@ -241,7 +241,7 @@ class EstimateService {
         'notes': (notes ?? estimate.notes).trim(),
         'terms': (terms ?? estimate.terms).trim(),
         if (fallCleanup != null) 'fallCleanup': fallCleanup.toMap(),
-        if (!isFallCleanup) 'discount': discount?.toMap(),
+        'discount': discount?.toMap(),
       },
       SetOptions(merge: true),
 
@@ -281,8 +281,7 @@ class EstimateService {
     FallCleanupDetails? fallCleanup,
     EstimateDiscount? discount,
   }) async {
-    final total =
-        _totalFor(services, fallCleanup, fallCleanup == null ? discount : null);
+    final total = _totalFor(services, fallCleanup, discount);
     await _collection.doc(estimateId).set(
       {
         'services': services.map((item) => item.toMap()).toList(),
@@ -291,7 +290,7 @@ class EstimateService {
         'terms': terms.trim(),
         'depositPercent': depositPercent,
         if (fallCleanup != null) 'fallCleanup': fallCleanup.toMap(),
-        if (fallCleanup == null) 'discount': discount?.toMap(),
+        'discount': discount?.toMap(),
         'updatedAt': DateTime.now(),
       },
       SetOptions(merge: true),
